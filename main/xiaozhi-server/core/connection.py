@@ -839,6 +839,11 @@ class ConnectionHandler:
         response_message = []
 
         try:
+            if self.llm is None:
+                self.logger.bind(tag=TAG).error(
+                    "LLM 未初始化，请检查模型配置或 selected_module.LLM 是否正确（如选 ZhibanAgent 需配置 base_url）"
+                )
+                return None
             # 使用带记忆的对话
             memory_str = None
             if self.memory is not None:

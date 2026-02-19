@@ -83,6 +83,12 @@ exit_commands:
   - "退出"
   - "关闭"
 
+# 智伴 Agent：xiaozhi-server 编排时可选调用下游 zhiban-agent（儿童对话/知识问答/故事/游戏）
+# 配置后可在 connection 或意图层按需将请求转发到智伴，回复经 TTS 返回设备
+zhiban_agent:
+  # zhiban-agent 服务地址，例如 http://127.0.0.1:8000；留空则不调用
+  base_url: ""
+
 xiaozhi:
   type: hello
   version: 1

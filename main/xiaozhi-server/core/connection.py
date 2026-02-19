@@ -717,8 +717,8 @@ class ConnectionHandler:
         # 如果使用 nomen，直接返回
         if memory_type == "nomem":
             return
-        # 使用 mem_local_short 模式
-        elif memory_type == "mem_local_short":
+        # 使用 mem_local_short 或 short_long_memory 时，为短期摘要配备 LLM
+        elif memory_type in ("mem_local_short", "short_long_memory"):
             memory_llm_name = memory_config[self.config["selected_module"]["Memory"]][
                 "llm"
             ]
@@ -738,7 +738,7 @@ class ConnectionHandler:
             else:
                 # 否则使用主LLM
                 self.memory.set_llm(self.llm)
-                self.logger.bind(tag=TAG).info("使用主LLM作为意图识别模型")
+                self.logger.bind(tag=TAG).info("使用主LLM作为记忆摘要模型")
 
     def _initialize_intent(self):
         if self.intent is None:

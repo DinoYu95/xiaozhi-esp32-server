@@ -289,6 +289,14 @@ Memory:
     # 如果这里不填，则会默认使用selected_module.LLM的模型作为意图识别的思考模型
     # 如果你的不想使用selected_module.LLM记忆存储，这里最好使用独立的LLM作为意图识别，例如使用免费的ChatGLMLLM
     llm: ChatGLMLLM
+  # 短期+长期记忆：短期=本地LLM摘要，长期=Mem0（适合 Mem0 已在阿里云部署好的场景）
+  short_long_memory:
+    type: short_long_memory
+    # Mem0 长期记忆：自建填 base_url，官方云填 api_key
+    base_url: http://47.84.15.224:8000
+    # api_key: 你的mem0ai api key
+    # 短期记忆摘要使用的 LLM（与 mem_local_short 一致）
+    llm: ChatGLMLLM
 
 ASR:
   FunASR:

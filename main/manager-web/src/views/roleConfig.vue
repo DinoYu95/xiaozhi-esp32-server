@@ -91,7 +91,7 @@
                         maxlength="2000"
                         show-word-limit
                         class="form-textarea"
-                        :disabled="form.model.memModelId !== 'Memory_mem_local_short'"
+                        :disabled="form.model.memModelId !== 'Memory_mem_local_short' && form.model.memModelId !== 'Memory_short_long_memory'"
                       />
                     </el-form-item>
                     <el-form-item

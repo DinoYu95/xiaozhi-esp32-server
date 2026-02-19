@@ -453,7 +453,8 @@ public class ConfigServiceImpl implements ConfigService {
                 }
                 if ("Memory".equals(modelTypes[i])) {
                     Map<String, Object> map = (Map<String, Object>) model.getConfigJson();
-                    if ("mem_local_short".equals(map.get("type"))) {
+                    String memoryType = (String) map.get("type");
+                    if ("mem_local_short".equals(memoryType) || "short_long_memory".equals(memoryType)) {
                         memLocalShortLLMModelId = (String) map.get("llm");
                         if (StringUtils.isNotBlank(memLocalShortLLMModelId)
                                 && memLocalShortLLMModelId.equals(llmModelId)) {

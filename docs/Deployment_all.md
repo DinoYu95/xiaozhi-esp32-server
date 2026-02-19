@@ -381,7 +381,7 @@ cd main/xiaozhi-server
 pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
 pip install -r requirements.txt
 ```
-
+ 
 ### 7.下载语音识别模型文件
 
 本项目语音识别模型，默认使用`SenseVoiceSmall`模型，进行语音转文字。因为模型较大，需要独立下载，下载后把`model.pt`

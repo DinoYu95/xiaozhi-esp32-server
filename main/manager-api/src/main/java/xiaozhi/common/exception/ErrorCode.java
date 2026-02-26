@@ -245,4 +245,12 @@ public interface ErrorCode {
     int DEVICE_NOT_EXIST = 10194; // 设备不存在
     int OTA_UPLOAD_COUNT_EXCEED = 10195; // OTA上传次数超过限制
 
+    // 家长端相关错误码
+    int PARENT_TOKEN_INVALID = 20001; // 家长token无效或已过期
+    int PARENT_WECHAT_CODE_INVALID = 20002; // 微信code无效
+    int PARENT_PHONE_CODE_INVALID = 20003; // 手机验证码错误
+    int PARENT_BIND_CODE_INVALID = 20004; // 绑定码无效或已过期
+    int PARENT_DEVICE_ALREADY_BOUND = 20005; // 设备已被其他账号绑定
+    int PARENT_DEVICE_NOT_BOUND = 20006; // 设备未绑定或不属于当前家长
+
 }

@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import jakarta.servlet.Filter;
+import xiaozhi.modules.parent.filter.ParentTokenFilter;
 import xiaozhi.modules.security.oauth2.Oauth2Filter;
 import xiaozhi.modules.security.oauth2.Oauth2Realm;
 import xiaozhi.modules.security.secret.ServerSecretFilter;
@@ -48,7 +49,8 @@ public class ShiroConfig {
     }
 
     @Bean("shiroFilter")
-    public ShiroFilterFactoryBean shirFilter(SecurityManager securityManager, SysParamsService sysParamsService) {
+    public ShiroFilterFactoryBean shirFilter(SecurityManager securityManager, SysParamsService sysParamsService,
+            ParentTokenFilter parentTokenFilter) {
         ShiroFilterConfiguration config = new ShiroFilterConfiguration();
         config.setFilterOncePerRequest(true);
 
@@ -59,6 +61,8 @@ public class ShiroConfig {
         Map<String, Filter> filters = new HashMap<>();
         // oauth过滤
         filters.put("oauth2", new Oauth2Filter());
+        // 家长端 token 过滤
+        filters.put("parentToken", parentTokenFilter);
         // 服务密钥过滤
         filters.put("server", new ServerSecretFilter(sysParamsService));
         shiroFilter.setFilters(filters);
@@ -92,6 +96,11 @@ public class ShiroConfig {
         filterMap.put("/agent/chat-summary/**", "server");
         filterMap.put("/agent/play/**", "anon");
         filterMap.put("/voiceClone/play/**", "anon");
+        // 家长端：登录相关放行
+        filterMap.put("/parent-api/auth/wechat", "anon");
+        filterMap.put("/parent-api/auth/phone/code", "anon");
+        filterMap.put("/parent-api/auth/phone/login", "anon");
+        filterMap.put("/parent-api/**", "parentToken");
         filterMap.put("/**", "oauth2");
         shiroFilter.setFilterChainDefinitionMap(filterMap);
 

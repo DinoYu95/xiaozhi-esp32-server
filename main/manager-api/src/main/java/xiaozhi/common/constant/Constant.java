@@ -25,6 +25,10 @@ public interface Constant {
      */
     String USER_KEY = "userId";
     /**
+     * 家长端用户标识（request attribute）
+     */
+    String PARENT_USER_KEY = "parent_user_id";
+    /**
      * 菜单根节点标识
      */
     Long MENU_ROOT = 0L;

@@ -33,6 +33,13 @@ public class ParentTokenFilter extends jakarta.servlet.http.HttpFilter {
     @Override
     protected void doFilter(HttpServletRequest request, HttpServletResponse response,
             FilterChain chain) throws IOException, ServletException {
+        String uri = request.getRequestURI();
+        // 只拦截 parent-api，其它路径一律放行
+        if (uri == null || (!uri.contains("/parent-api/"))) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         String token = getRequestToken(request);
         if (StringUtils.isBlank(token)) {
             writeUnauthorized(response);

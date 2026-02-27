@@ -415,6 +415,14 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String createAgent(AgentCreateDTO dto) {
+        // 使用当前登录后台用户作为 owner
+        UserDetail user = SecurityUser.getUser();
+        return createAgentForOwner(user.getId(), dto);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String createAgentForOwner(Long ownerId, AgentCreateDTO dto) {
         // 转换为实体
         AgentEntity entity = ConvertUtils.sourceToTarget(dto, AgentEntity.class);
 
@@ -467,9 +475,8 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
         }
 
         // 设置用户ID和创建者信息
-        UserDetail user = SecurityUser.getUser();
-        entity.setUserId(user.getId());
-        entity.setCreator(user.getId());
+        entity.setUserId(ownerId);
+        entity.setCreator(ownerId);
         entity.setCreatedAt(new Date());
 
         // 保存智能体

@@ -15,12 +15,16 @@ import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.exception.RenException;
 import xiaozhi.common.redis.RedisKeys;
 import xiaozhi.common.redis.RedisUtils;
+import xiaozhi.modules.agent.dto.AgentCreateDTO;
+import xiaozhi.modules.agent.service.AgentService;
 import xiaozhi.modules.device.dao.DeviceDao;
 import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
+import xiaozhi.modules.parent.dao.ParentUserDao;
 import xiaozhi.modules.parent.dto.ParentDeviceBindDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceUnbindDTO;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
+import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.service.ParentDeviceService;
 import xiaozhi.modules.parent.vo.ParentDeviceItemVO;
 import xiaozhi.modules.sys.service.SysParamsService;
@@ -29,12 +33,15 @@ import xiaozhi.modules.sys.service.SysParamsService;
 @RequiredArgsConstructor
 public class ParentDeviceServiceImpl implements ParentDeviceService {
 
-    private static final String PARAM_DEFAULT_AGENT_ID = "parent.default_agent_id";
+    // 后台固定 owner 用户ID（临时方案）
+    private static final Long DEFAULT_OWNER_USER_ID = 2019681905515061249L;
 
     private final ParentDeviceBindingDao parentDeviceBindingDao;
     private final DeviceDao deviceDao;
     private final RedisUtils redisUtils;
     private final SysParamsService sysParamsService;
+    private final AgentService agentService;
+    private final ParentUserDao parentUserDao;
 
     @Override
     public BindResult bind(Long parentUserId, ParentDeviceBindDTO dto) {
@@ -70,12 +77,17 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             return new BindResult(deviceId, "已绑定");
         }
 
-        // ai_device 不存在则创建
+        // ai_device 不存在则创建（同时自动为固定后台用户创建一个默认智能体）
         if (deviceDao.selectById(deviceId) == null) {
-            String defaultAgentId = sysParamsService.getValue(PARAM_DEFAULT_AGENT_ID, true);
-            if (StringUtils.isBlank(defaultAgentId)) {
-                defaultAgentId = "1"; // 兜底
-            }
+            // 生成智能体名称：{家长昵称}的agent
+            ParentUserEntity parentUser = parentUserDao.selectById(parentUserId);
+            String nickname = parentUser != null && StringUtils.isNotBlank(parentUser.getNickname())
+                    ? parentUser.getNickname()
+                    : "家长";
+            AgentCreateDTO agentCreateDTO = new AgentCreateDTO();
+            agentCreateDTO.setAgentName(nickname + "的agent");
+            String agentId = agentService.createAgentForOwner(DEFAULT_OWNER_USER_ID, agentCreateDTO);
+
             String macAddress = (String) cacheMap.get("mac_address");
             String board = (String) cacheMap.get("board");
             String appVersion = (String) cacheMap.get("app_version");
@@ -83,10 +95,13 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             DeviceEntity deviceEntity = new DeviceEntity();
             deviceEntity.setId(deviceId);
             deviceEntity.setBoard(board != null ? board : "unknown");
-            deviceEntity.setAgentId(defaultAgentId);
+            deviceEntity.setAgentId(agentId);
             deviceEntity.setAppVersion(appVersion);
             deviceEntity.setMacAddress(macAddress != null ? macAddress : deviceId);
             deviceEntity.setAutoUpdate(1);
+            // 按照后台绑定设备的语义，将设备 owner 固定归属到同一个后台用户
+            deviceEntity.setUserId(DEFAULT_OWNER_USER_ID);
+            deviceEntity.setCreator(DEFAULT_OWNER_USER_ID);
             deviceEntity.setCreateDate(now);
             deviceEntity.setUpdateDate(now);
             deviceEntity.setLastConnectedAt(now);

@@ -34,7 +34,7 @@ public class Oauth2Filter extends AuthenticatingFilter {
     protected AuthenticationToken createToken(ServletRequest request, ServletResponse response) throws Exception {
         // 获取请求token
         String token = getRequestToken((HttpServletRequest) request);
-
+        System.out.println("COME TO Oauth2Filter");
         if (StringUtils.isBlank(token)) {
             logger.warn("createToken:token is empty");
             return null;

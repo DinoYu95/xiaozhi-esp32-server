@@ -94,12 +94,21 @@ public interface AgentService extends BaseService<AgentEntity> {
     void updateAgentById(String agentId, AgentUpdateDTO dto);
 
     /**
-     * 创建智能体
+     * 创建智能体（使用当前后台登录用户作为 owner）
      *
      * @param dto 创建智能体所需的信息
      * @return 创建的智能体ID
      */
     String createAgent(AgentCreateDTO dto);
+
+    /**
+     * 为指定用户创建智能体（供家长端等非后台场景使用）
+     *
+     * @param ownerId 用户ID
+     * @param dto     创建智能体所需的信息
+     * @return 创建的智能体ID
+     */
+    String createAgentForOwner(Long ownerId, AgentCreateDTO dto);
 
 
 }

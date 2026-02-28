@@ -243,6 +243,18 @@ public interface Constant {
          */
         ALIYUN_SMS_SMS_CODE_TEMPLATE_CODE("aliyun.sms.sms_code_template_code"),
         /**
+         * 短信发送接口类型：dysmsapi=国内短信 SendSms，dypnsapi=号码认证 SendSmsVerifyCode（你控制台能用的 100001 等属此类）
+         */
+        ALIYUN_SMS_API_TYPE("aliyun.sms.api_type"),
+        /**
+         * Dypnsapi 地域，国内填 cn-hangzhou，国际填 ap-southeast-1
+         */
+        ALIYUN_SMS_DYPNSAPI_REGION_ID("aliyun.sms.dypnsapi_region_id"),
+        /**
+         * Dypnsapi 国际端点（可选），如 ap-southeast-1 时填 dypnsapi-intl.ap-southeast-1.aliyuncs.com
+         */
+        ALIYUN_SMS_DYPNSAPI_ENDPOINT("aliyun.sms.dypnsapi_endpoint"),
+        /**
          * 单号码最大短信发送条数
          */
         SERVER_SMS_MAX_SEND_COUNT("server.sms_max_send_count"),

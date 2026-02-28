@@ -226,11 +226,17 @@
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jsr310</artifactId>
         </dependency>
-        <!-- 阿里云短信sdk -->
+        <!-- 阿里云短信sdk（国内短信 SendSms） -->
         <dependency>
             <groupId>com.aliyun</groupId>
             <artifactId>dysmsapi20170525</artifactId>
             <version>${aliyun-sms-version}</version>
+        </dependency>
+        <!-- 阿里云号码认证/短信认证 sdk（SendSmsVerifyCode，国内 2017-05-25） -->
+        <dependency>
+            <groupId>com.aliyun</groupId>
+            <artifactId>dypnsapi20170525</artifactId>
+            <version>2.0.0</version>
         </dependency>
         <!-- 阿里云短信sdk使用的okio:1.15.0版本有安全漏洞：GHSA-w33c-445m-f8w7 现在升级成3.4.0安全版本-->
         <dependency>

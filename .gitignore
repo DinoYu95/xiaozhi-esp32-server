@@ -106,6 +106,8 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+deploy/data/
+
 # Environments
 .venv
 env/

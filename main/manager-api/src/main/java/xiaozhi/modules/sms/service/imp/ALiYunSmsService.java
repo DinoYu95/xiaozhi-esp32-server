@@ -39,6 +39,7 @@ public class ALiYunSmsService implements SmsService {
             RuntimeOptions runtime = new RuntimeOptions();
             // 复制代码运行请自行打印 API 的返回值
             SendSmsResponse sendSmsResponse = client.sendSmsWithOptions(sendSmsRequest, runtime);
+            log.info("发送短信响应的message: {}, code: {}", sendSmsResponse.getBody().getMessage(), sendSmsResponse.getBody().getCode());
             log.info("发送短信响应的requestID: {}", sendSmsResponse.getBody().getRequestId());
         } catch (Exception e) {
             // 如果发送失败了退还这次发送数

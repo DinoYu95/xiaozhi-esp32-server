@@ -8,7 +8,7 @@
 version: '3.8'
 
 services:
-  # 数据库（manager-api 使用）
+  # 数据库（manager-api 使用；暴露 3306 供同机 voiceprint-api 等通过 host.docker.internal 连接）
   db:
     image: mysql:8.0
     container_name: xiaozhi-mysql
@@ -19,6 +19,8 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-xiaozhi_esp32_server}
       MYSQL_INITDB_ARGS: "--character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci"
+    ports:
+      - "${MYSQL_EXPOSE_PORT:-3306}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 45s

@@ -1,0 +1,111 @@
+# 阿里云单机部署：manager-api + manager-web + xiaozhi-server + MySQL + Redis
+# 使用前：cp .env.example .env 并修改 .env 中的密码等配置
+# 启动：docker compose up -d
+#
+# 首次部署希望与本地 MySQL 一致：在本地导出后把 SQL 放到 init-db/ 目录，
+# 再在远程第一次执行 up（仅当 MySQL 数据目录为空时才会执行 init-db 里的脚本）。
+
+version: '3.8'
+
+services:
+  # 数据库（manager-api 使用）
+  db:
+    image: mysql:8.0
+    container_name: xiaozhi-mysql
+    restart: always
+    env_file: .env
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-xiaozhi_esp32_server}
+      MYSQL_INITDB_ARGS: "--character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 45s
+      interval: 10s
+      retries: 10
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-db:/docker-entrypoint-initdb.d:ro
+    networks:
+      - xiaozhi
+
+  # Redis（manager-api、xiaozhi-server 共用；暴露端口供同机 zhiban-agent 等复用）
+  redis:
+    image: redis:7-alpine
+    container_name: xiaozhi-redis
+    restart: always
+    env_file: .env
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - redis_data:/data
+    networks:
+      - xiaozhi
+
+  # 智控台（manager-api + manager-web，Nginx 反代 Java）
+  # 镜像：未设 WEB_IMAGE 时用本地构建 xiaozhi-esp32-server:web_latest（docker compose up -d --build）
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile-web
+    image: ${WEB_IMAGE:-xiaozhi-esp32-server:web_latest}
+    container_name: xiaozhi-web
+    restart: always
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    env_file: .env
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_DATASOURCE_DRUID_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE:-xiaozhi_esp32_server}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&connectTimeout=30000&socketTimeout=30000&autoReconnect=true&failOverReadOnly=false&maxReconnects=10
+      SPRING_DATASOURCE_DRUID_USERNAME: root
+      SPRING_DATASOURCE_DRUID_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      SPRING_DATA_REDIS_PORT: "6379"
+    ports:
+      - "${WEB_PORT:-8002}:8002"
+    volumes:
+      - ./uploadfile:/uploadfile
+    networks:
+      - xiaozhi
+
+  # 小智服务端（Python，requirements 在镜像内安装）
+  # 镜像：未设 SERVER_IMAGE 时用本地构建（Dockerfile-server-standalone）docker compose up -d --build
+  server:
+    build:
+      context: ..
+      dockerfile: Dockerfile-server-standalone
+    image: ${SERVER_IMAGE:-xiaozhi-esp32-server:server_latest}
+    container_name: xiaozhi-server
+    restart: always
+    depends_on:
+      - db
+      - redis
+    env_file: .env
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "${SERVER_WS_PORT:-8000}:8000"
+      - "${SERVER_HTTP_PORT:-8003}:8003"
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ./data:/opt/xiaozhi-esp32-server/data
+      - ./models/SenseVoiceSmall/model.pt:/opt/xiaozhi-esp32-server/models/SenseVoiceSmall/model.pt
+    networks:
+      - xiaozhi
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  xiaozhi:
+    driver: bridge

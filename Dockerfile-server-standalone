@@ -1,0 +1,34 @@
+# 单文件构建小智服务端（= server-base + 应用代码），不依赖预制的 server-base 镜像
+# 在项目根目录执行：docker build -t xiaozhi-esp32-server:server_latest -f Dockerfile-server-standalone .
+
+FROM python:3.10-slim
+
+# 安装系统依赖（语音/音频等）
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libopus0 ffmpeg locales && \
+    sed -i '/zh_CN.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip config set global.trusted-host mirrors.aliyun.com && \
+    pip config set global.timeout 120 && \
+    pip config set install.retries 5
+
+ENV LANG=zh_CN.UTF-8 \
+    LC_ALL=zh_CN.UTF-8 \
+    LANGUAGE=zh_CN:zh \
+    PYTHONIOENCODING=utf-8
+
+WORKDIR /opt/xiaozhi-esp32-server
+
+# 安装 Python 依赖（requirements.txt）
+COPY main/xiaozhi-server/requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt --default-timeout=120 --retries 5
+
+# 应用代码
+COPY main/xiaozhi-server .
+
+CMD ["python", "app.py"]

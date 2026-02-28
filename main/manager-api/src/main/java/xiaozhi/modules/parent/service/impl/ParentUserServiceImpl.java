@@ -7,7 +7,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -20,7 +19,9 @@ import xiaozhi.modules.parent.dto.ParentPhoneCodeDTO;
 import xiaozhi.modules.parent.dto.ParentPhoneLoginDTO;
 import xiaozhi.modules.parent.dto.ParentProfileDTO;
 import xiaozhi.modules.parent.dto.ParentWechatLoginDTO;
+import xiaozhi.modules.parent.entity.ParentAuthEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
+import xiaozhi.modules.parent.service.ParentAuthService;
 import xiaozhi.modules.parent.service.ParentUserService;
 import xiaozhi.modules.parent.service.ParentUserTokenService;
 import xiaozhi.modules.parent.vo.ParentLoginVO;
@@ -38,6 +39,7 @@ public class ParentUserServiceImpl implements ParentUserService {
     private static final String PARAM_WECHAT_SECRET = "parent.wechat.secret";
 
     private final ParentUserDao parentUserDao;
+    private final ParentAuthService parentAuthService;
     private final ParentUserTokenService parentUserTokenService;
     private final SysParamsService sysParamsService;
     private final CaptchaService captchaService;
@@ -73,18 +75,20 @@ public class ParentUserServiceImpl implements ParentUserService {
                 throw new RenException(ErrorCode.PARENT_WECHAT_CODE_INVALID);
             }
             String channel = StringUtils.isNotBlank(dto.getChannel()) ? dto.getChannel() : "mini_program";
-            ParentUserEntity user = parentUserDao.selectOne(
-                    new LambdaQueryWrapper<ParentUserEntity>()
-                            .eq(ParentUserEntity::getOpenId, openId)
-                            .eq(ParentUserEntity::getChannel, channel));
-            if (user == null) {
-                user = new ParentUserEntity();
-                user.setOpenId(openId);
-                user.setUnionId(unionId);
-                user.setChannel(channel);
-                user.setCreateTime(new Date());
-                user.setUpdateTime(user.getCreateTime());
-                parentUserDao.insert(user);
+            Long parentUserId = parentAuthService.findParentUserIdByWechat(openId, channel);
+            if (parentUserId == null) {
+                parentUserId = parentAuthService.createWechatAuth(openId, unionId, channel);
+            }
+            ParentUserEntity user = parentUserDao.selectById(parentUserId);
+            if (user != null && (StringUtils.isNotBlank(dto.getNickname()) || StringUtils.isNotBlank(dto.getAvatarUrl()))) {
+                if (StringUtils.isNotBlank(dto.getNickname())) {
+                    user.setNickname(dto.getNickname());
+                }
+                if (StringUtils.isNotBlank(dto.getAvatarUrl())) {
+                    user.setAvatarUrl(dto.getAvatarUrl());
+                }
+                user.setUpdateTime(new Date());
+                parentUserDao.updateById(user);
             }
             ParentUserTokenService.TokenResult tr = parentUserTokenService.createToken(user.getId(), channel);
             return buildLoginVO(tr.token(), tr.expireTime(), user);
@@ -113,17 +117,15 @@ public class ParentUserServiceImpl implements ParentUserService {
             throw new RenException(ErrorCode.PARENT_PHONE_CODE_INVALID);
         }
         String phoneEncrypted = encryptPhone(dto.getPhone());
-        ParentUserEntity user = parentUserDao.selectOne(
-                new LambdaQueryWrapper<ParentUserEntity>().eq(ParentUserEntity::getPhone, phoneEncrypted));
-        if (user == null) {
-            user = new ParentUserEntity();
-            user.setPhone(phoneEncrypted);
-            user.setChannel("app");
-            user.setCreateTime(new Date());
-            user.setUpdateTime(user.getCreateTime());
-            parentUserDao.insert(user);
+        String channel = StringUtils.isNotBlank(dto.getChannel()) ? dto.getChannel() : "app";
+        Long parentUserId = parentAuthService.findParentUserIdByPhone(phoneEncrypted);
+        if (parentUserId == null) {
+            parentUserId = parentAuthService.createPhoneAuth(phoneEncrypted, channel);
+        } else {
+            parentAuthService.addPhoneAuth(parentUserId, phoneEncrypted, channel);
         }
-        ParentUserTokenService.TokenResult tr = parentUserTokenService.createToken(user.getId(), "app");
+        ParentUserEntity user = parentUserDao.selectById(parentUserId);
+        ParentUserTokenService.TokenResult tr = parentUserTokenService.createToken(user.getId(), channel);
         return buildLoginVO(tr.token(), tr.expireTime(), user);
     }
 
@@ -137,7 +139,7 @@ public class ParentUserServiceImpl implements ParentUserService {
         vo.setId(user.getId());
         vo.setNickname(user.getNickname());
         vo.setAvatarUrl(user.getAvatarUrl());
-        vo.setPhone(maskPhone(decryptPhone(user.getPhone())));
+        vo.setPhone(getMaskedPhoneForUser(parentUserId));
         return vo;
     }
 
@@ -154,7 +156,7 @@ public class ParentUserServiceImpl implements ParentUserService {
             user.setAvatarUrl(dto.getAvatarUrl());
         }
         if (StringUtils.isNotBlank(dto.getPhone())) {
-            user.setPhone(encryptPhone(dto.getPhone()));
+            parentAuthService.setPhoneAuth(parentUserId, encryptPhone(dto.getPhone()), "app");
         }
         user.setUpdateTime(new Date());
         parentUserDao.updateById(user);
@@ -173,9 +175,17 @@ public class ParentUserServiceImpl implements ParentUserService {
         u.setId(user.getId());
         u.setNickname(user.getNickname());
         u.setAvatarUrl(user.getAvatarUrl());
-        u.setPhone(maskPhone(decryptPhone(user.getPhone())));
+        u.setPhone(getMaskedPhoneForUser(user.getId()));
         vo.setUser(u);
         return vo;
+    }
+
+    private String getMaskedPhoneForUser(Long parentUserId) {
+        ParentAuthEntity phoneAuth = parentAuthService.getAnyPhoneAuth(parentUserId);
+        if (phoneAuth == null || StringUtils.isBlank(phoneAuth.getPhone())) {
+            return null;
+        }
+        return maskPhone(decryptPhone(phoneAuth.getPhone()));
     }
 
     private String getPhoneEncryptKey() {

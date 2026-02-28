@@ -10,4 +10,6 @@ public class ParentPhoneLoginDTO {
     private String phone;
     @Schema(description = "验证码")
     private String code;
+    @Schema(description = "渠道：mini_program/app，不传默认为 app")
+    private String channel;
 }

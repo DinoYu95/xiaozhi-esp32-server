@@ -34,6 +34,8 @@ import xiaozhi.modules.agent.vo.AgentVoicePrintVO;
 import xiaozhi.modules.config.service.ConfigService;
 import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.device.service.DeviceService;
+import xiaozhi.modules.parent.dao.DeviceChildDao;
+import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.model.entity.ModelConfigEntity;
 import xiaozhi.modules.model.service.ModelConfigService;
 import xiaozhi.modules.sys.dto.SysParamsDTO;
@@ -58,6 +60,7 @@ public class ConfigServiceImpl implements ConfigService {
     private final AgentContextProviderService agentContextProviderService;
     private final VoiceCloneService cloneVoiceService;
     private final AgentVoicePrintDao agentVoicePrintDao;
+    private final DeviceChildDao deviceChildDao;
 
     @Override
     public Object getConfig(Boolean isCache) {
@@ -197,8 +200,8 @@ public class ConfigServiceImpl implements ConfigService {
             result.put("context_providers", contextProviderEntity.getContextProviders());
         }
 
-        // 获取声纹信息
-        buildVoiceprintConfig(agent.getId(), result);
+        // 获取声纹信息（按设备过滤：本设备主孩子 + 后台声纹）
+        buildVoiceprintConfig(agent.getId(), result, device.getId());
 
         // 构建模块配置
         buildModuleConfig(
@@ -294,12 +297,13 @@ public class ConfigServiceImpl implements ConfigService {
     }
 
     /**
-     * 构建声纹配置信息
-     * 
-     * @param agentId 智能体ID
-     * @param result  结果Map
+     * 构建声纹配置（设备拉取时仅返回：后台声纹 + 本设备主孩子声纹）
+     *
+     * @param agentId  智能体ID
+     * @param result   结果Map
+     * @param deviceId 设备ID，可为 null（如 getConfig 时无设备则不过滤）
      */
-    private void buildVoiceprintConfig(String agentId, Map<String, Object> result) {
+    private void buildVoiceprintConfig(String agentId, Map<String, Object> result, String deviceId) {
         try {
             // 获取声纹接口地址
             String voiceprintUrl = sysParamsService.getValue(Constant.SERVER_VOICE_PRINT, true);
@@ -307,8 +311,8 @@ public class ConfigServiceImpl implements ConfigService {
                 return;
             }
 
-            // 获取智能体关联的声纹信息（不需要用户权限验证）
-            List<AgentVoicePrintVO> voiceprints = getVoiceprintsByAgentId(agentId);
+            // 获取智能体关联的声纹信息；有 deviceId 时仅返回后台声纹 + 本设备主孩子声纹
+            List<AgentVoicePrintVO> voiceprints = getVoiceprintsByAgentId(agentId, deviceId);
             if (voiceprints == null || voiceprints.isEmpty()) {
                 return;
             }
@@ -351,13 +355,24 @@ public class ConfigServiceImpl implements ConfigService {
 
     /**
      * 获取智能体关联的声纹信息
-     * 
-     * @param agentId 智能体ID
+     *
+     * @param agentId  智能体ID
+     * @param deviceId 设备ID；非空时仅返回 child_id IS NULL（后台声纹）或 child 属于该设备的声纹
      * @return 声纹信息列表
      */
-    private List<AgentVoicePrintVO> getVoiceprintsByAgentId(String agentId) {
+    private List<AgentVoicePrintVO> getVoiceprintsByAgentId(String agentId, String deviceId) {
         LambdaQueryWrapper<AgentVoicePrintEntity> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(AgentVoicePrintEntity::getAgentId, agentId);
+        if (StringUtils.isNotBlank(deviceId)) {
+            DeviceChildEntity child = deviceChildDao.selectOne(
+                    new LambdaQueryWrapper<DeviceChildEntity>().eq(DeviceChildEntity::getDeviceId, deviceId));
+            if (child != null) {
+                queryWrapper.and(w -> w.isNull(AgentVoicePrintEntity::getChildId)
+                        .or().eq(AgentVoicePrintEntity::getChildId, child.getId()));
+            } else {
+                queryWrapper.isNull(AgentVoicePrintEntity::getChildId);
+            }
+        }
         queryWrapper.orderByAsc(AgentVoicePrintEntity::getCreateDate);
         List<AgentVoicePrintEntity> entities = agentVoicePrintDao.selectList(queryWrapper);
         return ConvertUtils.sourceToTarget(entities, AgentVoicePrintVO.class);

@@ -142,15 +142,13 @@ public class AgentVoicePrintServiceImpl extends ServiceImpl<AgentVoicePrintDao, 
 
     @Override
     public List<AgentVoicePrintVO> list(Long userId, String agentId) {
-        // 按照指定当前登录用户和智能体查找数据
+        // 按智能体查该 agent 下全部声纹（含后台添加的 creator=userId 与家长端主孩子声纹 creator 为空）
         List<AgentVoicePrintEntity> list = baseMapper.selectList(new LambdaQueryWrapper<AgentVoicePrintEntity>()
                 .eq(AgentVoicePrintEntity::getAgentId, agentId)
-                .eq(AgentVoicePrintEntity::getCreator, userId));
+                .orderByAsc(AgentVoicePrintEntity::getCreateDate));
         return list.stream().map(entity -> {
-            // 遍历转换成AgentVoicePrintVO类型
             return ConvertUtils.sourceToTarget(entity, AgentVoicePrintVO.class);
         }).toList();
-
     }
 
     @Override
@@ -268,22 +266,22 @@ public class AgentVoicePrintServiceImpl extends ServiceImpl<AgentVoicePrintDao, 
      * @return 声纹音频资源数据
      */
     private ByteArrayResource getVoicePrintAudioWAV(String agentId, String audioId) {
-        // 判断这个音频是否属于当前智能体
         boolean b = agentChatHistoryService.isAudioOwnedByAgent(audioId, agentId);
         if (!b) {
             throw new RenException(ErrorCode.VOICEPRINT_AUDIO_NOT_BELONG_AGENT);
         }
-        // 获取到音频数据
+        return getVoicePrintAudioWAVByAudioIdOnly(audioId);
+    }
+
+    private ByteArrayResource getVoicePrintAudioWAVByAudioIdOnly(String audioId) {
         byte[] audio = agentChatAudioService.getAudio(audioId);
-        // 如果音频数据为空的直接报错不进行下去
         if (audio == null || audio.length == 0) {
             throw new RenException(ErrorCode.VOICEPRINT_AUDIO_EMPTY);
         }
-        // 将字节数组包装为资源，返回
         return new ByteArrayResource(audio) {
             @Override
             public String getFilename() {
-                return "VoicePrint.WAV"; // 设置文件名
+                return "VoicePrint.WAV";
             }
         };
     }
@@ -407,5 +405,92 @@ public class AgentVoicePrintServiceImpl extends ServiceImpl<AgentVoicePrintDao, 
             return JsonUtils.parseObject(responseBody, IdentifyVoicePrintResponse.class);
         }
         return null;
+    }
+
+    @Override
+    public void deleteByChildId(Long childId) {
+        if (childId == null) {
+            return;
+        }
+        List<AgentVoicePrintEntity> list = baseMapper.selectList(
+                new LambdaQueryWrapper<AgentVoicePrintEntity>()
+                        .eq(AgentVoicePrintEntity::getChildId, childId));
+        for (AgentVoicePrintEntity entity : list) {
+            try {
+                cancelVoicePrint(entity.getId());
+            } catch (RuntimeException e) {
+                log.error("删除孩子声纹 cancel 失败 id: {}, {}", entity.getId(), e.getMessage());
+            }
+            baseMapper.deleteById(entity.getId());
+        }
+    }
+
+    @Override
+    public void saveChildVoicePrint(String agentId, Long childId, String audioId, String sourceName, String introduce) {
+        ByteArrayResource resource = getVoicePrintAudioWAVByAudioIdOnly(audioId);
+        AgentVoicePrintEntity existing = baseMapper.selectOne(
+                new LambdaQueryWrapper<AgentVoicePrintEntity>()
+                        .eq(AgentVoicePrintEntity::getAgentId, agentId)
+                        .eq(AgentVoicePrintEntity::getChildId, childId));
+        Boolean ok = transactionTemplate.execute(status -> {
+            try {
+                if (existing != null) {
+                    cancelVoicePrint(existing.getId());
+                    existing.setAudioId(audioId);
+                    existing.setSourceName(sourceName);
+                    existing.setIntroduce(introduce);
+                    baseMapper.updateById(existing);
+                    registerVoicePrint(existing.getId(), resource);
+                } else {
+                    AgentVoicePrintEntity entity = new AgentVoicePrintEntity();
+                    entity.setAgentId(agentId);
+                    entity.setChildId(childId);
+                    entity.setAudioId(audioId);
+                    entity.setSourceName(sourceName);
+                    entity.setIntroduce(introduce);
+                    java.util.Date now = new java.util.Date();
+                    entity.setCreateDate(now);
+                    entity.setUpdateDate(now);
+                    baseMapper.insert(entity);
+                    registerVoicePrint(entity.getId(), resource);
+                }
+                return true;
+            } catch (Exception e) {
+                status.setRollbackOnly();
+                log.error("保存孩子声纹失败: {}", e.getMessage());
+                throw new RenException(ErrorCode.VOICE_PRINT_SAVE_ERROR);
+            }
+        });
+        if (!Boolean.TRUE.equals(ok)) {
+            throw new RenException(ErrorCode.VOICE_PRINT_SAVE_ERROR);
+        }
+    }
+
+    @Override
+    public void deleteByVoicePrintId(String voicePrintId) {
+        AgentVoicePrintEntity entity = baseMapper.selectById(voicePrintId);
+        if (entity == null) {
+            return;
+        }
+        try {
+            cancelVoicePrint(voicePrintId);
+        } catch (RuntimeException e) {
+            log.error("deleteByVoicePrintId cancel 失败: {}", e.getMessage());
+        }
+        baseMapper.deleteById(voicePrintId);
+    }
+
+    @Override
+    public List<AgentVoicePrintVO> listByAgentIdAndChildId(String agentId, Long childId) {
+        List<AgentVoicePrintEntity> list = baseMapper.selectList(
+                new LambdaQueryWrapper<AgentVoicePrintEntity>()
+                        .eq(AgentVoicePrintEntity::getAgentId, agentId)
+                        .eq(AgentVoicePrintEntity::getChildId, childId));
+        return list.stream().map(e -> ConvertUtils.sourceToTarget(e, AgentVoicePrintVO.class)).toList();
+    }
+
+    @Override
+    public AgentVoicePrintEntity getById(String voicePrintId) {
+        return baseMapper.selectById(voicePrintId);
     }
 }

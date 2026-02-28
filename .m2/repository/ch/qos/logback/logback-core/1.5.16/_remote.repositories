@@ -1,3 +1,4 @@
 #NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
-#Sat Feb 28 21:22:06 NZDT 2026
+#Sun Mar 01 09:02:42 NZDT 2026
+logback-core-1.5.16.jar>public=
 logback-core-1.5.16.pom>public=

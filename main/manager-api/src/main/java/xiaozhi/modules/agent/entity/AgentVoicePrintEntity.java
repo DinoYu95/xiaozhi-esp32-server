@@ -32,6 +32,10 @@ public class AgentVoicePrintEntity {
      */
     private String audioId;
     /**
+     * 关联 device_child.id，非空表示主孩子声纹
+     */
+    private Long childId;
+    /**
      * 声纹来源的人姓名
      */
     private String sourceName;

@@ -3,12 +3,48 @@
 智伴 Agent 作为 LLM 提供方：将用户输入转发到 zhiban-agent 的 /api/chat，返回助手回复。
 在「模型配置」里选本 LLM 时，对话会走智伴（儿童对话/知识问答/故事/游戏等），不再走其他大模型。
 """
+import json
+
 from config.logger import setup_logging
 from core.providers.llm.base import LLMProviderBase
 from core.zhibanAgent import ZhibanAgentClient
 
 TAG = __name__
 logger = setup_logging()
+
+MAX_HISTORY_ROUNDS = 3
+
+
+def _extract_user_text(raw):
+    """从用户消息提取纯文本，支持 JSON 格式 {"content":"..."}"""
+    if not isinstance(raw, str):
+        return ""
+    s = (raw or "").strip()
+    if s.startswith("{") and "content" in s:
+        try:
+            data = json.loads(s)
+            return (data.get("content") or "").strip() or s
+        except Exception:
+            return s
+    return s
+
+
+def _build_messages_from_dialogue(dialogue, max_rounds=MAX_HISTORY_ROUNDS):
+    """从 dialogue 提取最近 max_rounds 轮对话，供 zhiban 理解多轮上下文"""
+    if not isinstance(dialogue, list):
+        return []
+    turns = []
+    for m in dialogue:
+        role = m.get("role")
+        if role not in ("user", "assistant"):
+            continue
+        content = m.get("content", "")
+        if role == "user":
+            content = _extract_user_text(content)
+        if isinstance(content, str) and content.strip():
+            turns.append({"role": role, "content": content.strip()})
+    max_messages = max_rounds * 2
+    return turns[-max_messages:] if len(turns) > max_messages else turns
 
 
 class LLMProvider(LLMProviderBase):
@@ -19,18 +55,24 @@ class LLMProvider(LLMProviderBase):
         """
         self.config = config or {}
         self._client = ZhibanAgentClient(self.config)
+        self._max_history_rounds = int(
+            self.config.get("max_history_rounds", MAX_HISTORY_ROUNDS)
+        )
 
     def response(self, session_id, dialogue, **kwargs):
-        # 取最后一条用户消息
+        # 取最后一条用户消息（若为 JSON 则提取 content 字段作为纯文本）
         input_text = None
         if isinstance(dialogue, list):
             for message in reversed(dialogue):
                 if message.get("role") == "user":
-                    input_text = message.get("content", "")
+                    input_text = _extract_user_text(message.get("content", ""))
                     break
         if not (input_text or "").strip():
             logger.bind(tag=TAG).warning("ZhibanAgent: 无用户输入，跳过调用")
             return
+
+        # 构建最近 N 轮对话，供 zhiban 理解上下文（谜语提示、故事续讲等）
+        messages = _build_messages_from_dialogue(dialogue, self._max_history_rounds)
 
         # 优先流式：调用 /api/chat/stream，逐块 yield，便于 TTS 边收边播
         yielded_any = False
@@ -38,6 +80,10 @@ class LLMProvider(LLMProviderBase):
             text=input_text.strip(),
             session_id=session_id or "",
             user_id=kwargs.get("user_id"),
+            speaker_context=kwargs.get("speaker_context"),
+            skill_ids=kwargs.get("skill_ids"),
+            environment_context=kwargs.get("environment_context"),
+            messages=messages,
         ):
             yielded_any = True
             yield chunk
@@ -47,13 +93,17 @@ class LLMProvider(LLMProviderBase):
                 text=input_text.strip(),
                 session_id=session_id or "",
                 user_id=kwargs.get("user_id"),
+                speaker_context=kwargs.get("speaker_context"),
+                skill_ids=kwargs.get("skill_ids"),
+                environment_context=kwargs.get("environment_context"),
+                messages=messages,
             )
             if reply:
                 yield reply
             else:
                 logger.bind(tag=TAG).warning("ZhibanAgent: 未获取到回复")
 
-    def response_with_functions(self, session_id, dialogue, functions=None):
+    def response_with_functions(self, session_id, dialogue, functions=None, **kwargs):
         """智伴不支持 function call，按普通对话转发到 zhiban-agent。"""
-        for chunk in self.response(session_id, dialogue):
+        for chunk in self.response(session_id, dialogue, **kwargs):
             yield chunk, None

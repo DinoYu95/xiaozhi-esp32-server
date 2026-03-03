@@ -90,7 +90,8 @@
             $route.path === '/agent-template-management' ||
             $route.path === '/ota-management' ||
             $route.path === '/user-management' ||
-            $route.path === '/feature-management',
+            $route.path === '/feature-management' ||
+            $route.path === '/skill-management',
         }" @visible-change="handleParamDropdownVisibleChange">
           <span class="el-dropdown-link">
             <img loading="lazy" alt="" src="@/assets/header/param_management.png" :style="{
@@ -102,7 +103,8 @@
                   $route.path === '/agent-template-management' ||
                   $route.path === '/ota-management' ||
                   $route.path === '/user-management' ||
-                  $route.path === '/feature-management'
+                  $route.path === '/feature-management' ||
+                  $route.path === '/skill-management'
                   ? 'brightness(0) invert(1)'
                   : 'None',
             }" />
@@ -134,6 +136,9 @@
             <el-dropdown-item @click.native="goFeatureManagement">
                 {{ $t("header.featureManagement") }}
               </el-dropdown-item>
+            <el-dropdown-item @click.native="goSkillManagement">
+              {{ $t("header.skillManagement") }}
+            </el-dropdown-item>
           </el-dropdown-menu>
         </el-dropdown>
       </div>
@@ -372,6 +377,9 @@ export default {
     // 跳转到功能管理
     goFeatureManagement() {
       this.$router.push("/feature-management");
+    },
+    goSkillManagement() {
+      this.$router.push("/skill-management");
     },
     // 加载功能状态
     async loadFeatureStatus() {

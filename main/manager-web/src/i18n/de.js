@@ -23,6 +23,7 @@ export default {
   'header.providerManagement': 'Anbieterverwaltung',
   'header.serverSideManagement': 'Serververwaltung',
   'header.featureManagement': 'Systemfunktionsverwaltung',
+  'header.skillManagement': 'Skill-Verwaltung',
   'header.changePassword': 'Passwort ändern',
   'header.logout': 'Abmelden',
   'header.searchPlaceholder': 'Namen oder MAC suchen',
@@ -249,6 +250,7 @@ export default {
   'roleConfig.contextProviderSuccess': '{count} Quellen erfolgreich hinzugefügt.',
   'roleConfig.contextProviderDocLink': 'Wie man Kontextquellen bereitstellt',
   'roleConfig.editContextProvider': 'Quelle bearbeiten',
+  'roleConfig.skillMapping': 'Sprecher→Skill',
 
   // Voice print page related
   'voicePrint.pageTitle': 'Stimmabdruck-Erkennung',

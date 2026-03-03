@@ -23,6 +23,7 @@ export default {
   'header.providerManagement': 'Quản lý nhà cung cấp',
   'header.serverSideManagement': 'Quản lý máy chủ',
   'header.featureManagement': 'Cấu hình chức năng hệ thống',
+  'header.skillManagement': 'Quản lý kỹ năng',
   'header.changePassword': 'Đổi mật khẩu',
   'header.logout': 'Đăng xuất',
   'header.searchPlaceholder': 'Tìm tên hoặc MAC',

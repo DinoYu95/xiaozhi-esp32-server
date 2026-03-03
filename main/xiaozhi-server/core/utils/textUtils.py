@@ -71,6 +71,10 @@ def is_punctuation_or_emoji(char):
         "]",  # 方括号
         "【",
         "】",  # 中文方括号
+        "（",
+        "）",  # 中文括号（单字符易触发 TTS illegal input）
+        "(",
+        ")",  # 英文括号
     }
     if char.isspace() or char in punctuation_set:
         return True

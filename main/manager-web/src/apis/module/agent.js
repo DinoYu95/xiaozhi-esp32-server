@@ -383,6 +383,88 @@ export default {
             }).send();
     },
     
+    // 多角色智伴：技能列表
+    getSkillList(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/agent/skill/list`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime();
+                callback(res);
+            })
+            .networkFail(() => {
+                RequestService.reAjaxFun(() => this.getSkillList(callback));
+            }).send();
+    },
+    // 新建技能
+    addAgentSkill(form, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/agent/skill`)
+            .method('POST')
+            .data(form)
+            .success((res) => {
+                RequestService.clearRequestTime();
+                callback(res);
+            })
+            .networkFail(() => {
+                RequestService.reAjaxFun(() => this.addAgentSkill(form, callback));
+            }).send();
+    },
+    // 更新技能
+    updateAgentSkill(form, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/agent/skill`)
+            .method('PUT')
+            .data(form)
+            .success((res) => {
+                RequestService.clearRequestTime();
+                callback(res);
+            })
+            .networkFail(() => {
+                RequestService.reAjaxFun(() => this.updateAgentSkill(form, callback));
+            }).send();
+    },
+    // 删除技能
+    deleteAgentSkill(id, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/agent/skill/${id}`)
+            .method('DELETE')
+            .success((res) => {
+                RequestService.clearRequestTime();
+                callback(res);
+            })
+            .networkFail(() => {
+                RequestService.reAjaxFun(() => this.deleteAgentSkill(id, callback));
+            }).send();
+    },
+    // 多角色智伴：获取智能体说话人→技能映射
+    getAgentSkillMapping(agentId, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/agent/${agentId}/skill-mapping`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime();
+                callback(res);
+            })
+            .networkFail(() => {
+                RequestService.reAjaxFun(() => this.getAgentSkillMapping(agentId, callback));
+            }).send();
+    },
+    // 多角色智伴：保存智能体说话人→技能映射
+    saveAgentSkillMapping(agentId, items, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/agent/${agentId}/skill-mapping`)
+            .method('PUT')
+            .data(items)
+            .success((res) => {
+                RequestService.clearRequestTime();
+                callback(res);
+            })
+            .networkFail(() => {
+                RequestService.reAjaxFun(() => this.saveAgentSkillMapping(agentId, items, callback));
+            }).send();
+    },
+
     // 搜索智能体
     searchAgent(keyword, searchType, callback) {
         RequestService.sendRequest()

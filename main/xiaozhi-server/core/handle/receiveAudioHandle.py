@@ -10,6 +10,18 @@ from core.handle.sendAudioHandle import send_stt_message, SentenceType
 TAG = __name__
 
 
+def _set_current_round_speaker_type(conn):
+    """根据 current_speaker_id 与 owner_child_voice_print_id 设置 current_round_speaker_type。"""
+    owner_vp_id = getattr(conn, "owner_child_voice_print_id", None)
+    speaker_id = getattr(conn, "current_speaker_id", None)
+    if owner_vp_id and speaker_id == owner_vp_id:
+        conn.current_round_speaker_type = "owner_child"
+    elif speaker_id:
+        conn.current_round_speaker_type = "other_child"  # 已知声纹非主孩子，简化为 other_child
+    else:
+        conn.current_round_speaker_type = "unknown"
+
+
 async def handleAudioMessage(conn, audio):
     # 当前片段是否有人说话
     have_voice = conn.vad.is_vad(conn, audio)
@@ -48,10 +60,11 @@ async def startToChat(conn, text):
             data = json.loads(text)
             if "speaker" in data and "content" in data:
                 speaker_name = data["speaker"]
-                language_tag = data["language"]
+                language_tag = data.get("language")
                 actual_text = data["content"]
                 conn.logger.bind(tag=TAG).info(f"解析到说话人信息: {speaker_name}")
-
+                if "speaker_id" in data:
+                    conn.current_speaker_id = data["speaker_id"]
                 # 直接使用JSON格式的文本，不解析
                 actual_text = text
     except (json.JSONDecodeError, KeyError):
@@ -63,6 +76,8 @@ async def startToChat(conn, text):
         conn.current_speaker = speaker_name
     else:
         conn.current_speaker = None
+    # 多角色：当前轮说话人类型，供打断策略与 skill 路由
+    _set_current_round_speaker_type(conn)
     # 保存语种信息到连接对象
     if language_tag:
         conn.current_language_tag = language_tag

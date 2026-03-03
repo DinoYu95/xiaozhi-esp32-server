@@ -5,6 +5,7 @@ import json
 import uuid
 import time
 import queue
+from datetime import date
 import asyncio
 import threading
 import traceback
@@ -133,8 +134,15 @@ class ConnectionHandler:
         # 所以涉及到ASR的变量，需要在这里定义，属于connection的私有变量
         self.asr_audio = []
         self.asr_audio_queue = queue.Queue()
-        self.current_speaker = None  # 存储当前说话人
+        self.current_speaker = None  # 存储当前说话人（名字）
+        self.current_speaker_id = None  # 存储当前说话人声纹ID，供 speaker_context、is_owner_child 使用
+        self.current_round_speaker_type = None  # 当前轮说话人类型：owner_child/parent/other_child/other_adult/unknown，供打断策略与 skill 路由
         self.current_language_tag = None  # 存储当前ASR识别的语言标签
+        # 多角色与智伴：主孩子与技能映射（由私有配置下发填充）
+        self.owner_child_id = None
+        self.owner_child_birthday = None
+        self.owner_child_voice_print_id = None
+        self.skill_mapping = {}
 
         # llm相关变量
         self.dialogue = Dialogue()
@@ -667,6 +675,16 @@ class ConnectionHandler:
             self.config["mcp_endpoint"] = private_config["mcp_endpoint"]
         if private_config.get("context_providers", None) is not None:
             self.config["context_providers"] = private_config["context_providers"]
+        # 多角色与智伴：主孩子信息与说话人类型→技能映射（来自 getAgentModels）
+        if private_config.get("owner_child_id", None) is not None:
+            self.owner_child_id = private_config["owner_child_id"]
+            self.owner_child_birthday = private_config.get("owner_child_birthday")
+            self.owner_child_voice_print_id = private_config.get("owner_child_voice_print_id")
+        else:
+            self.owner_child_id = None
+            self.owner_child_birthday = None
+            self.owner_child_voice_print_id = None
+        self.skill_mapping = private_config.get("skill_mapping") or {}
 
         # 使用 run_in_executor 在线程池中执行 initialize_modules，避免阻塞主循环
         try:
@@ -794,6 +812,62 @@ class ConnectionHandler:
         # 更新系统prompt至上下文
         self.dialogue.update_system_message(self.prompt)
 
+    def _compute_role_id(self):
+        """多角色：按当前说话人计算 memory/llm 的 role_id。"""
+        device_id = self.device_id or ""
+        speaker_id = getattr(self, "current_speaker_id", None)
+        owner_vp_id = getattr(self, "owner_child_voice_print_id", None)
+        owner_child_id = getattr(self, "owner_child_id", None)
+        if owner_vp_id and speaker_id == owner_vp_id and owner_child_id is not None:
+            return f"{device_id}_{owner_child_id}"
+        if speaker_id:
+            return f"{device_id}_guest_{speaker_id}"
+        return device_id
+
+    def _build_speaker_context(self):
+        """多角色：拼装传给 zhiban-agent 的 speaker_context。"""
+        name = getattr(self, "current_speaker", None) or ""
+        speaker_id = getattr(self, "current_speaker_id", None)
+        speaker_type = getattr(self, "current_round_speaker_type", None) or "unknown"
+        owner_vp_id = getattr(self, "owner_child_voice_print_id", None)
+        introduction = ""
+        if self.voiceprint_provider and speaker_id and getattr(self.voiceprint_provider, "speaker_map", None):
+            intro_map = self.voiceprint_provider.speaker_map.get(speaker_id, {})
+            introduction = intro_map.get("description") or ""
+        estimated_age = "unknown"
+        if owner_vp_id and speaker_id == owner_vp_id:
+            bd = getattr(self, "owner_child_birthday", None)
+            if bd:
+                try:
+                    if isinstance(bd, str):
+                        y, m, d = bd.split("-")[:3]
+                        birth = date(int(y), int(m), int(d))
+                    else:
+                        birth = bd
+                    today = date.today()
+                    estimated_age = str(max(0, (today - birth).days // 365))
+                except Exception:
+                    pass
+        is_owner_child = bool(owner_vp_id and speaker_id == owner_vp_id)
+        return {
+            "speaker_id": speaker_id,
+            "speaker_name": name,
+            "speaker_type": speaker_type,
+            "introduction": introduction,
+            "estimated_age": estimated_age,
+            "is_owner_child": is_owner_child,
+        }
+
+    def _build_environment_context(self):
+        """多角色：拼装 environment_context，设备字段由 conn 或后续 hello 解析填充。"""
+        return {
+            "noise_level": getattr(self, "environment_noise_level", None) or "unknown",
+            "has_overlapping_voice": getattr(self, "environment_has_overlapping_voice", False),
+            "scene": getattr(self, "environment_scene", None) or "unknown",
+            "environment_description": getattr(self, "environment_description", None) or "",
+            "device_reported_context": getattr(self, "device_reported_context", None) or {},
+        }
+
     def chat(self, query, depth=0):
         if query is not None:
             self.logger.bind(tag=TAG).info(f"大模型收到用户消息: {query}")
@@ -844,6 +918,20 @@ class ConnectionHandler:
                     "LLM 未初始化，请检查模型配置或 selected_module.LLM 是否正确（如选 ZhibanAgent 需配置 base_url）"
                 )
                 return None
+            # 多角色：按当前说话人切换记忆维度并拼装上下文
+            role_id = self._compute_role_id()
+            speaker_context = self._build_speaker_context()
+            # 一说话人对应多技能：skill_mapping 为 speaker_type -> list[skill_id]，由 zhiban 按意图选 skill
+            st = getattr(self, "current_round_speaker_type", None) or "unknown"
+            raw = (self.skill_mapping or {}).get(st) or (self.skill_mapping or {}).get("unknown")
+            if isinstance(raw, list):
+                skill_ids = [x for x in raw if x]
+            else:
+                skill_ids = [raw] if raw else []
+            environment_context = self._build_environment_context()
+            if self.memory is not None:
+                self.memory.switch_role(role_id)
+
             # 使用带记忆的对话
             memory_str = None
             if self.memory is not None:
@@ -852,14 +940,20 @@ class ConnectionHandler:
                 )
                 memory_str = future.result()
 
+            llm_kwargs = {
+                "user_id": role_id,
+                "speaker_context": speaker_context,
+                "skill_ids": skill_ids,
+                "environment_context": environment_context,
+            }
             if self.intent_type == "function_call" and functions is not None:
-                # 使用支持functions的streaming接口
                 llm_responses = self.llm.response_with_functions(
                     self.session_id,
                     self.dialogue.get_llm_dialogue_with_memory(
                         memory_str, self.config.get("voiceprint", {})
                     ),
                     functions=functions,
+                    **llm_kwargs,
                 )
             else:
                 llm_responses = self.llm.response(
@@ -867,6 +961,7 @@ class ConnectionHandler:
                     self.dialogue.get_llm_dialogue_with_memory(
                         memory_str, self.config.get("voiceprint", {})
                     ),
+                    **llm_kwargs,
                 )
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"LLM 处理出错 {query}: {e}")

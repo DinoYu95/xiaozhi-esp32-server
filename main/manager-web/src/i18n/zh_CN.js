@@ -23,6 +23,7 @@ export default {
   'header.providerManagement': '字段管理',
   'header.serverSideManagement': '服务端管理',
   'header.featureManagement': '系统功能配置',
+  'header.skillManagement': '技能管理',
   'header.changePassword': '修改密码',
   'header.logout': '退出登录',
   'header.searchPlaceholder': '输入名称或mac搜索',
@@ -249,6 +250,7 @@ export default {
   'roleConfig.contextProviderSuccess': '已成功添加 {count} 个源。',
   'roleConfig.contextProviderDocLink': '如何部署上下文源',
   'roleConfig.editContextProvider': '编辑源',
+  'roleConfig.skillMapping': '说话人→技能',
 
   // 声纹页面相关
   'voicePrint.pageTitle': '声纹识别',

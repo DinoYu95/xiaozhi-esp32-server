@@ -26,3 +26,7 @@ class MemoryProviderBase(ABC):
     def init_memory(self, role_id, llm, **kwargs):
         self.role_id = role_id
         self.llm = llm
+
+    def switch_role(self, role_id):
+        """多角色：切换当前记忆维度（每轮对话前按当前说话人调用）。"""
+        self.role_id = role_id

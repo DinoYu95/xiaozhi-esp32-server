@@ -69,6 +69,16 @@
                         </el-button>
                       </div>
                     </el-form-item>
+                    <el-form-item :label="$t('roleConfig.skillMapping') + '：'" class="skill-mapping-item">
+                      <div class="skill-mapping-grid">
+                        <div v-for="(label, key) in speakerTypeLabels" :key="key" class="skill-mapping-row">
+                          <span class="skill-mapping-label">{{ label }}</span>
+                          <el-select v-model="skillMappingByType[key]" :placeholder="$t('roleConfig.pleaseSelect')" clearable multiple collapse-tags size="small" class="skill-mapping-select">
+                            <el-option v-for="s in skillList" :key="s.id" :label="s.name" :value="s.id" />
+                          </el-select>
+                        </div>
+                      </div>
+                    </el-form-item>
                     <el-form-item :label="$t('roleConfig.roleIntroduction') + '：'">
                       <el-input
                         type="textarea"
@@ -362,6 +372,22 @@ export default {
         vad: false, // 语言检测活动功能状态
         asr: false, // 语音识别功能状态
       },
+      // 多角色智伴：技能列表与说话人→多技能映射（每类说话人可多选技能，由意图决定走哪个）
+      skillList: [],
+      skillMappingByType: {
+        owner_child: [],
+        parent: [],
+        other_child: [],
+        other_adult: [],
+        unknown: [],
+      },
+      speakerTypeLabels: {
+        owner_child: "主孩子",
+        parent: "家长",
+        other_child: "其他孩子",
+        other_adult: "其他成人",
+        unknown: "未知",
+      },
     };
   },
   methods: {
@@ -394,11 +420,20 @@ export default {
         }),
         contextProviders: this.currentContextProviders,
       };
-      Api.agent.updateAgentConfig(this.$route.query.agentId, configData, ({ data }) => {
+      const agentId = this.$route.query.agentId;
+      Api.agent.updateAgentConfig(agentId, configData, ({ data }) => {
         if (data.code === 0) {
-          this.$message.success({
-            message: i18n.t("roleConfig.saveSuccess"),
-            showClose: true,
+          const items = [];
+          Object.entries(this.skillMappingByType).forEach(([speakerType, skillIds]) => {
+            const ids = Array.isArray(skillIds) ? skillIds : (skillIds ? [skillIds] : []);
+            ids.forEach((skillId) => items.push({ speakerType, skillId }));
+          });
+          Api.agent.saveAgentSkillMapping(agentId, items, ({ data: res }) => {
+            if (res.code === 0) {
+              this.$message.success({ message: i18n.t("roleConfig.saveSuccess"), showClose: true });
+            } else {
+              this.$message.warning({ message: i18n.t("roleConfig.saveSuccess") + "，" + (res.msg || "技能映射保存失败"), showClose: true });
+            }
           });
         } else {
           this.$message.error({
@@ -406,6 +441,11 @@ export default {
             showClose: true,
           });
         }
+      });
+    },
+    fetchSkillList() {
+      Api.agent.getSkillList(({ data }) => {
+        if (data.code === 0 && data.data) this.skillList = data.data;
       });
     },
     resetConfig() {
@@ -512,6 +552,18 @@ export default {
           
           // 加载上下文配置
           this.currentContextProviders = data.data.contextProviders || [];
+
+          // 多角色智伴：加载技能列表与说话人→技能映射
+          this.fetchSkillList();
+          Api.agent.getAgentSkillMapping(agentId, ({ data: res }) => {
+            if (res.code === 0 && res.data && Array.isArray(res.data)) {
+              const map = { owner_child: [], parent: [], other_child: [], other_adult: [], unknown: [] };
+              res.data.forEach((m) => {
+                if (m.speakerType && map.hasOwnProperty(m.speakerType) && m.skillId) map[m.speakerType].push(m.skillId);
+              });
+              this.skillMappingByType = { ...map };
+            }
+          });
 
           // 先保证 allFunctions 已经加载（如果没有，则先 fetchAllFunctions）
           const ensureFuncs = this.allFunctions.length
@@ -1308,6 +1360,11 @@ export default {
   color: #409eff;
   border-color: #409eff;
 }
+
+.skill-mapping-grid { display: flex; flex-direction: column; gap: 8px; }
+.skill-mapping-row { display: flex; align-items: center; gap: 12px; }
+.skill-mapping-label { min-width: 72px; font-size: 13px; color: #606266; }
+.skill-mapping-select { flex: 1; max-width: 280px; }
 
 .edit-function-btn {
   background: #e6ebff;

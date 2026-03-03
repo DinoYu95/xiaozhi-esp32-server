@@ -3,7 +3,7 @@ import time
 import aiohttp
 import requests
 from urllib.parse import urlparse, parse_qs
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple
 from config.logger import setup_logging
 from core.utils.cache.manager import cache_manager
 from core.utils.cache.config import CacheType
@@ -137,62 +137,59 @@ class VoiceprintProvider:
         
         return is_healthy
     
-    async def identify_speaker(self, audio_data: bytes, session_id: str) -> Optional[str]:
-        """识别说话人"""
+    async def identify_speaker(self, audio_data: bytes, session_id: str) -> Tuple[Optional[str], str]:
+        """
+        识别说话人。返回 (speaker_id, speaker_name)，未识别时 (None, "未知说话人")。
+        兼容旧调用方：name 仍可用于展示与对话；id 供 xiaozhi 拼 speaker_context、判断 is_owner_child。
+        """
         if not self.enabled or not self.api_url or not self.api_key:
             logger.bind(tag=TAG).debug("声纹识别功能已禁用或未配置，跳过识别")
-            return None
-            
+            return None, "未知说话人"
+
+        api_start_time = time.monotonic()
         try:
-            api_start_time = time.monotonic()
-            
-            # 准备请求头
             headers = {
                 'Authorization': f'Bearer {self.api_key}',
                 'Accept': 'application/json'
             }
-            
-            # 准备multipart/form-data数据
             data = aiohttp.FormData()
             data.add_field('speaker_ids', ','.join(self.speaker_ids))
             data.add_field('file', audio_data, filename='audio.wav', content_type='audio/wav')
-            
             timeout = aiohttp.ClientTimeout(total=10)
-            
-            # 网络请求
+
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(self.api_url, headers=headers, data=data) as response:
-                    
                     if response.status == 200:
                         result = await response.json()
                         speaker_id = result.get("speaker_id")
                         score = result.get("score", 0)
                         total_elapsed_time = time.monotonic() - api_start_time
-                        
                         logger.bind(tag=TAG).info(f"声纹识别耗时: {total_elapsed_time:.3f}s")
-                        
-                        # 相似度阈值检查
+
                         if score < self.similarity_threshold:
-                            logger.bind(tag=TAG).warning(f"声纹识别相似度{score:.3f}低于阈值{self.similarity_threshold}")
-                            return "未知说话人"
-                        
+                            logger.bind(tag=TAG).warning(
+                                f"声纹识别相似度{score:.3f}低于阈值{self.similarity_threshold}"
+                            )
+                            return None, "未知说话人"
+
                         if speaker_id and speaker_id in self.speaker_map:
                             result_name = self.speaker_map[speaker_id]["name"]
-                            logger.bind(tag=TAG).info(f"声纹识别成功: {result_name} (相似度: {score:.3f})")
-                            return result_name
+                            logger.bind(tag=TAG).info(
+                                f"声纹识别成功: {result_name} (id={speaker_id}, 相似度: {score:.3f})"
+                            )
+                            return speaker_id, result_name
                         else:
                             logger.bind(tag=TAG).warning(f"未识别的说话人ID: {speaker_id}")
-                            return "未知说话人"
+                            return None, "未知说话人"
                     else:
                         logger.bind(tag=TAG).error(f"声纹识别API错误: HTTP {response.status}")
-                        return None
-                        
+                        return None, "未知说话人"
         except asyncio.TimeoutError:
             elapsed = time.monotonic() - api_start_time
             logger.bind(tag=TAG).error(f"声纹识别超时: {elapsed:.3f}s")
-            return None
+            return None, "未知说话人"
         except Exception as e:
             elapsed = time.monotonic() - api_start_time
             logger.bind(tag=TAG).error(f"声纹识别失败: {e}")
-            return None
+            return None, "未知说话人"
 

@@ -19,11 +19,13 @@ import xiaozhi.common.redis.RedisKeys;
 import xiaozhi.common.redis.RedisUtils;
 import xiaozhi.common.utils.ConvertUtils;
 import xiaozhi.common.utils.JsonUtils;
+import xiaozhi.modules.agent.dao.AgentSkillMappingDao;
 import xiaozhi.modules.agent.dao.AgentVoicePrintDao;
 import xiaozhi.modules.agent.entity.AgentContextProviderEntity;
 import xiaozhi.modules.agent.entity.AgentEntity;
 import xiaozhi.modules.agent.entity.AgentPluginMapping;
 import xiaozhi.modules.agent.entity.AgentTemplateEntity;
+import xiaozhi.modules.agent.entity.AgentSkillMappingEntity;
 import xiaozhi.modules.agent.entity.AgentVoicePrintEntity;
 import xiaozhi.modules.agent.service.AgentContextProviderService;
 import xiaozhi.modules.agent.service.AgentMcpAccessPointService;
@@ -60,6 +62,7 @@ public class ConfigServiceImpl implements ConfigService {
     private final AgentContextProviderService agentContextProviderService;
     private final VoiceCloneService cloneVoiceService;
     private final AgentVoicePrintDao agentVoicePrintDao;
+    private final AgentSkillMappingDao agentSkillMappingDao;
     private final DeviceChildDao deviceChildDao;
 
     @Override
@@ -202,6 +205,31 @@ public class ConfigServiceImpl implements ConfigService {
 
         // 获取声纹信息（按设备过滤：本设备主孩子 + 后台声纹）
         buildVoiceprintConfig(agent.getId(), result, device.getId());
+
+        // 多角色与智伴：下发主孩子信息（供 xiaozhi 算 estimated_age、is_owner_child）及说话人类型→技能映射
+        DeviceChildEntity deviceChild = deviceChildDao.selectOne(
+                new LambdaQueryWrapper<DeviceChildEntity>().eq(DeviceChildEntity::getDeviceId, device.getId()));
+        if (deviceChild != null) {
+            result.put("owner_child_id", deviceChild.getId());
+            result.put("owner_child_birthday", deviceChild.getBirthday() != null ? deviceChild.getBirthday().toString() : null);
+            AgentVoicePrintEntity ownerVoicePrint = agentVoicePrintDao.selectOne(
+                    new LambdaQueryWrapper<AgentVoicePrintEntity>()
+                            .eq(AgentVoicePrintEntity::getAgentId, agent.getId())
+                            .eq(AgentVoicePrintEntity::getChildId, deviceChild.getId()));
+            if (ownerVoicePrint != null) {
+                result.put("owner_child_voice_print_id", ownerVoicePrint.getId());
+            }
+        }
+        // 一说话人对应多技能：speaker_type -> List<skill_id>，由意图决定走哪个 skill
+        List<AgentSkillMappingEntity> skillMappings = agentSkillMappingDao.selectList(
+                new LambdaQueryWrapper<AgentSkillMappingEntity>().eq(AgentSkillMappingEntity::getAgentId, agent.getId()));
+        if (skillMappings != null && !skillMappings.isEmpty()) {
+            Map<String, List<String>> skillMapping = new HashMap<>();
+            for (AgentSkillMappingEntity m : skillMappings) {
+                skillMapping.computeIfAbsent(m.getSpeakerType(), k -> new ArrayList<>()).add(m.getSkillId());
+            }
+            result.put("skill_mapping", skillMapping);
+        }
 
         // 构建模块配置
         buildModuleConfig(

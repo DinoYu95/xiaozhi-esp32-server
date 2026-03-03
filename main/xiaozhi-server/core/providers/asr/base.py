@@ -121,15 +121,23 @@ class ASRProviderBase(ABC):
 
             if isinstance(voiceprint_result, Exception):
                 logger.bind(tag=TAG).error(f"声纹识别失败: {voiceprint_result}")
-                speaker_name = ""
+                speaker_id, speaker_name = None, ""
             else:
-                speaker_name = voiceprint_result
+                # identify_speaker 返回 (speaker_id, speaker_name)
+                speaker_id, speaker_name = voiceprint_result if isinstance(voiceprint_result, (tuple, list)) else (None, voiceprint_result or "")
+
+            if hasattr(conn, "current_speaker"):
+                conn.current_speaker = speaker_name or None
+            if hasattr(conn, "current_speaker_id"):
+                conn.current_speaker_id = speaker_id
 
             # 判断 ASR 结果类型
             if isinstance(raw_text, dict):
                 # FunASR 返回的 dict 格式
                 if speaker_name:
                     raw_text["speaker"] = speaker_name
+                if speaker_id is not None:
+                    raw_text["speaker_id"] = speaker_id
 
                 # 记录识别结果
                 if raw_text.get("language"):
@@ -152,7 +160,7 @@ class ASRProviderBase(ABC):
                     logger.bind(tag=TAG).info(f"识别说话人: {speaker_name}")
 
                 # 构建包含说话人信息的JSON字符串
-                enhanced_text = self._build_enhanced_text(raw_text, speaker_name)
+                enhanced_text = self._build_enhanced_text(raw_text, speaker_name, speaker_id)
                 content_for_length_check = raw_text
 
             # 性能监控
@@ -164,6 +172,28 @@ class ASRProviderBase(ABC):
             self.stop_ws_connection()
 
             if text_len > 0:
+                # 多角色打断策略：当前轮为主孩子且机器未播时，非主孩子声音需为「打断意图」才处理
+                # 例外：声纹识别失败（speaker_id 为 None，未知说话人）时，可能是同一孩子在嘈杂环境下的误判，不再忽略，以免对话断连
+                current_round = getattr(conn, "current_round_speaker_type", None)
+                owner_vp_id = getattr(conn, "owner_child_voice_print_id", None)
+                machine_speaking = getattr(conn, "client_is_speaking", True)
+                is_voiceprint_failed = speaker_id is None and getattr(conn, "current_speaker", None) in (None, "", "未知说话人")
+                if (
+                    not is_voiceprint_failed
+                    and current_round == "owner_child"
+                    and not machine_speaking
+                    and owner_vp_id is not None
+                    and speaker_id != owner_vp_id
+                ):
+                    from core.utils.interrupt_intent import is_interrupt_intent
+                    if not is_interrupt_intent(content_for_length_check):
+                        logger.bind(tag=TAG).info(
+                            "主孩子轮次内非主孩子声音，且非打断意图，忽略本段: %s",
+                            content_for_length_check[:50] if content_for_length_check else "",
+                        )
+                        return
+                    from core.handle.abortHandle import handleAbortMessage
+                    await handleAbortMessage(conn)
                 # 使用自定义模块进行上报
                 await startToChat(conn, enhanced_text)
                 audio_snapshot = asr_audio_task.copy()
@@ -174,14 +204,16 @@ class ASRProviderBase(ABC):
 
             logger.bind(tag=TAG).debug(f"异常详情: {traceback.format_exc()}")
 
-    def _build_enhanced_text(self, text: str, speaker_name: Optional[str]) -> str:
+    def _build_enhanced_text(
+        self, text: str, speaker_name: Optional[str], speaker_id: Optional[str] = None
+    ) -> str:
         """构建包含说话人信息的文本（仅用于纯文本ASR）"""
         if speaker_name and speaker_name.strip():
-            return json.dumps(
-                {"speaker": speaker_name, "content": text}, ensure_ascii=False
-            )
-        else:
-            return text
+            obj = {"speaker": speaker_name, "content": text}
+            if speaker_id is not None:
+                obj["speaker_id"] = speaker_id
+            return json.dumps(obj, ensure_ascii=False)
+        return text
 
     def _pcm_to_wav(self, pcm_data: bytes) -> bytes:
         """将PCM数据转换为WAV格式"""

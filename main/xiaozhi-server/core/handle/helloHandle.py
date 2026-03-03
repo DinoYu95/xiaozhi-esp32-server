@@ -56,6 +56,13 @@ async def handleHelloMessage(conn, msg_json):
             # 发送初始化
             asyncio.create_task(send_mcp_initialize_message(conn))
 
+    # 多角色：设备上报的环境信息（图像识别文案、场景等），供 environment_context 带给 zhiban
+    env = msg_json.get("environment") or {}
+    if env or msg_json.get("scene") is not None or msg_json.get("environment_description") is not None:
+        conn.environment_scene = env.get("scene") or msg_json.get("scene") or getattr(conn, "environment_scene", None)
+        conn.environment_description = env.get("environment_description") or msg_json.get("environment_description") or getattr(conn, "environment_description", None)
+        conn.device_reported_context = env.get("device_reported_context") or msg_json.get("device_reported_context") or getattr(conn, "device_reported_context", None) or {}
+
     await conn.websocket.send(json.dumps(conn.welcome_msg))
 
 

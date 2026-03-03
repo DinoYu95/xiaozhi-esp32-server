@@ -85,6 +85,10 @@ class TTSProviderBase(ABC):
 
     def to_tts_stream(self, text, opus_handler: Callable[[bytes], None] = None) -> None:
         text = MarkdownCleaner.clean_markdown(text)
+        # 过滤纯标点/空白，避免 doubao 等 TTS 报 illegal input text
+        text = textUtils.get_string_no_punctuation_or_emoji(text)
+        if not text:
+            return
         max_repeat_time = 5
         if self.delete_audio_file:
             # 需要删除文件的直接转为音频数据
@@ -149,6 +153,9 @@ class TTSProviderBase(ABC):
     
     def to_tts(self, text):
         text = MarkdownCleaner.clean_markdown(text)
+        text = textUtils.get_string_no_punctuation_or_emoji(text)
+        if not text:
+            return []
         max_repeat_time = 5
         if self.delete_audio_file:
             # 需要删除文件的直接转为音频数据

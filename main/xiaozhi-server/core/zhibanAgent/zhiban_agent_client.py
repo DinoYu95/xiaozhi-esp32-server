@@ -3,7 +3,7 @@
 智伴 Agent 客户端：向 zhiban-agent 发起 /api/chat（非流）或 /api/chat/stream（流式），用于儿童对话、知识问答、故事、游戏等。
 设备不直连 zhiban-agent，由 xiaozhi-server 在需要时调用本客户端，再将回复经 TTS 返回设备。
 """
-from typing import Optional, Iterator
+from typing import Optional, Iterator, Dict, Any, List
 
 import httpx
 
@@ -32,9 +32,14 @@ class ZhibanAgentClient:
         text: str,
         session_id: str,
         user_id: Optional[str] = None,
+        speaker_context: Optional[Dict[str, Any]] = None,
+        skill_ids: Optional[list] = None,
+        environment_context: Optional[Dict[str, Any]] = None,
+        messages: Optional[List[Dict[str, str]]] = None,
     ) -> Optional[str]:
         """
         非流式：发送用户文本到 zhiban-agent /api/chat，返回完整助手回复。
+        一说话人多技能：传 skill_ids 列表，由 zhiban 按意图选 skill。
         """
         if not self.base_url:
             logger.bind(tag=TAG).warning("zhiban_agent base_url 未配置，跳过智伴调用")
@@ -48,6 +53,14 @@ class ZhibanAgentClient:
         }
         if user_id:
             payload["user_id"] = user_id
+        if speaker_context:
+            payload["speaker_context"] = speaker_context
+        if skill_ids:
+            payload["skill_ids"] = skill_ids
+        if environment_context:
+            payload["environment_context"] = environment_context
+        if messages:
+            payload["messages"] = messages
 
         try:
             with httpx.Client(timeout=self.timeout) as client:
@@ -74,9 +87,14 @@ class ZhibanAgentClient:
         text: str,
         session_id: str,
         user_id: Optional[str] = None,
+        speaker_context: Optional[Dict[str, Any]] = None,
+        skill_ids: Optional[list] = None,
+        environment_context: Optional[Dict[str, Any]] = None,
+        messages: Optional[List[Dict[str, str]]] = None,
     ) -> Iterator[str]:
         """
         流式：POST /api/chat/stream，按 SSE 解析，逐块 yield 文本。
+        一说话人多技能：传 skill_ids 列表，由 zhiban 按意图选 skill。
         """
         if not self.base_url:
             logger.bind(tag=TAG).warning("zhiban_agent base_url 未配置，跳过智伴调用")
@@ -90,6 +108,14 @@ class ZhibanAgentClient:
         }
         if user_id:
             payload["user_id"] = user_id
+        if speaker_context:
+            payload["speaker_context"] = speaker_context
+        if skill_ids:
+            payload["skill_ids"] = skill_ids
+        if environment_context:
+            payload["environment_context"] = environment_context
+        if messages:
+            payload["messages"] = messages
 
         try:
             with httpx.Client(timeout=self.timeout) as client:

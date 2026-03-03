@@ -99,6 +99,17 @@ const routes = [
     }
   },
   {
+    path: '/skill-management',
+    name: 'SkillManagement',
+    component: function () {
+      return import('../views/SkillManagement.vue')
+    },
+    meta: {
+      requiresAuth: true,
+      title: '技能管理'
+    }
+  },
+  {
     path: '/knowledge-file-upload',
     name: 'KnowledgeFileUpload',
     component: function () {

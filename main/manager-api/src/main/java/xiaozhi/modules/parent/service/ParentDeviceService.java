@@ -5,6 +5,7 @@ import java.util.List;
 import xiaozhi.modules.parent.dto.ParentDeviceBindDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceUnbindDTO;
 import xiaozhi.modules.parent.vo.ParentDeviceItemVO;
+import xiaozhi.modules.parent.vo.ParentDeviceSkillVO;
 
 /**
  * 家长端设备绑定服务
@@ -25,6 +26,16 @@ public interface ParentDeviceService {
      * 当前家长已绑定设备列表
      */
     List<ParentDeviceItemVO> list(Long parentUserId);
+
+    /**
+     * 获取某设备下所有技能信息（需校验设备已绑定给当前家长）
+     */
+    List<ParentDeviceSkillVO> listSkills(Long parentUserId, String deviceId);
+
+    /**
+     * 获取某设备已绑定的技能 id 列表（用于去重；官方=String ai_skill.id，家长=Long parent_user_skill.id）
+     */
+    List<Object> listBoundSkillIds(Long parentUserId, String deviceId);
 
     record BindResult(String deviceId, String message) {
     }

@@ -1,4 +1,4 @@
-package xiaozhi.modules.agent.entity;
+package xiaozhi.modules.parent.entity;
 
 import java.util.Date;
 
@@ -10,26 +10,21 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 /**
- * 技能定义表（固定格式，类 Claude Skill）
+ * 家长端自定义技能表（与管理员 ai_skill 区分）
  */
 @Data
-@TableName("ai_skill")
-public class AgentSkillEntity {
+@TableName("parent_user_skill")
+public class ParentUserSkillEntity {
 
-    @TableId(type = IdType.INPUT)
-    private String id;
-
+    @TableId(type = IdType.AUTO)
+    private Long id;
+    private Long parentUserId;
     private String name;
     private String description;
     private String instructions;
     private String version;
-    /** JSON 数组字符串，如 ["play_music","story_tell"] */
     private String tools;
-    /** JSON 对象字符串 */
     private String metadata;
-    /** 是否官方推荐：0否 1是 */
-    @TableField("is_official_recommended")
-    private Integer isOfficialRecommended;
 
     @TableField("create_time")
     private Date createTime;

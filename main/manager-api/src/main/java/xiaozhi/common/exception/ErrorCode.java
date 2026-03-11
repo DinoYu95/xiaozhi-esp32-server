@@ -252,5 +252,6 @@ public interface ErrorCode {
     int PARENT_BIND_CODE_INVALID = 20004; // 绑定码无效或已过期
     int PARENT_DEVICE_ALREADY_BOUND = 20005; // 设备已被其他账号绑定
     int PARENT_DEVICE_NOT_BOUND = 20006; // 设备未绑定或不属于当前家长
+    int PARENT_SKILL_NOT_FOUND = 20007; // 技能不存在或无权操作
 
 }

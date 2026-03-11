@@ -123,6 +123,10 @@ class MarkdownCleaner:
             _replace_inline_dollar
         ),
         (re.compile(r'\n{2,}'), '\n'),  # 多余空行
+        # 移除括号内的旁白/动作描写（如「轻轻拍拍你的小肩膀」「声音放轻，带点不舍」），避免 TTS 念出来
+        (re.compile(
+            r'[（(][^）)]*(?:轻轻|拍拍|摸摸|点头|摇头|拥抱|叹气|声音放|带点|温柔地|悄悄|放轻)[^）)]*[）)]'
+        ), ''),
     ]
 
     @staticmethod

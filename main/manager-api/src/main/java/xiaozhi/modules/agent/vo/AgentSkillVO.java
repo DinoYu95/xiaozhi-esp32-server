@@ -15,6 +15,8 @@ public class AgentSkillVO {
     private String version;
     private String tools;
     private String metadata;
+    @Schema(description = "是否官方推荐：0否 1是")
+    private Integer isOfficialRecommended;
     private Date createTime;
     private Date updateTime;
 }

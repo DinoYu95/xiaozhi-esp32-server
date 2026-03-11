@@ -12,6 +12,16 @@ public interface AgentSkillService extends IService<AgentSkillEntity> {
 
     List<AgentSkillVO> listAll();
 
+    /**
+     * 官方推荐的技能列表（家长端展示）
+     */
+    List<AgentSkillVO> listOfficialRecommended();
+
+    /**
+     * 官方推荐技能按关键词模糊搜索（name、description）
+     */
+    List<AgentSkillVO> searchOfficialRecommended(String keyword);
+
     AgentSkillVO getById(String id);
 
     boolean saveSkill(AgentSkillSaveDTO dto);

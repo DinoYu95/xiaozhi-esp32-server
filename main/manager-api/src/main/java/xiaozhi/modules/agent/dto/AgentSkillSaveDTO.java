@@ -32,4 +32,7 @@ public class AgentSkillSaveDTO {
 
     @Schema(description = "扩展字段，JSON 对象字符串")
     private String metadata;
+
+    @Schema(description = "是否官方推荐：true是 false否，家长端展示推荐技能")
+    private Boolean isOfficialRecommended;
 }

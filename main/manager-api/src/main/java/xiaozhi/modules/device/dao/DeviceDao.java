@@ -18,4 +18,8 @@ public interface DeviceDao extends BaseMapper<DeviceEntity> {
      */
     Date getAllLastConnectedAtByAgentId(String agentId);
 
+    /**
+     * 按 id 或 mac 格式变体查找设备（兼容 B6:C8:35:D6:10:48 / b6_c8_35_d6_10_48）
+     */
+    DeviceEntity selectByIdOrMacVariant(String deviceId);
 }

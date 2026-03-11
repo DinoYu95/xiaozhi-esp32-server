@@ -9,4 +9,12 @@
         order by
             last_connected_at desc limit 0,1
     </select>
+
+    <select id="selectByIdOrMacVariant" resultType="xiaozhi.modules.device.entity.DeviceEntity">
+        SELECT * FROM ai_device
+        WHERE id = #{deviceId}
+           OR REPLACE(LOWER(id), ':', '_') = REPLACE(LOWER(#{deviceId}), ':', '_')
+           OR REPLACE(LOWER(id), '_', ':') = REPLACE(LOWER(#{deviceId}), '_', ':')
+        LIMIT 1
+    </select>
 </mapper> 

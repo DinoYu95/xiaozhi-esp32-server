@@ -35,6 +35,19 @@ async def handle_user_intent(conn, text):
     if conn.intent_type == "function_call":
         # 使用支持function calling的聊天方法,不再进行意图分析
         return False
+    # 使用 ZhibanAgent 时跳过 xiaozhi 意图识别，直接进 chat；意图与工具由 zhiban-agent 内部处理
+    # 智控台可能下发的 selected_module.LLM 为 model_id 而非 "ZhibanAgent"，故同时检查 config 与实例类型
+    selected_llm = (conn.config.get("selected_module") or {}).get("LLM") or ""
+    llm_config = (conn.config.get("LLM") or {}).get(selected_llm) or {}
+    llm_type = llm_config.get("type", selected_llm)
+    is_zhiban = (
+        selected_llm == "ZhibanAgent"
+        or llm_type == "ZhibanAgent"
+        or (getattr(conn, "llm", None) and "ZhibanAgent" in type(conn.llm).__module__)
+    )
+    if is_zhiban:
+        conn.logger.bind(tag=TAG).info("LLM 为 ZhibanAgent，跳过意图识别，直接进入对话")
+        return False
     # 使用LLM进行意图分析
     intent_result = await analyze_intent_with_llm(conn, text)
     if not intent_result:

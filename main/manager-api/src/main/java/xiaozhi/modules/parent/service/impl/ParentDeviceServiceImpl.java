@@ -1,8 +1,11 @@
 package xiaozhi.modules.parent.service.impl;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
@@ -17,16 +20,25 @@ import xiaozhi.common.redis.RedisKeys;
 import xiaozhi.common.redis.RedisUtils;
 import xiaozhi.modules.agent.dto.AgentCreateDTO;
 import xiaozhi.modules.agent.service.AgentService;
+import xiaozhi.modules.agent.service.AgentSkillMappingService;
+import xiaozhi.modules.agent.service.AgentSkillService;
+import xiaozhi.modules.agent.vo.AgentSkillVO;
+import xiaozhi.modules.agent.vo.AgentSkillMappingVO;
 import xiaozhi.modules.device.dao.DeviceDao;
 import xiaozhi.modules.device.entity.DeviceEntity;
+import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dao.ParentUserDao;
+import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.dto.ParentDeviceBindDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceUnbindDTO;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.service.ParentDeviceService;
+import xiaozhi.modules.parent.service.ParentUserSkillService;
 import xiaozhi.modules.parent.vo.ParentDeviceItemVO;
+import xiaozhi.modules.parent.vo.ParentDeviceSkillVO;
+import xiaozhi.modules.parent.vo.ParentUserSkillVO;
 import xiaozhi.modules.sys.service.SysParamsService;
 
 @Service
@@ -38,10 +50,14 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
 
     private final ParentDeviceBindingDao parentDeviceBindingDao;
     private final DeviceDao deviceDao;
+    private final DeviceChildDao deviceChildDao;
     private final RedisUtils redisUtils;
     private final SysParamsService sysParamsService;
     private final AgentService agentService;
+    private final AgentSkillService agentSkillService;
+    private final AgentSkillMappingService agentSkillMappingService;
     private final ParentUserDao parentUserDao;
+    private final ParentUserSkillService parentUserSkillService;
 
     @Override
     public BindResult bind(Long parentUserId, ParentDeviceBindDTO dto) {
@@ -106,6 +122,8 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             deviceEntity.setUpdateDate(now);
             deviceEntity.setLastConnectedAt(now);
             deviceDao.insert(deviceEntity);
+            // 为新建 agent 自动配置官方推荐技能
+            agentSkillMappingService.addOfficialRecommendedSkillsIfEmpty(agentId);
         }
 
         ParentDeviceBindingEntity binding = new ParentDeviceBindingEntity();
@@ -135,17 +153,149 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         parentDeviceBindingDao.deleteById(binding.getId());
     }
 
+    private static final long ONLINE_THRESHOLD_MS = TimeUnit.MINUTES.toMillis(5);
+
     @Override
     public List<ParentDeviceItemVO> list(Long parentUserId) {
         List<ParentDeviceBindingEntity> list = parentDeviceBindingDao.selectList(
                 new LambdaQueryWrapper<ParentDeviceBindingEntity>()
                         .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId)
                         .orderByDesc(ParentDeviceBindingEntity::getBindTime));
+        Date now = new Date();
         return list.stream().map(b -> {
             ParentDeviceItemVO vo = new ParentDeviceItemVO();
             vo.setDeviceId(b.getDeviceId());
             vo.setBindTime(b.getBindTime());
+            // 主孩子名 + "的机器人"
+            DeviceChildEntity child = deviceChildDao.selectOne(
+                    new LambdaQueryWrapper<DeviceChildEntity>()
+                            .eq(DeviceChildEntity::getDeviceId, b.getDeviceId()));
+            String childName = (child != null && StringUtils.isNotBlank(child.getName()))
+                    ? child.getName().trim()
+                    : null;
+            vo.setOwnerChildName(childName);
+            vo.setDeviceName(childName != null ? childName + "的机器人" : "我的机器人");
+            // 设备最后连接时间、在线状态
+            DeviceEntity device = deviceDao.selectById(b.getDeviceId());
+            if (device != null) {
+                vo.setLastConnectedAt(device.getLastConnectedAt());
+                vo.setIsOnline(device.getLastConnectedAt() != null
+                        && (now.getTime() - device.getLastConnectedAt().getTime()) < ONLINE_THRESHOLD_MS);
+            } else {
+                vo.setIsOnline(false);
+            }
+            // 电量、WiFi 需设备上报，暂无数据源，降级写死占位值，后续补充
+            vo.setBatteryLevel(0);
+            vo.setWifiName("--");
             return vo;
         }).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ParentDeviceSkillVO> listSkills(Long parentUserId, String deviceId) {
+        if (StringUtils.isBlank(deviceId)) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        // 校验设备已绑定给当前家长（兼容 deviceId 格式：B6:C8:35:D6:10:48 / b6_c8_35_d6_10_48）
+        ParentDeviceBindingEntity binding = parentDeviceBindingDao.selectOne(
+                new LambdaQueryWrapper<ParentDeviceBindingEntity>()
+                        .eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
+                        .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId));
+        if (binding == null) {
+            List<ParentDeviceBindingEntity> list = parentDeviceBindingDao.selectList(
+                    new LambdaQueryWrapper<ParentDeviceBindingEntity>()
+                            .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId));
+            String normalized = deviceId.replace(":", "_").toLowerCase();
+            binding = list != null ? list.stream().filter(b -> {
+                if (b.getDeviceId() == null) return false;
+                String bNorm = b.getDeviceId().replace(":", "_").toLowerCase();
+                return bNorm.equals(normalized);
+            }).findFirst().orElse(null) : null;
+        }
+        if (binding == null) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        // 获取设备的 agentId（兼容 deviceId 格式：B6:C8:35:D6:10:48 / b6_c8_35_d6_10_48）
+        DeviceEntity device = deviceDao.selectById(deviceId);
+        if (device == null) {
+            device = deviceDao.selectByIdOrMacVariant(deviceId);
+        }
+        if (device == null || StringUtils.isBlank(device.getAgentId())) {
+            return new ArrayList<>();
+        }
+        // 获取 agent 的 skill 映射
+        List<AgentSkillMappingVO> mappings = agentSkillMappingService.listByAgentId(device.getAgentId());
+        if (mappings == null || mappings.isEmpty()) {
+            return new ArrayList<>();
+        }
+        // 按 skillId 分组 speakerTypes，并获取技能详情
+        Map<String, List<String>> skillIdToSpeakerTypes = new LinkedHashMap<>();
+        for (AgentSkillMappingVO m : mappings) {
+            if (StringUtils.isNotBlank(m.getSkillId())) {
+                skillIdToSpeakerTypes
+                        .computeIfAbsent(m.getSkillId(), k -> new ArrayList<>())
+                        .add(m.getSpeakerType() != null ? m.getSpeakerType() : "");
+            }
+        }
+        List<ParentDeviceSkillVO> result = new ArrayList<>();
+        for (Map.Entry<String, List<String>> e : skillIdToSpeakerTypes.entrySet()) {
+            String skillId = e.getKey();
+            List<String> speakerTypes = e.getValue();
+            if (skillId.startsWith("parent_")) {
+                Long parentSkillId = parseParentSkillId(skillId);
+                if (parentSkillId != null) {
+                    ParentUserSkillVO skill = parentUserSkillService.getById(parentSkillId);
+                    if (skill != null) {
+                        ParentDeviceSkillVO vo = new ParentDeviceSkillVO();
+                        vo.setSkillId(skill.getId());
+                        vo.setName(skill.getName());
+                        vo.setDescription(skill.getDescription());
+                        vo.setInstructions(skill.getInstructions());
+                        vo.setVersion(skill.getVersion());
+                        vo.setTools(skill.getTools());
+                        vo.setMetadata(skill.getMetadata());
+                        vo.setSkillSource("parent");
+                        vo.setSpeakerTypes(speakerTypes);
+                        vo.setCreateTime(skill.getCreateTime());
+                        vo.setUpdateTime(skill.getUpdateTime());
+                        result.add(vo);
+                    }
+                }
+            } else {
+                AgentSkillVO skill = agentSkillService.getById(skillId);
+                if (skill != null) {
+                    ParentDeviceSkillVO vo = new ParentDeviceSkillVO();
+                    vo.setSkillId(skill.getId());
+                    vo.setName(skill.getName());
+                    vo.setDescription(skill.getDescription());
+                    vo.setInstructions(skill.getInstructions());
+                    vo.setVersion(skill.getVersion());
+                    vo.setTools(skill.getTools());
+                    vo.setMetadata(skill.getMetadata());
+                    vo.setSkillSource("official");
+                    vo.setSpeakerTypes(speakerTypes);
+                    vo.setCreateTime(skill.getCreateTime());
+                    vo.setUpdateTime(skill.getUpdateTime());
+                    result.add(vo);
+                }
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public List<Object> listBoundSkillIds(Long parentUserId, String deviceId) {
+        List<ParentDeviceSkillVO> skills = listSkills(parentUserId, deviceId);
+        if (skills == null || skills.isEmpty()) return new ArrayList<>();
+        return skills.stream().map(ParentDeviceSkillVO::getSkillId).filter(sid -> sid != null).collect(Collectors.toList());
+    }
+
+    private static Long parseParentSkillId(String skillId) {
+        if (skillId == null || !skillId.startsWith("parent_")) return null;
+        try {
+            return Long.parseLong(skillId.substring(7));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

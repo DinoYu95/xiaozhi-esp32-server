@@ -383,7 +383,7 @@ export default {
             }).send();
     },
     
-    // 多角色智伴：技能列表
+    // 多角色智伴：技能列表（管理员）
     getSkillList(callback) {
         RequestService.sendRequest()
             .url(`${getServiceUrl()}/agent/skill/list`)
@@ -394,6 +394,32 @@ export default {
             })
             .networkFail(() => {
                 RequestService.reAjaxFun(() => this.getSkillList(callback));
+            }).send();
+    },
+    // 家长端技能列表（管理员查看）
+    getParentSkillList(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/agent/parent-skill/list`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime();
+                callback(res);
+            })
+            .networkFail(() => {
+                RequestService.reAjaxFun(() => this.getParentSkillList(callback));
+            }).send();
+    },
+    // 删除家长端技能（管理员）
+    deleteParentSkill(id, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/agent/parent-skill/${id}`)
+            .method('DELETE')
+            .success((res) => {
+                RequestService.clearRequestTime();
+                callback(res);
+            })
+            .networkFail(() => {
+                RequestService.reAjaxFun(() => this.deleteParentSkill(id, callback));
             }).send();
     },
     // 新建技能

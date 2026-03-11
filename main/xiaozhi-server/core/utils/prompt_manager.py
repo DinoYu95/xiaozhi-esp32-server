@@ -234,7 +234,7 @@ class PromptManager:
             if client_ip:
                 # 获取位置信息（从全局缓存）
                 local_address = (
-                    self.cache_manager.get(self.CacheType.LOCATION, client_ip) or ""
+                    self.cache_manager.get(self.CacheType.LOCATION, client_ip) or "" 
                 )
 
                 # 获取天气信息（从全局缓存）

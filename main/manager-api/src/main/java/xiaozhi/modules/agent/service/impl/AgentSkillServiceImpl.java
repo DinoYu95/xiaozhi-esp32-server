@@ -27,6 +27,28 @@ public class AgentSkillServiceImpl extends ServiceImpl<AgentSkillDao, AgentSkill
     }
 
     @Override
+    public List<AgentSkillVO> listOfficialRecommended() {
+        List<AgentSkillEntity> list = baseMapper.selectList(
+                new LambdaQueryWrapper<AgentSkillEntity>()
+                        .eq(AgentSkillEntity::getIsOfficialRecommended, 1)
+                        .orderByAsc(AgentSkillEntity::getId));
+        return ConvertUtils.sourceToTarget(list, AgentSkillVO.class);
+    }
+
+    @Override
+    public List<AgentSkillVO> searchOfficialRecommended(String keyword) {
+        LambdaQueryWrapper<AgentSkillEntity> wrapper = new LambdaQueryWrapper<AgentSkillEntity>()
+                .eq(AgentSkillEntity::getIsOfficialRecommended, 1)
+                .orderByAsc(AgentSkillEntity::getId);
+        if (StringUtils.isNotBlank(keyword)) {
+            String kw = keyword.trim();
+            wrapper.and(w -> w.like(AgentSkillEntity::getName, kw).or().like(AgentSkillEntity::getDescription, kw));
+        }
+        List<AgentSkillEntity> list = baseMapper.selectList(wrapper);
+        return ConvertUtils.sourceToTarget(list, AgentSkillVO.class);
+    }
+
+    @Override
     public AgentSkillVO getById(String id) {
         AgentSkillEntity entity = baseMapper.selectById(id);
         return entity == null ? null : ConvertUtils.sourceToTarget(entity, AgentSkillVO.class);
@@ -43,6 +65,7 @@ public class AgentSkillServiceImpl extends ServiceImpl<AgentSkillDao, AgentSkill
         if (StringUtils.isBlank(entity.getVersion())) {
             entity.setVersion("1.0");
         }
+        entity.setIsOfficialRecommended(Boolean.TRUE.equals(dto.getIsOfficialRecommended()) ? 1 : 0);
         return baseMapper.insert(entity) > 0;
     }
 
@@ -58,6 +81,7 @@ public class AgentSkillServiceImpl extends ServiceImpl<AgentSkillDao, AgentSkill
         entity.setVersion(StringUtils.isNotBlank(dto.getVersion()) ? dto.getVersion() : entity.getVersion());
         entity.setTools(dto.getTools());
         entity.setMetadata(dto.getMetadata());
+        entity.setIsOfficialRecommended(Boolean.TRUE.equals(dto.getIsOfficialRecommended()) ? 1 : 0);
         entity.setUpdateTime(new Date());
         return baseMapper.updateById(entity) > 0;
     }

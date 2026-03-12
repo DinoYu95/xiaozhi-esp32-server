@@ -21,6 +21,11 @@ public interface ParentUserSkillService {
     ParentUserSkillVO getById(Long id);
 
     /**
+     * 按 id 且归属当前家长时获取（校验归属，用于绑定等操作）
+     */
+    ParentUserSkillVO getByIdAndParentUserId(Long id, Long parentUserId);
+
+    /**
      * 家长技能按关键词模糊搜索（name、description）
      */
     List<ParentUserSkillVO> searchByParentUserId(Long parentUserId, String keyword);

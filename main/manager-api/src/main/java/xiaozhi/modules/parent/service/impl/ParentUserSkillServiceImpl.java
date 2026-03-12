@@ -32,6 +32,16 @@ public class ParentUserSkillServiceImpl implements ParentUserSkillService {
     }
 
     @Override
+    public ParentUserSkillVO getByIdAndParentUserId(Long id, Long parentUserId) {
+        if (id == null || parentUserId == null) return null;
+        ParentUserSkillEntity entity = parentUserSkillDao.selectOne(
+                new LambdaQueryWrapper<ParentUserSkillEntity>()
+                        .eq(ParentUserSkillEntity::getId, id)
+                        .eq(ParentUserSkillEntity::getParentUserId, parentUserId));
+        return entity == null ? null : ConvertUtils.sourceToTarget(entity, ParentUserSkillVO.class);
+    }
+
+    @Override
     public List<ParentUserSkillVO> listByParentUserId(Long parentUserId) {
         List<ParentUserSkillEntity> list = parentUserSkillDao.selectList(
                 new LambdaQueryWrapper<ParentUserSkillEntity>()

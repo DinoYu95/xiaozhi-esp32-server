@@ -4,7 +4,7 @@ import java.util.List;
 
 import org.springframework.web.multipart.MultipartFile;
 
-import xiaozhi.modules.agent.vo.AgentVoicePrintVO;
+import xiaozhi.modules.parent.vo.ParentDeviceVoicePrintVO;
 import xiaozhi.modules.parent.dto.ChildVoicePrintSaveDTO;
 
 /**
@@ -31,13 +31,13 @@ public interface ParentDeviceChildVoicePrintService {
     void saveVoicePrint(Long parentUserId, ChildVoicePrintSaveDTO dto);
 
     /**
-     * 查询该设备主孩子在该设备智能体下的声纹（0 或 1 条）
+     * 查询该设备下全部声纹（主孩子 + 后台录入），供声纹管理卡片与详情页使用
      *
      * @param parentUserId 当前家长用户ID
      * @param deviceId     设备ID
-     * @return 声纹列表
+     * @return 声纹列表，含 canManage 标记（主孩子可编辑/删除，后台仅可查看）
      */
-    List<AgentVoicePrintVO> listVoicePrint(Long parentUserId, String deviceId);
+    List<ParentDeviceVoicePrintVO> listVoicePrint(Long parentUserId, String deviceId);
 
     /**
      * 删除主孩子声纹

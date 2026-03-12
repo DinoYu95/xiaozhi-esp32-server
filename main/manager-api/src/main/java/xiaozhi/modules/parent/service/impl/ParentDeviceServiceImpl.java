@@ -31,6 +31,7 @@ import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dao.ParentUserDao;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.dto.ParentDeviceBindDTO;
+import xiaozhi.modules.parent.dto.ParentDeviceSkillBindDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceUnbindDTO;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
@@ -281,6 +282,100 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             }
         }
         return result;
+    }
+
+    @Override
+    public void bindSkill(Long parentUserId, String deviceId, ParentDeviceSkillBindDTO dto) {
+        if (StringUtils.isBlank(deviceId) || dto == null) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        ensureDeviceBoundAndGetAgentId(parentUserId, deviceId);
+        DeviceEntity device = deviceDao.selectById(deviceId);
+        if (device == null) device = deviceDao.selectByIdOrMacVariant(deviceId);
+        if (device == null || StringUtils.isBlank(device.getAgentId())) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        String speakerType = normalizeSpeakerType(dto.getSpeakerType());
+        String storageSkillId = resolveStorageSkillId(dto.getSkillSource(), dto.getSkillId(), parentUserId);
+        if (StringUtils.isBlank(storageSkillId)) {
+            throw new RenException(ErrorCode.PARENT_SKILL_NOT_FOUND);
+        }
+        agentSkillMappingService.addMapping(device.getAgentId(), speakerType, storageSkillId);
+    }
+
+    @Override
+    public void unbindSkill(Long parentUserId, String deviceId, String skillSource, Object skillId, String speakerType) {
+        if (StringUtils.isBlank(deviceId)) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        ensureDeviceBoundAndGetAgentId(parentUserId, deviceId);
+        DeviceEntity device = deviceDao.selectById(deviceId);
+        if (device == null) device = deviceDao.selectByIdOrMacVariant(deviceId);
+        if (device == null || StringUtils.isBlank(device.getAgentId())) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        String storageSkillId = toStorageSkillId(skillSource, skillId);
+        if (StringUtils.isBlank(storageSkillId)) {
+            throw new RenException(ErrorCode.PARENT_SKILL_NOT_FOUND);
+        }
+        agentSkillMappingService.removeMapping(device.getAgentId(),
+                normalizeSpeakerType(speakerType), storageSkillId);
+    }
+
+    /** 解绑时仅做格式转换，不校验技能是否存在 */
+    private static String toStorageSkillId(String skillSource, Object skillId) {
+        if (skillId == null) return null;
+        if ("parent".equalsIgnoreCase(StringUtils.trimToEmpty(skillSource))) {
+            long id = skillId instanceof Number ? ((Number) skillId).longValue()
+                    : Long.parseLong(skillId.toString().trim());
+            return "parent_" + id;
+        }
+        return skillId.toString().trim();
+    }
+
+    /** 校验设备已绑定给当前家长 */
+    private void ensureDeviceBoundAndGetAgentId(Long parentUserId, String deviceId) {
+        ParentDeviceBindingEntity binding = parentDeviceBindingDao.selectOne(
+                new LambdaQueryWrapper<ParentDeviceBindingEntity>()
+                        .eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
+                        .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId));
+        if (binding == null) {
+            List<ParentDeviceBindingEntity> list = parentDeviceBindingDao.selectList(
+                    new LambdaQueryWrapper<ParentDeviceBindingEntity>()
+                            .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId));
+            if (list != null) {
+                String normalized = deviceId.replace(":", "_").toLowerCase();
+                binding = list.stream().filter(b -> {
+                    if (b.getDeviceId() == null) return false;
+                    String bNorm = b.getDeviceId().replace(":", "_").toLowerCase();
+                    return bNorm.equals(normalized);
+                }).findFirst().orElse(null);
+            }
+        }
+        if (binding == null) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+    }
+
+    private static String normalizeSpeakerType(String speakerType) {
+        if (StringUtils.isBlank(speakerType)) return "owner_child";
+        String s = speakerType.trim().toLowerCase();
+        if (s.matches("owner_child|parent|other_child|other_adult|unknown")) return s;
+        return "owner_child";
+    }
+
+    /** 将请求 skillId 转为 ai_agent_skill_mapping 存储格式：官方=原样，家长=parent_{id} */
+    private String resolveStorageSkillId(String skillSource, Object skillId, Long parentUserId) {
+        if (skillId == null) return null;
+        if ("parent".equalsIgnoreCase(skillSource != null ? skillSource.trim() : "")) {
+            Long id = skillId instanceof Number ? ((Number) skillId).longValue()
+                    : Long.parseLong(skillId.toString().trim());
+            if (parentUserSkillService.getByIdAndParentUserId(id, parentUserId) == null) return null;
+            return "parent_" + id;
+        }
+        String id = skillId.toString().trim();
+        if (agentSkillService.getById(id) == null) return null;
+        return id;
     }
 
     @Override

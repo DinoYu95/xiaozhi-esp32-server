@@ -1,7 +1,10 @@
 package xiaozhi.modules.parent.controller;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,7 +22,7 @@ import lombok.RequiredArgsConstructor;
 import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.exception.RenException;
 import xiaozhi.common.utils.Result;
-import xiaozhi.modules.agent.vo.AgentVoicePrintVO;
+import xiaozhi.modules.parent.vo.ParentDeviceVoicePrintVO;
 import xiaozhi.modules.parent.context.ParentContext;
 import xiaozhi.modules.parent.dto.ChildVoicePrintSaveDTO;
 import xiaozhi.modules.parent.service.ParentDeviceChildVoicePrintService;
@@ -41,6 +44,7 @@ public class ParentDeviceChildVoicePrintController {
         if (parentUserId == null) {
             throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
         }
+        deviceId = decodeDeviceId(deviceId);
         String audioId = parentDeviceChildVoicePrintService.uploadAudio(parentUserId, deviceId, file);
         return new Result<String>().ok(audioId);
     }
@@ -52,20 +56,24 @@ public class ParentDeviceChildVoicePrintController {
         if (parentUserId == null) {
             throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
         }
+        if (StringUtils.isNotBlank(dto.getDeviceId())) {
+            dto.setDeviceId(decodeDeviceId(dto.getDeviceId()));
+        }
         parentDeviceChildVoicePrintService.saveVoicePrint(parentUserId, dto);
         return new Result<Void>().ok(null);
     }
 
     @GetMapping
-    @Operation(summary = "查询该设备主孩子的声纹列表（0 或 1 条）")
-    public Result<List<AgentVoicePrintVO>> list(
+    @Operation(summary = "查询该设备全部声纹（主孩子+后台），已录入几人=列表长度，canManage=true 的可编辑/删除")
+    public Result<List<ParentDeviceVoicePrintVO>> list(
             @Parameter(description = "设备ID", required = true) @RequestParam String deviceId) {
         Long parentUserId = ParentContext.getParentUserId();
         if (parentUserId == null) {
             throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
         }
-        List<AgentVoicePrintVO> list = parentDeviceChildVoicePrintService.listVoicePrint(parentUserId, deviceId);
-        return new Result<List<AgentVoicePrintVO>>().ok(list);
+        deviceId = decodeDeviceId(deviceId);
+        List<ParentDeviceVoicePrintVO> list = parentDeviceChildVoicePrintService.listVoicePrint(parentUserId, deviceId);
+        return new Result<List<ParentDeviceVoicePrintVO>>().ok(list);
     }
 
     @DeleteMapping
@@ -78,5 +86,21 @@ public class ParentDeviceChildVoicePrintController {
         }
         parentDeviceChildVoicePrintService.deleteVoicePrint(parentUserId, voicePrintId);
         return new Result<Void>().ok(null);
+    }
+
+    /** 解码 deviceId（处理小程序端可能的 URL 双重编码，如 B6%3AC8%3A35 或 B6%253AC8%253A35 转为 B6:C8:35） */
+    private static String decodeDeviceId(String deviceId) {
+        if (StringUtils.isBlank(deviceId)) return deviceId;
+        try {
+            String prev = deviceId;
+            for (int i = 0; i < 3; i++) {
+                String decoded = URLDecoder.decode(prev, StandardCharsets.UTF_8);
+                if (decoded.equals(prev)) break;
+                prev = decoded;
+            }
+            return prev;
+        } catch (IllegalArgumentException e) {
+            return deviceId;
+        }
     }
 }

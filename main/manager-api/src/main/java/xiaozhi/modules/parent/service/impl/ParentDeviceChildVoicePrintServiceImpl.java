@@ -1,12 +1,12 @@
 package xiaozhi.modules.parent.service.impl;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
@@ -16,7 +16,7 @@ import xiaozhi.common.exception.RenException;
 import xiaozhi.modules.agent.entity.AgentVoicePrintEntity;
 import xiaozhi.modules.agent.service.AgentChatAudioService;
 import xiaozhi.modules.agent.service.AgentVoicePrintService;
-import xiaozhi.modules.agent.vo.AgentVoicePrintVO;
+import xiaozhi.modules.parent.vo.ParentDeviceVoicePrintVO;
 import xiaozhi.modules.device.dao.DeviceDao;
 import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
@@ -86,18 +86,30 @@ public class ParentDeviceChildVoicePrintServiceImpl implements ParentDeviceChild
     }
 
     @Override
-    public List<AgentVoicePrintVO> listVoicePrint(Long parentUserId, String deviceId) {
+    public List<ParentDeviceVoicePrintVO> listVoicePrint(Long parentUserId, String deviceId) {
         ensureDeviceBoundToParent(parentUserId, deviceId);
+        DeviceEntity device = deviceDao.selectById(deviceId);
+        if (device == null) {
+            device = deviceDao.selectByIdOrMacVariant(deviceId);
+        }
+        if (device == null || StringUtils.isBlank(device.getAgentId())) {
+            return List.of();
+        }
         DeviceChildEntity child = deviceChildDao.selectOne(
                 new LambdaQueryWrapper<DeviceChildEntity>().eq(DeviceChildEntity::getDeviceId, deviceId));
-        if (child == null) {
-            return Collections.emptyList();
-        }
-        DeviceEntity device = deviceDao.selectById(deviceId);
-        if (device == null || StringUtils.isBlank(device.getAgentId())) {
-            return Collections.emptyList();
-        }
-        return agentVoicePrintService.listByAgentIdAndChildId(device.getAgentId(), child.getId());
+        Long mainChildId = child != null ? child.getId() : null;
+        List<AgentVoicePrintEntity> entities = agentVoicePrintService.listByAgentIdForDevice(
+                device.getAgentId(), mainChildId);
+        return entities.stream().map(e -> {
+            ParentDeviceVoicePrintVO vo = new ParentDeviceVoicePrintVO();
+            vo.setId(e.getId());
+            vo.setAudioId(e.getAudioId());
+            vo.setSourceName(e.getSourceName());
+            vo.setIntroduce(e.getIntroduce());
+            vo.setCreateDate(e.getCreateDate());
+            vo.setCanManage(mainChildId != null && mainChildId.equals(e.getChildId()));
+            return vo;
+        }).collect(Collectors.toList());
     }
 
     @Override
@@ -122,10 +134,12 @@ public class ParentDeviceChildVoicePrintServiceImpl implements ParentDeviceChild
         if (StringUtils.isBlank(deviceId)) {
             throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
         }
+        String normalized = deviceId.replace(":", "_").toLowerCase();
         ParentDeviceBindingEntity binding = parentDeviceBindingDao.selectOne(
                 new LambdaQueryWrapper<ParentDeviceBindingEntity>()
                         .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId)
-                        .eq(ParentDeviceBindingEntity::getDeviceId, deviceId));
+                        .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
+                                .or().eq(ParentDeviceBindingEntity::getDeviceId, normalized)));
         if (binding == null) {
             throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
         }

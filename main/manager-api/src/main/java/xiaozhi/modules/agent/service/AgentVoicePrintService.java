@@ -86,4 +86,13 @@ public interface AgentVoicePrintService {
      * 按ID查询声纹（用于校验 child_id 等）
      */
     AgentVoicePrintEntity getById(String voicePrintId);
+
+    /**
+     * 按设备维度查询声纹：后台声纹(child_id 为空) + 主孩子声纹(若有)
+     *
+     * @param agentId           智能体ID
+     * @param mainChildIdOrNull  主孩子ID；为空则只返回 child_id IS NULL
+     * @return 声纹实体列表
+     */
+    List<AgentVoicePrintEntity> listByAgentIdForDevice(String agentId, Long mainChildIdOrNull);
 }

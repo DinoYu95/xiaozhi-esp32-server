@@ -65,6 +65,45 @@ public class AgentSkillMappingServiceImpl implements AgentSkillMappingService {
     }
 
     @Override
+    public void addMapping(String agentId, String speakerType, String skillId) {
+        if (StringUtils.isBlank(agentId) || StringUtils.isBlank(speakerType) || StringUtils.isBlank(skillId)) {
+            return;
+        }
+        long cnt = agentSkillMappingDao.selectCount(
+                new LambdaQueryWrapper<AgentSkillMappingEntity>()
+                        .eq(AgentSkillMappingEntity::getAgentId, agentId)
+                        .eq(AgentSkillMappingEntity::getSpeakerType, speakerType)
+                        .eq(AgentSkillMappingEntity::getSkillId, skillId));
+        if (cnt > 0) {
+            return; // 已存在，幂等
+        }
+        Date now = new Date();
+        AgentSkillMappingEntity entity = new AgentSkillMappingEntity();
+        entity.setAgentId(agentId);
+        entity.setSpeakerType(speakerType);
+        entity.setSkillId(skillId);
+        entity.setCreateTime(now);
+        entity.setUpdateTime(now);
+        agentSkillMappingDao.insert(entity);
+    }
+
+    @Override
+    public void removeMapping(String agentId, String speakerType, String skillId) {
+        if (StringUtils.isBlank(agentId)) {
+            return;
+        }
+        LambdaQueryWrapper<AgentSkillMappingEntity> wrapper = new LambdaQueryWrapper<AgentSkillMappingEntity>()
+                .eq(AgentSkillMappingEntity::getAgentId, agentId);
+        if (StringUtils.isNotBlank(speakerType)) {
+            wrapper.eq(AgentSkillMappingEntity::getSpeakerType, speakerType);
+        }
+        if (StringUtils.isNotBlank(skillId)) {
+            wrapper.eq(AgentSkillMappingEntity::getSkillId, skillId);
+        }
+        agentSkillMappingDao.delete(wrapper);
+    }
+
+    @Override
     public void addOfficialRecommendedSkillsIfEmpty(String agentId) {
         if (StringUtils.isBlank(agentId)) {
             return;

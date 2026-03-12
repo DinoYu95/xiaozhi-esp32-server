@@ -493,4 +493,18 @@ public class AgentVoicePrintServiceImpl extends ServiceImpl<AgentVoicePrintDao, 
     public AgentVoicePrintEntity getById(String voicePrintId) {
         return baseMapper.selectById(voicePrintId);
     }
+
+    @Override
+    public List<AgentVoicePrintEntity> listByAgentIdForDevice(String agentId, Long mainChildIdOrNull) {
+        LambdaQueryWrapper<AgentVoicePrintEntity> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AgentVoicePrintEntity::getAgentId, agentId);
+        if (mainChildIdOrNull != null) {
+            wrapper.and(w -> w.isNull(AgentVoicePrintEntity::getChildId)
+                    .or().eq(AgentVoicePrintEntity::getChildId, mainChildIdOrNull));
+        } else {
+            wrapper.isNull(AgentVoicePrintEntity::getChildId);
+        }
+        wrapper.orderByAsc(AgentVoicePrintEntity::getCreateDate);
+        return baseMapper.selectList(wrapper);
+    }
 }

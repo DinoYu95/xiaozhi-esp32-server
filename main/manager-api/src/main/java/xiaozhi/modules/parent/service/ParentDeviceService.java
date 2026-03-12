@@ -3,6 +3,7 @@ package xiaozhi.modules.parent.service;
 import java.util.List;
 
 import xiaozhi.modules.parent.dto.ParentDeviceBindDTO;
+import xiaozhi.modules.parent.dto.ParentDeviceSkillBindDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceUnbindDTO;
 import xiaozhi.modules.parent.vo.ParentDeviceItemVO;
 import xiaozhi.modules.parent.vo.ParentDeviceSkillVO;
@@ -36,6 +37,16 @@ public interface ParentDeviceService {
      * 获取某设备已绑定的技能 id 列表（用于去重；官方=String ai_skill.id，家长=Long parent_user_skill.id）
      */
     List<Object> listBoundSkillIds(Long parentUserId, String deviceId);
+
+    /**
+     * 绑定技能到设备（支持按 speakerType  targeting）
+     */
+    void bindSkill(Long parentUserId, String deviceId, ParentDeviceSkillBindDTO dto);
+
+    /**
+     * 解绑设备的某个技能（需指定 speakerType）
+     */
+    void unbindSkill(Long parentUserId, String deviceId, String skillSource, Object skillId, String speakerType);
 
     record BindResult(String deviceId, String message) {
     }

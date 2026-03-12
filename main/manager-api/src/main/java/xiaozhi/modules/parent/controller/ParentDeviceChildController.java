@@ -1,5 +1,9 @@
 package xiaozhi.modules.parent.controller;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,6 +42,9 @@ public class ParentDeviceChildController {
         if (parentUserId == null) {
             throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
         }
+        if (StringUtils.isNotBlank(dto.getDeviceId())) {
+            dto.setDeviceId(decodeDeviceId(dto.getDeviceId()));
+        }
         DeviceChildVO vo = deviceChildService.saveOrUpdate(parentUserId, dto);
         return new Result<DeviceChildVO>().ok(vo);
     }
@@ -50,6 +57,7 @@ public class ParentDeviceChildController {
         if (parentUserId == null) {
             throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
         }
+        deviceId = decodeDeviceId(deviceId);
         DeviceChildVO vo = deviceChildService.getByDeviceId(parentUserId, deviceId);
         return new Result<DeviceChildVO>().ok(vo);
     }
@@ -73,7 +81,24 @@ public class ParentDeviceChildController {
         if (parentUserId == null) {
             throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
         }
+        deviceId = decodeDeviceId(deviceId);
         deviceChildService.deleteByDeviceId(parentUserId, deviceId);
         return new Result<Void>().ok(null);
+    }
+
+    /** 解码 deviceId（处理小程序端可能的 URL 双重编码） */
+    private static String decodeDeviceId(String deviceId) {
+        if (StringUtils.isBlank(deviceId)) return deviceId;
+        try {
+            String prev = deviceId;
+            for (int i = 0; i < 3; i++) {
+                String decoded = URLDecoder.decode(prev, StandardCharsets.UTF_8);
+                if (decoded.equals(prev)) break;
+                prev = decoded;
+            }
+            return prev;
+        } catch (IllegalArgumentException e) {
+            return deviceId;
+        }
     }
 }

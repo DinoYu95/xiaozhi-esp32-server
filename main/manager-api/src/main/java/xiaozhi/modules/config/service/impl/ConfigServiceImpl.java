@@ -158,13 +158,10 @@ public class ConfigServiceImpl implements ConfigService {
         String deviceMaxOutputSize = sysParamsService.getValue("device_max_output_size", true);
         result.put("device_max_output_size", deviceMaxOutputSize);
 
-        // 获取聊天记录配置
+        // 获取聊天记录配置（与 memory model 解耦：无记忆时仍可开启聊天上报，供家长端拉取孩子对话）
         Integer chatHistoryConf = agent.getChatHistoryConf();
-        if (agent.getMemModelId() != null && agent.getMemModelId().equals(Constant.MEMORY_NO_MEM)) {
-            chatHistoryConf = Constant.ChatHistoryConfEnum.IGNORE.getCode();
-        } else if (agent.getMemModelId() != null
-                && !agent.getMemModelId().equals(Constant.MEMORY_NO_MEM)
-                && agent.getChatHistoryConf() == null) {
+        if (chatHistoryConf == null) {
+            // 未显式配置时：有记忆/无记忆均默认开启文本+语音（无脑开启，供家长端拉取；用户可在智控台改为 0 关闭）
             chatHistoryConf = Constant.ChatHistoryConfEnum.RECORD_TEXT_AUDIO.getCode();
         }
         result.put("chat_history_conf", chatHistoryConf);

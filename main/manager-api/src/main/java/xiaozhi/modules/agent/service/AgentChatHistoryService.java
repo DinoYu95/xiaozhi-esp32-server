@@ -38,6 +38,27 @@ public interface AgentChatHistoryService extends IService<AgentChatHistoryEntity
     List<AgentChatHistoryDTO> getChatHistoryBySessionId(String agentId, String sessionId);
 
     /**
+     * 根据智能体ID和设备MAC地址获取近期聊天记录（供家长端汇总孩子与助手的对话）
+     *
+     * @param agentId    智能体ID
+     * @param macAddress 设备MAC地址
+     * @param limit      最多返回条数
+     * @return 聊天记录列表（按时间正序，便于阅读）
+     */
+    List<AgentChatHistoryDTO> getRecentByAgentAndMac(String agentId, String macAddress, int limit);
+
+    /**
+     * 获取格式化的孩子与助手近期对话（供 zhiban-agent 拉取后回答家长）
+     *
+     * @param agentId         智能体ID
+     * @param macAddress       设备MAC地址
+     * @param limit            最多返回条数
+     * @param childDisplayName 孩子显示名（如「小明」），用于角色标注，null 则用「孩子」
+     * @return 格式化字符串「孩子：xxx\n助手：yyy」，无记录返回空串
+     */
+    String getFormattedRecentByAgentAndMac(String agentId, String macAddress, int limit, String childDisplayName);
+
+    /**
      * 根据智能体ID删除聊天记录
      *
      * @param agentId     智能体ID

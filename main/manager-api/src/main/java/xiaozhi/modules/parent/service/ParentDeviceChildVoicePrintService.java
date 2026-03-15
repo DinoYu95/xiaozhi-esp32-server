@@ -46,4 +46,21 @@ public interface ParentDeviceChildVoicePrintService {
      * @param voicePrintId  声纹ID
      */
     void deleteVoicePrint(Long parentUserId, String voicePrintId);
+
+    /**
+     * 获取声纹音频播放 token（供小程序 wx.createInnerAudioContext 播放用）
+     *
+     * @param parentUserId 当前家长用户ID
+     * @param audioId      音频ID（来自声纹列表的 audioId）
+     * @return 一次性播放 token（uuid），用于拼接 play 接口 URL
+     */
+    String getPlayToken(Long parentUserId, String audioId);
+
+    /**
+     * 按播放 token 获取音频数据（一次性使用，取后即删 Redis）
+     *
+     * @param playToken 播放 token（uuid）
+     * @return 音频字节，无则返回 null
+     */
+    byte[] getAudioByPlayToken(String playToken);
 }

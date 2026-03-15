@@ -2,6 +2,7 @@ package xiaozhi.modules.parent.service.impl;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
@@ -13,6 +14,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.exception.RenException;
+import xiaozhi.common.redis.RedisKeys;
+import xiaozhi.common.redis.RedisUtils;
+import xiaozhi.modules.agent.dao.AgentVoicePrintDao;
 import xiaozhi.modules.agent.entity.AgentVoicePrintEntity;
 import xiaozhi.modules.agent.service.AgentChatAudioService;
 import xiaozhi.modules.agent.service.AgentVoicePrintService;
@@ -30,11 +34,16 @@ import xiaozhi.modules.parent.service.ParentDeviceChildVoicePrintService;
 @RequiredArgsConstructor
 public class ParentDeviceChildVoicePrintServiceImpl implements ParentDeviceChildVoicePrintService {
 
+    /** 播放 token 有效时长（秒），一次性使用后即删 */
+    private static final int PLAY_TOKEN_EXPIRE_SECONDS = 300;
+
     private final ParentDeviceBindingDao parentDeviceBindingDao;
     private final DeviceChildDao deviceChildDao;
     private final DeviceDao deviceDao;
+    private final AgentVoicePrintDao agentVoicePrintDao;
     private final AgentChatAudioService agentChatAudioService;
     private final AgentVoicePrintService agentVoicePrintService;
+    private final RedisUtils redisUtils;
 
     @Override
     public String uploadAudio(Long parentUserId, String deviceId, MultipartFile file) {
@@ -128,6 +137,50 @@ public class ParentDeviceChildVoicePrintServiceImpl implements ParentDeviceChild
         }
         ensureDeviceBoundToParent(parentUserId, child.getDeviceId());
         agentVoicePrintService.deleteByVoicePrintId(voicePrintId);
+    }
+
+    @Override
+    public String getPlayToken(Long parentUserId, String audioId) {
+        if (StringUtils.isBlank(audioId)) {
+            throw new RenException("音频ID不能为空");
+        }
+        AgentVoicePrintEntity vp = agentVoicePrintDao.selectOne(
+                new LambdaQueryWrapper<AgentVoicePrintEntity>().eq(AgentVoicePrintEntity::getAudioId, audioId));
+        if (vp == null) {
+            throw new RenException("音频不存在或无权访问");
+        }
+        List<DeviceEntity> devices = deviceDao.selectList(
+                new LambdaQueryWrapper<DeviceEntity>().eq(DeviceEntity::getAgentId, vp.getAgentId()));
+        boolean canAccess = false;
+        for (DeviceEntity d : devices) {
+            ParentDeviceBindingEntity b = parentDeviceBindingDao.selectOne(
+                    new LambdaQueryWrapper<ParentDeviceBindingEntity>()
+                            .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId)
+                            .eq(ParentDeviceBindingEntity::getDeviceId, d.getId()));
+            if (b != null) {
+                canAccess = true;
+                break;
+            }
+        }
+        if (!canAccess) {
+            throw new RenException("音频不存在或无权访问");
+        }
+        byte[] audio = agentChatAudioService.getAudio(audioId);
+        if (audio == null || audio.length == 0) {
+            throw new RenException("音频不存在");
+        }
+        String uuid = UUID.randomUUID().toString();
+        redisUtils.set(RedisKeys.getParentVoicePrintAudioKey(uuid), audioId, PLAY_TOKEN_EXPIRE_SECONDS);
+        return uuid;
+    }
+
+    @Override
+    public byte[] getAudioByPlayToken(String playToken) {
+        if (StringUtils.isBlank(playToken)) return null;
+        String audioId = (String) redisUtils.get(RedisKeys.getParentVoicePrintAudioKey(playToken));
+        if (StringUtils.isBlank(audioId)) return null;
+        redisUtils.delete(List.of(RedisKeys.getParentVoicePrintAudioKey(playToken)));
+        return agentChatAudioService.getAudio(audioId);
     }
 
     private void ensureDeviceBoundToParent(Long parentUserId, String deviceId) {

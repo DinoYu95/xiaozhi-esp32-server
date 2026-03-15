@@ -222,16 +222,16 @@
                           </el-button>
                         </div>
                         <div
-                          v-if="
-                            model.type === 'Memory' &&
-                            form.model.memModelId !== 'Memory_nomem'
-                          "
+                          v-if="model.type === 'Memory'"
                           class="chat-history-options"
                         >
                           <el-radio-group
                             v-model="form.chatHistoryConf"
                             @change="updateChatHistoryConf"
                           >
+                            <el-radio-button :label="0">{{
+                              $t("roleConfig.reportNone")
+                            }}</el-radio-button>
                             <el-radio-button :label="1">{{
                               $t("roleConfig.reportText")
                             }}</el-radio-button>
@@ -395,18 +395,20 @@ export default {
       this.$router.push("/home");
     },
     saveConfig() {
+      // 空字符串不要发送，否则后端会用它覆盖 DB 导致 LLM/TTS 等被清空
+      const orUndef = (v) => (v && String(v).trim() ? v : undefined);
       const configData = {
-        agentCode: this.form.agentCode,
-        agentName: this.form.agentName,
-        asrModelId: this.form.model.asrModelId,
-        vadModelId: this.form.model.vadModelId,
-        llmModelId: this.form.model.llmModelId,
-        vllmModelId: this.form.model.vllmModelId,
-        ttsModelId: this.form.model.ttsModelId,
-        ttsVoiceId: this.form.ttsVoiceId,
+        agentCode: orUndef(this.form.agentCode),
+        agentName: orUndef(this.form.agentName),
+        asrModelId: orUndef(this.form.model.asrModelId),
+        vadModelId: orUndef(this.form.model.vadModelId),
+        llmModelId: orUndef(this.form.model.llmModelId),
+        vllmModelId: orUndef(this.form.model.vllmModelId),
+        ttsModelId: orUndef(this.form.model.ttsModelId),
+        ttsVoiceId: orUndef(this.form.ttsVoiceId),
         chatHistoryConf: this.form.chatHistoryConf,
-        memModelId: this.form.model.memModelId,
-        intentModelId: this.form.model.intentModelId,
+        memModelId: orUndef(this.form.model.memModelId),
+        intentModelId: orUndef(this.form.model.intentModelId),
         systemPrompt: this.form.systemPrompt,
         summaryMemory: this.form.summaryMemory,
         langCode: this.form.langCode,
@@ -533,25 +535,24 @@ export default {
     },
     fetchAgentConfig(agentId) {
       Api.agent.getDeviceConfig(agentId, ({ data }) => {
-        if (data.code === 0) {
+        if (data?.code === 0 && data?.data) {
+          const agentData = data.data;
           this.form = {
             ...this.form,
-            ...data.data,
+            ...agentData,
+            chatHistoryConf: agentData.chatHistoryConf != null ? Number(agentData.chatHistoryConf) : 0,
             model: {
-              ttsModelId: data.data.ttsModelId,
-              vadModelId: data.data.vadModelId,
-              asrModelId: data.data.asrModelId,
-              llmModelId: data.data.llmModelId,
-              vllmModelId: data.data.vllmModelId,
-              memModelId: data.data.memModelId,
-              intentModelId: data.data.intentModelId,
+              ttsModelId: agentData.ttsModelId,
+              vadModelId: agentData.vadModelId,
+              asrModelId: agentData.asrModelId,
+              llmModelId: agentData.llmModelId,
+              vllmModelId: agentData.vllmModelId,
+              memModelId: agentData.memModelId,
+              intentModelId: agentData.intentModelId,
             },
           };
-          // 后端只给了最小映射：[{ id, agentId, pluginId }, ...]
-          const savedMappings = data.data.functions || [];
-          
-          // 加载上下文配置
-          this.currentContextProviders = data.data.contextProviders || [];
+          const savedMappings = agentData.functions || [];
+          this.currentContextProviders = agentData.contextProviders || [];
 
           // 多角色智伴：加载技能列表与说话人→技能映射
           this.fetchSkillList();
@@ -593,7 +594,7 @@ export default {
             this.updateIntentOptionsVisibility();
           });
         } else {
-          this.$message.error(data.msg || i18n.t("roleConfig.fetchConfigFailed"));
+          this.$message.error(data?.msg || i18n.t("roleConfig.fetchConfigFailed"));
         }
       });
     },
@@ -692,8 +693,8 @@ export default {
       }
       if (type === "Memory") {
         if (value === "Memory_nomem") {
-          // 无记忆功能的模型，默认不记录聊天记录
-          this.form.chatHistoryConf = 0;
+          // 无记忆时默认开启聊天记录上报（与 memory 解耦，供家长端拉取孩子对话；用户可改为 0 关闭）
+          this.form.chatHistoryConf = 2;
         } else {
           // 有记忆功能的模型，默认记录文本和语音
           this.form.chatHistoryConf = 2;
@@ -1045,9 +1046,7 @@ export default {
       }
     },
     updateChatHistoryConf() {
-      if (this.form.model.memModelId === "Memory_nomem") {
-        this.form.chatHistoryConf = 0;
-      }
+      // 与 memory 解耦：无记忆时也允许选择 1/2，供家长端拉取孩子聊天记录
     },
     // 加载功能状态
     async loadFeatureStatus() {

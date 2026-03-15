@@ -83,6 +83,38 @@ public class AgentChatHistoryServiceImpl extends ServiceImpl<AiAgentChatHistoryD
     }
 
     @Override
+    public List<AgentChatHistoryDTO> getRecentByAgentAndMac(String agentId, String macAddress, int limit) {
+        if (org.apache.commons.lang3.StringUtils.isBlank(agentId) || org.apache.commons.lang3.StringUtils.isBlank(macAddress)) {
+            return List.of();
+        }
+        int safeLimit = Math.max(1, Math.min(limit, 100));
+        // 使用 format 兼容查询，支持 B6:C8:35:D6:10:48 与 b6_c8_35_d6_10_48 等格式
+        List<AgentChatHistoryEntity> list = baseMapper.selectRecentByAgentAndMacVariants(agentId, macAddress.trim(), safeLimit);
+        // 按时间正序返回（便于阅读：从早到晚）
+        List<AgentChatHistoryEntity> reversed = new java.util.ArrayList<>(list);
+        java.util.Collections.reverse(reversed);
+        return ConvertUtils.sourceToTarget(reversed, AgentChatHistoryDTO.class);
+    }
+
+    @Override
+    public String getFormattedRecentByAgentAndMac(String agentId, String macAddress, int limit, String childDisplayName) {
+        List<AgentChatHistoryDTO> list = getRecentByAgentAndMac(agentId, macAddress, limit);
+        if (list == null || list.isEmpty()) {
+            return "";
+        }
+        String childName = org.apache.commons.lang3.StringUtils.isNotBlank(childDisplayName) ? childDisplayName : "孩子";
+        StringBuilder sb = new StringBuilder();
+        for (AgentChatHistoryDTO dto : list) {
+            String lineContent = extractContentFromString(dto.getContent());
+            if (lineContent == null || lineContent.isBlank()) continue;
+            String role = (dto.getChatType() != null && dto.getChatType() == AgentChatHistoryType.AGENT.getValue())
+                    ? "助手" : childName;
+            sb.append(role).append("：").append(lineContent.trim()).append("\n");
+        }
+        return sb.length() > 0 ? sb.toString().trim() : "";
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteByAgentId(String agentId, Boolean deleteAudio, Boolean deleteText) {
         if (deleteAudio) {
@@ -178,4 +210,5 @@ public class AgentChatHistoryServiceImpl extends ServiceImpl<AiAgentChatHistoryD
                 .eq(AgentChatHistoryEntity::getAgentId, agentId));
         return row == 1;
     }
+
 }

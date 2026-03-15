@@ -761,6 +761,14 @@ body {
     font-size: 14px;
 }
 
+.config-hint {
+    display: block;
+    margin-top: 4px;
+    color: #8b8f94;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
 /* ==================== MCP工具样式 ==================== */
 .mcp-tools-container {
     background: #2f3136;

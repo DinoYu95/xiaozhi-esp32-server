@@ -20,13 +20,10 @@ export function loadConfig() {
     const clientIdInput = document.getElementById('clientId');
     const otaUrlInput = document.getElementById('otaUrl');
 
-    // 从localStorage加载MAC地址，如果没有则生成新的
-    let savedMac = localStorage.getItem('xz_tester_deviceMac');
-    if (!savedMac) {
-        savedMac = generateRandomMac();
-        localStorage.setItem('xz_tester_deviceMac', savedMac);
-    }
-    deviceMacInput.value = savedMac;
+    // 从localStorage加载MAC地址。不自动生成随机MAC：随机MAC不在ai_device表中，会导致聊天记录无法上报。
+    // 用户需先在智控台「手动添加设备」并绑定Agent，再在此填入相同MAC。
+    const savedMac = localStorage.getItem('xz_tester_deviceMac');
+    deviceMacInput.value = savedMac || '';
 
     // 从localStorage加载其他配置
     const savedDeviceName = localStorage.getItem('xz_tester_deviceName');

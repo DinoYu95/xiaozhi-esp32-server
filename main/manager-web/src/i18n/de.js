@@ -685,6 +685,8 @@ export default {
   'home.deleteSuccess': 'Löschen erfolgreich',
   'home.deleteFailed': 'Löschen fehlgeschlagen',
   'home.enableMemory': 'Bitte aktivieren Sie zuerst den Speicher auf der \"Rolle konfigurieren\" Seite',
+  'home.enableChatHistory': 'Bitte aktivieren Sie die Chat-Verlauf-Aufzeichnung auf der Seite \"Rolle konfigurieren\"',
+  'home.enableChatHistory': 'Bitte aktivieren Sie die Chat-Verlauf-Aufzeichnung auf der Seite \"Rolle konfigurieren\"',
 
   // Parameter management page text
   'paramManagement.pageTitle': 'Parameterverwaltung',
@@ -770,6 +772,7 @@ export default {
   'roleConfig.pleaseEnterLangName': 'Bitte Interaktionssprache eingeben, z.B.: Englisch',
   'roleConfig.pleaseSelect': 'Bitte auswählen',
   'roleConfig.editFunctions': 'Funktionen bearbeiten',
+  'roleConfig.reportNone': 'Nicht aufzeichnen',
   'roleConfig.reportText': 'Nur Text',
   'roleConfig.reportTextVoice': 'Text & Sprache',
   'roleConfig.saveSuccess': 'Konfiguration erfolgreich gespeichert',

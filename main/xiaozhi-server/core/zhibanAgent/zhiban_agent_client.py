@@ -13,6 +13,8 @@ TAG = __name__
 logger = setup_logging()
 
 DEFAULT_TIMEOUT = 30.0
+# HTTP 连接复用：keep-alive 减少首包延迟
+HTTPX_LIMITS = httpx.Limits(max_keepalive_connections=4, max_connections=10)
 
 
 class ZhibanAgentClient:
@@ -26,6 +28,18 @@ class ZhibanAgentClient:
         self.config = config or {}
         self.base_url = (self.config.get("base_url") or "").rstrip("/")
         self.timeout = float(self.config.get("timeout", DEFAULT_TIMEOUT))
+        self._client: Optional[httpx.Client] = None
+
+    def _get_client(self) -> Optional[httpx.Client]:
+        """获取复用的 httpx 客户端，无 base_url 时返回 None。"""
+        if not self.base_url:
+            return None
+        if self._client is None:
+            self._client = httpx.Client(
+                timeout=self.timeout,
+                limits=HTTPX_LIMITS,
+            )
+        return self._client
 
     def chat(
         self,
@@ -62,14 +76,24 @@ class ZhibanAgentClient:
         if messages:
             payload["messages"] = messages
 
+        # 诊断：发往 zhiban-agent 的 payload（排查「我是谁」不生效）
+        logger.bind(tag=TAG).info(
+            "zhiban-agent 调用: text前80字=%s, speaker_name=%s, env_parent_nickname=%s",
+            (payload.get("text") or "")[:80],
+            (payload.get("speaker_context") or {}).get("speaker_name"),
+            (payload.get("environment_context") or {}).get("parent_nickname"),
+        )
+
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                r = client.post(
-                    "%s/api/chat" % self.base_url,
-                    json=payload,
-                )
-                r.raise_for_status()
-                data = r.json()
+            client = self._get_client()
+            if not client:
+                return None
+            r = client.post(
+                "%s/api/chat" % self.base_url,
+                json=payload,
+            )
+            r.raise_for_status()
+            data = r.json()
             reply = data.get("reply") if isinstance(data, dict) else None
             if reply is not None:
                 return reply if isinstance(reply, str) else str(reply)
@@ -118,18 +142,20 @@ class ZhibanAgentClient:
             payload["messages"] = messages
 
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                with client.stream(
-                    "POST",
-                    "%s/api/chat/stream" % self.base_url,
-                    json=payload,
-                ) as r:
-                    r.raise_for_status()
-                    for line in r.iter_lines():
-                        if line and line.startswith("data: "):
-                            chunk = line[6:].strip()
-                            if chunk:
-                                yield chunk
+            client = self._get_client()
+            if not client:
+                return
+            with client.stream(
+                "POST",
+                "%s/api/chat/stream" % self.base_url,
+                json=payload,
+            ) as r:
+                r.raise_for_status()
+                for line in r.iter_lines():
+                    if line and line.startswith("data: "):
+                        chunk = line[6:].strip()
+                        if chunk:
+                            yield chunk
         except httpx.HTTPError as e:
             logger.bind(tag=TAG).error("zhiban_agent 流式请求失败: %s", e)
         except Exception as e:

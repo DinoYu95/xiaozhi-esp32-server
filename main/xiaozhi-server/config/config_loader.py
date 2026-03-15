@@ -45,6 +45,10 @@ def load_config():
     else:
         # 合并配置
         config = merge_configs(default_config, custom_config)
+        # 若本地配置含 manager-api，初始化客户端（供家长端 WebSocket 鉴权等）
+        ma = config.get("manager-api", {})
+        if ma.get("url") and ma.get("secret") and "你" not in str(ma.get("secret", "")):
+            init_service(config)
     # 初始化目录
     ensure_directories(config)
 

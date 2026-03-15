@@ -16,13 +16,14 @@ RUN mvn clean package -Dmaven.test.skip=true
 # 第三阶段：构建最终镜像
 FROM bellsoft/liberica-runtime-container:jre-21-glibc
 
-# 安装Nginx和字体库
+# 安装Nginx、字体库与 ffmpeg（声纹音频转码用）
 RUN apk update && \
     apk add --no-cache --no-scripts \
         nginx \
         bash \
         fontconfig \
         ttf-dejavu \
+        ffmpeg \
     && rm -rf /var/cache/apk/* \
     && mkdir -p /run/nginx /var/log/nginx /var/tmp/nginx /etc/nginx/conf.d
 

@@ -119,6 +119,20 @@ public class RedisKeys {
     }
 
     /**
+     * 家长端声纹音频播放临时 token（uuid -> audioId，一次性使用）
+     */
+    public static String getParentVoicePrintAudioKey(String uuid) {
+        return "parent:voiceprint:audio:" + uuid;
+    }
+
+    /**
+     * 家长端聊天音频播放临时 token（uuid -> audioId，一次性使用）
+     */
+    public static String getParentChatAudioKey(String uuid) {
+        return "parent:chat:audio:" + uuid;
+    }
+
+    /**
      * 获取短信验证码的缓存key
      */
     public static String getSMSValidateCodeKey(String phone) {

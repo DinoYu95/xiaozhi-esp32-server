@@ -102,8 +102,16 @@ def opus_to_wav(conn, opus_data):
 
 def enqueue_tts_report(conn, text, opus_data):
     if not conn.read_config_from_api or conn.need_bind or not conn.report_tts_enable:
+        conn.logger.bind(tag=TAG).info(
+            "TTS上报跳过: device_id=%s read_config_from_api=%s need_bind=%s report_tts_enable=%s",
+            conn.device_id, conn.read_config_from_api, conn.need_bind, conn.report_tts_enable,
+        )
         return
     if conn.chat_history_conf == 0:
+        conn.logger.bind(tag=TAG).info(
+            "TTS上报跳过: device_id=%s chat_history_conf=0 未启用记录",
+            conn.device_id,
+        )
         return
     """将TTS数据加入上报队列
 
@@ -130,8 +138,16 @@ def enqueue_tts_report(conn, text, opus_data):
 
 def enqueue_asr_report(conn, text, opus_data):
     if not conn.read_config_from_api or conn.need_bind or not conn.report_asr_enable:
+        conn.logger.bind(tag=TAG).info(
+            "ASR上报跳过: device_id=%s read_config_from_api=%s need_bind=%s report_asr_enable=%s",
+            conn.device_id, conn.read_config_from_api, conn.need_bind, conn.report_asr_enable,
+        )
         return
     if conn.chat_history_conf == 0:
+        conn.logger.bind(tag=TAG).info(
+            "ASR上报跳过: device_id=%s chat_history_conf=0 未启用记录",
+            conn.device_id,
+        )
         return
     """将ASR数据加入上报队列
 

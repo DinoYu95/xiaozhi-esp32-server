@@ -64,6 +64,10 @@ public class AgentChatHistoryBizServiceImpl implements AgentChatHistoryBizServic
 
         Integer chatHistoryConf = agentEntity.getChatHistoryConf();
         String agentId = agentEntity.getId();
+        if (chatHistoryConf == null || chatHistoryConf == 0) {
+            log.info("小智设备聊天上报跳过: macAddress={} agentId={} chatHistoryConf={} 未启用记录", macAddress, agentId, chatHistoryConf);
+            return Boolean.TRUE; // 视为成功但不写入
+        }
 
         if (Objects.equals(chatHistoryConf, Constant.ChatHistoryConfEnum.RECORD_TEXT.getCode())) {
             saveChatText(report, agentId, macAddress, null, reportTimeMillis);

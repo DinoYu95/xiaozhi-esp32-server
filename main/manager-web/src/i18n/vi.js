@@ -684,6 +684,8 @@ export default {
   'home.deleteSuccess': 'Xóa thành công',
   'home.deleteFailed': 'Xóa thất bại',
   'home.enableMemory': 'Vui lòng bật bộ nhớ trong trang \"Cấu hình vai trò\" trước',
+  'home.enableChatHistory': 'Vui lòng bật ghi chép lịch sử trò chuyện trong trang \"Cấu hình vai trò\"',
+  'home.enableChatHistory': 'Vui lòng bật ghi lịch sử trò chuyện trong trang \"Cấu hình vai trò\"',
 
   // Parameter management page text
   'paramManagement.pageTitle': 'Quản lý tham số',
@@ -769,6 +771,7 @@ export default {
   'roleConfig.pleaseEnterLangName': 'Vui lòng nhập ngôn ngữ tương tác, ví dụ: Tiếng Anh',
   'roleConfig.pleaseSelect': 'Vui lòng chọn',
   'roleConfig.editFunctions': 'Chỉnh sửa chức năng',
+  'roleConfig.reportNone': 'Không ghi',
   'roleConfig.reportText': 'Chỉ văn bản',
   'roleConfig.reportTextVoice': 'VB&Giọng nói',
   'roleConfig.saveSuccess': 'Đã lưu cấu hình thành công',

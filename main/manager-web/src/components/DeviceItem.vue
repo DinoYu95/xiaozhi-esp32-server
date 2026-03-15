@@ -29,9 +29,9 @@
       <div class="settings-btn" @click="handleDeviceManage">
         {{ $t('home.deviceManagement') }}({{ device.deviceCount }})
       </div>
-      <div :class="['settings-btn', { 'disabled-btn': device.memModelId === 'Memory_nomem' }]"
+      <div :class="['settings-btn', { 'disabled-btn': !device.chatHistoryConf }]"
         @click="handleChatHistory">
-        <el-tooltip v-if="device.memModelId === 'Memory_nomem'" :content="$t('home.enableMemory')" placement="top">
+        <el-tooltip v-if="!device.chatHistoryConf" :content="$t('home.enableChatHistory')" placement="top">
           <span>{{ $t('home.chatHistory') }}</span>
         </el-tooltip>
         <span v-else>{{ $t('home.chatHistory') }}</span>
@@ -97,7 +97,7 @@ export default {
       this.$router.push({ path: '/device-management', query: { agentId: this.device.agentId } });
     },
     handleChatHistory() {
-      if (this.device.memModelId === 'Memory_nomem') {
+      if (!this.device.chatHistoryConf) {
         return
       }
       this.$emit('chat-history', { agentId: this.device.agentId, agentName: this.device.agentName })

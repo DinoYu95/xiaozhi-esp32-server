@@ -200,6 +200,8 @@ async def report(
 ) -> Optional[Dict]:
     """异步聊天记录上报"""
     if not content or not ManageApiClient._instance:
+        if not content:
+            print("[manage_api] 聊天上报跳过: content 为空")
         return None
     try:
         return await ManageApiClient._instance._execute_async_request(
@@ -219,6 +221,55 @@ async def report(
     except Exception as e:
         print(f"TTS上报失败: {e}")
         return None
+
+
+async def validate_parent_token(token: str) -> Optional[int]:
+    """校验家长 token，返回 parentUserId，无效则返回 None。需 init_service 已调用。"""
+    if not token or not ManageApiClient._instance:
+        return None
+    try:
+        client = await ManageApiClient._ensure_async_client()
+        r = await client.get(
+            "config/parent/validate-token",
+            params={"token": token},
+        )
+        data = r.json()
+        if data.get("code") == 0:
+            return data.get("data")
+        return None
+    except Exception as e:
+        print(f"validate_parent_token 失败: {e}")
+        return None
+
+
+async def save_parent_chat(
+    parent_user_id: int,
+    child_id: int,
+    content: str,
+    reply: str,
+    audio_id: Optional[str] = None,
+) -> bool:
+    """保存家长聊天记录到 manager-api。"""
+    if not ManageApiClient._instance:
+        return False
+    try:
+        payload = {
+            "parentUserId": parent_user_id,
+            "childId": child_id,
+            "content": content,
+            "reply": reply,
+        }
+        if audio_id:
+            payload["audioId"] = audio_id
+        await ManageApiClient._instance._execute_async_request(
+            "POST",
+            "config/parent/chat/save",
+            json=payload,
+        )
+        return True
+    except Exception as e:
+        print(f"save_parent_chat 失败: {e}")
+        return False
 
 
 def init_service(config):

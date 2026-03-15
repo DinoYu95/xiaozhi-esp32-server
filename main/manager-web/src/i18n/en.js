@@ -685,6 +685,8 @@ export default {
   'home.deleteSuccess': 'Delete successful',
   'home.deleteFailed': 'Delete failed',
   'home.enableMemory': 'Please enable memory in the "Config Role" page first',
+  'home.enableChatHistory': 'Please enable chat history recording in the "Config Role" page',
+  'home.enableChatHistory': 'Please enable chat history recording in the "Config Role" page (select "Text Only" or "Text & Voice")',
 
   // Parameter management page text
   'paramManagement.pageTitle': 'Parameter Management',
@@ -770,6 +772,7 @@ export default {
   'roleConfig.pleaseEnterLangName': 'Please enter interaction language, e.g.: English',
   'roleConfig.pleaseSelect': 'Please select',
   'roleConfig.editFunctions': 'Edit Functions',
+  'roleConfig.reportNone': 'Do Not Record',
   'roleConfig.reportText': 'Text Only',
   'roleConfig.reportTextVoice': 'Text & Voice',
   'roleConfig.saveSuccess': 'Configuration saved successfully',

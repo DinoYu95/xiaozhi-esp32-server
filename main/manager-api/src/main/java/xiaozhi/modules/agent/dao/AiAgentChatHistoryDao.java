@@ -47,4 +47,12 @@ public interface AiAgentChatHistoryDao extends BaseMapper<AgentChatHistoryEntity
      * @param audioIds 音频ID列表
      */
     void deleteAudioByIds(@Param("audioIds") List<String> audioIds);
+
+    /**
+     * 按 agent_id + mac_address 查询近期记录，兼容 MAC 格式变体（B6:C8:35:D6:10:48 / b6_c8_35_d6_10_48）
+     */
+    List<AgentChatHistoryEntity> selectRecentByAgentAndMacVariants(
+            @Param("agentId") String agentId,
+            @Param("macAddress") String macAddress,
+            @Param("limit") int limit);
 }

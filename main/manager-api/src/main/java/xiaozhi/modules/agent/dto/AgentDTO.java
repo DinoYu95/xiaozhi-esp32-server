@@ -34,6 +34,9 @@ public class AgentDTO {
     @Schema(description = "记忆模型ID", example = "mem_model_01")
     private String memModelId;
 
+    @Schema(description = "聊天记录配置：0不记录 1仅文本 2文本+语音", example = "2")
+    private Integer chatHistoryConf;
+
     @Schema(description = "角色设定参数", example = "你是一个专业的客服助手，负责回答用户问题并提供帮助")
     private String systemPrompt;
 

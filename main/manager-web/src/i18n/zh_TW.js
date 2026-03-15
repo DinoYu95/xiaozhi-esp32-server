@@ -685,6 +685,8 @@ export default {
   'home.deleteSuccess': '刪除成功',
   'home.deleteFailed': '刪除失敗',
   'home.enableMemory': '請先在「配置角色」介面開啟記憶',
+  'home.enableChatHistory': '請在「配置角色」頁面開啟聊天記錄上報',
+  'home.enableChatHistory': '請在「配置角色」頁面開啟聊天記錄上報（選「上報文字」或「上報文字+語音」）',
 
   // 參數管理頁面文本
   'paramManagement.pageTitle': '參數管理',
@@ -770,6 +772,7 @@ export default {
   'roleConfig.pleaseEnterLangName': '請輸入交互語種，如：繁體中文',
   'roleConfig.pleaseSelect': '請選擇',
   'roleConfig.editFunctions': '編輯功能',
+  'roleConfig.reportNone': '不記錄',
   'roleConfig.reportText': '上報文字',
   'roleConfig.reportTextVoice': '上報文字+語音',
   'roleConfig.saveSuccess': '配置保存成功',

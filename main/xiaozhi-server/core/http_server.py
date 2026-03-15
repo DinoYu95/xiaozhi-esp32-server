@@ -3,6 +3,8 @@ from aiohttp import web
 from config.logger import setup_logging
 from core.api.ota_handler import OTAHandler
 from core.api.vision_handler import VisionHandler
+from core.api.parent_chat_handler import ParentChatHandler
+from core.api.parent_chat_websocket import handle_parent_chat_ws
 
 TAG = __name__
 
@@ -13,6 +15,7 @@ class SimpleHttpServer:
         self.logger = setup_logging()
         self.ota_handler = OTAHandler(config)
         self.vision_handler = VisionHandler(config)
+        self.parent_chat_handler = ParentChatHandler(config)
 
     def _get_websocket_url(self, local_ip: str, port: int) -> str:
         """获取websocket地址
@@ -41,6 +44,7 @@ class SimpleHttpServer:
 
             if port:
                 app = web.Application()
+                app["config"] = self.config
 
                 if not read_config_from_api:
                     # 如果没有开启智控台，只是单模块运行，就需要再添加简单OTA接口，用于下发websocket接口
@@ -72,6 +76,25 @@ class SimpleHttpServer:
                         web.options(
                             "/mcp/vision/explain", self.vision_handler.handle_options
                         ),
+                        # 家长端聊天（manager-api 内部调用，需 Bearer 鉴权）
+                        web.post(
+                            "/internal/parent/chat",
+                            self.parent_chat_handler.handle_post,
+                        ),
+                        web.post(
+                            "/internal/parent/chat/stream",
+                            self.parent_chat_handler.handle_post_stream,
+                        ),
+                        web.options(
+                            "/internal/parent/chat",
+                            self.parent_chat_handler.handle_options,
+                        ),
+                        web.options(
+                            "/internal/parent/chat/stream",
+                            self.parent_chat_handler.handle_options_stream,
+                        ),
+                        # 家长端聊天 WebSocket（小程序直连，与设备 8000 端口完全独立）
+                        web.get("/parent/chat/ws", handle_parent_chat_ws),
                     ]
                 )
 

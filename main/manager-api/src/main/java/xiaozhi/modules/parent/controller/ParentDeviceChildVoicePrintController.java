@@ -5,8 +5,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -86,6 +90,31 @@ public class ParentDeviceChildVoicePrintController {
         }
         parentDeviceChildVoicePrintService.deleteVoicePrint(parentUserId, voicePrintId);
         return new Result<Void>().ok(null);
+    }
+
+    @PostMapping("/play-token")
+    @Operation(summary = "获取声纹音频播放 token，用于拼接 play 接口 URL（wx.createInnerAudioContext 播放用）")
+    public Result<String> getPlayToken(
+            @Parameter(description = "音频ID", required = true) @RequestParam String audioId) {
+        Long parentUserId = ParentContext.getParentUserId();
+        if (parentUserId == null) {
+            throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
+        }
+        String token = parentDeviceChildVoicePrintService.getPlayToken(parentUserId, audioId);
+        return new Result<String>().ok(token);
+    }
+
+    @GetMapping("/play/{uuid}")
+    @Operation(summary = "按 token 播放音频（一次性使用，免鉴权，供小程序 Audio 组件加载）")
+    public ResponseEntity<byte[]> play(@PathVariable String uuid) {
+        byte[] audio = parentDeviceChildVoicePrintService.getAudioByPlayToken(uuid);
+        if (audio == null || audio.length == 0) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("audio/wav"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"voiceprint.wav\"")
+                .body(audio);
     }
 
     /** 解码 deviceId（处理小程序端可能的 URL 双重编码，如 B6%3AC8%3A35 或 B6%253AC8%253A35 转为 B6:C8:35） */

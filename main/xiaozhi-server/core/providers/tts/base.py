@@ -406,6 +406,13 @@ class TTSProviderBase(ABC):
 
         if last_punct_pos != -1:
             segment_text_raw = current_text[: last_punct_pos + 1]
+            # 流式场景：LLM 可能先输出「你吃了」+「？」再输出「吗」，若立即按「？」切分会把「吗」拆到下一段。
+            # 若句尾为「了？/呢？/啊？」且片段较短，暂不切分，等待更多 token（如「吗」）到来。
+            end_punct = segment_text_raw[-1] if segment_text_raw else ""
+            if end_punct in ("？", "?", "！", "!") and len(segment_text_raw) < 6:
+                char_before = segment_text_raw[-2] if len(segment_text_raw) >= 2 else ""
+                if char_before in ("了", "呢", "啊") and not self.tts_stop_request:
+                    return None  # 延迟切分，等待「吗」等语气词
             segment_text = textUtils.get_string_no_punctuation_or_emoji(
                 segment_text_raw
             )

@@ -62,12 +62,14 @@ public class ParentTokenFilter extends jakarta.servlet.http.HttpFilter {
         chain.doFilter(request, response);
     }
 
-    /** 无需 token 即可访问的 parent-api 路径（登录、发验证码） */
+    /** 无需 token 即可访问的 parent-api 路径（登录、发验证码、声纹播放） */
     private static boolean isAnonymousPath(String uri) {
         if (uri == null) return false;
         return uri.contains("/parent-api/auth/wechat")
                 || uri.contains("/parent-api/auth/phone/code")
-                || uri.contains("/parent-api/auth/phone/login");
+                || uri.contains("/parent-api/auth/phone/login")
+                || uri.contains("/parent-api/device/child/voiceprint/play/")
+                || uri.contains("/parent-api/chat/play/");
     }
 
     private static String getRequestToken(HttpServletRequest request) {

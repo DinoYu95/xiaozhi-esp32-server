@@ -38,6 +38,7 @@ import xiaozhi.modules.agent.entity.AgentVoicePrintEntity;
 import xiaozhi.modules.agent.service.AgentChatAudioService;
 import xiaozhi.modules.agent.service.AgentChatHistoryService;
 import xiaozhi.modules.agent.service.AgentVoicePrintService;
+import xiaozhi.modules.agent.service.VoiceprintAudioConvertService;
 import xiaozhi.modules.agent.vo.AgentVoicePrintVO;
 import xiaozhi.modules.sys.service.SysParamsService;
 
@@ -52,6 +53,7 @@ public class AgentVoicePrintServiceImpl extends ServiceImpl<AgentVoicePrintDao, 
     private final RestTemplate restTemplate;
     private final SysParamsService sysParamsService;
     private final AgentChatHistoryService agentChatHistoryService;
+    private final VoiceprintAudioConvertService voiceprintAudioConvertService;
     // Springboot提供的编程事务类
     private final TransactionTemplate transactionTemplate;
     // 识别度
@@ -60,11 +62,13 @@ public class AgentVoicePrintServiceImpl extends ServiceImpl<AgentVoicePrintDao, 
 
     public AgentVoicePrintServiceImpl(AgentChatAudioService agentChatAudioService, RestTemplate restTemplate,
                                       SysParamsService sysParamsService, AgentChatHistoryService agentChatHistoryService,
+                                      VoiceprintAudioConvertService voiceprintAudioConvertService,
                                       TransactionTemplate transactionTemplate, @Qualifier("taskExecutor") Executor taskExecutor) {
         this.agentChatAudioService = agentChatAudioService;
         this.restTemplate = restTemplate;
         this.sysParamsService = sysParamsService;
         this.agentChatHistoryService = agentChatHistoryService;
+        this.voiceprintAudioConvertService = voiceprintAudioConvertService;
         this.transactionTemplate = transactionTemplate;
         this.taskExecutor = taskExecutor;
     }
@@ -277,6 +281,13 @@ public class AgentVoicePrintServiceImpl extends ServiceImpl<AgentVoicePrintDao, 
         byte[] audio = agentChatAudioService.getAudio(audioId);
         if (audio == null || audio.length == 0) {
             throw new RenException(ErrorCode.VOICEPRINT_AUDIO_EMPTY);
+        }
+        // 统一转码为 16kHz 单声道 PCM WAV，避免 voiceprint-api「Format not recognised」
+        byte[] converted = voiceprintAudioConvertService.convertToVoiceprintWav(audio);
+        if (converted != null && converted.length > 0) {
+            audio = converted;
+        } else {
+            log.debug("声纹音频转码跳过或失败，使用原数据");
         }
         return new ByteArrayResource(audio) {
             @Override

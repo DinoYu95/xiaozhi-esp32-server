@@ -113,6 +113,11 @@ async def startToChat(conn, text):
 
 async def no_voice_close_connect(conn, have_voice):
     if have_voice:
+        # 若已触发结束对话（再见），用户再次说话时取消并中止 goodbye chat
+        if getattr(conn, "close_after_chat", False):
+            conn.logger.bind(tag=TAG).info("检测到用户再次说话，取消结束对话并中止再见")
+            conn.close_after_chat = False
+            conn.client_abort = True
         conn.last_activity_time = time.time() * 1000
         return
     # 只有在已经初始化过时间戳的情况下才进行超时检查

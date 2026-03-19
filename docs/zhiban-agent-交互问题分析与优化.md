@@ -89,14 +89,28 @@
 | **check_device_output_limit** | `receiveAudioHandle` | 内存字典查询，几乎无耗时 | 必需 | 无需改 |
 | **get_current_time_info** | `result_for_context` 等 | 本地 + cnlunar，耗时很小 | 仅 result_for_context 意图时用 | 无需改 |
 
-**优先可做**：
+**已实现**（`connection.py`）：
 
-1. **memory.query_memory 可选/可关**：配置项如 `skip_xiaozhi_memory_when_llm=ZhibanAgent`，用 ZhibanAgent 时直接 `memory_str = ""`，省去 Mem0 网络往返。
-2. **get_functions 短路**：检测到 `ZhibanAgent` 时，不调 `get_functions()` 或立即返回 `[]`，避免 MCP/工具初始化开销。
+1. **memory.query_memory 跳过**：`_is_zhiban_llm()` 为 True 时，不调用 `query_memory`，`memory_str` 保持空，省去 Mem0 网络往返。
+2. **get_functions 跳过**：`_is_zhiban_llm()` 为 True 时，不调 `get_functions()`，`functions` 保持 `None`，避免 MCP/工具初始化开销。
 
 ---
 
-## 六、后续可做
+## 六、关键阶段 RT 日志（已实现）
+
+`connection.py` 在 `depth=0` 时打印以下耗时（`[RT]` 前缀，info 级别）：
+
+| 日志 | 含义 |
+|------|------|
+| `[RT] get_functions 耗时` | 拉取工具列表耗时（ZhibanAgent 时跳过，不打印） |
+| `[RT] memory.query_memory 耗时` | 记忆查询耗时（ZhibanAgent 时跳过，不打印） |
+| `[RT] chat 入口到 LLM 调用前` | 含 get_functions/memory/上下文准备的总耗时 |
+| `[RT] LLM 首 token: Xs \| chat 入口到首包(TTFT): Ys` | LLM 首包耗时 + 用户感知 TTFT |
+| `[RT] LLM 流式完成耗时 \| chat 总耗时` | LLM 流式结束耗时 + 整轮 chat 总耗时 |
+
+---
+
+## 七、后续可做
 
 - zhiban-agent 侧：优化流式 token 边界，尽量不在「吗」前单独输出 `？`
 - 记忆查询：评估与 LLM 并行或延后加载的可能

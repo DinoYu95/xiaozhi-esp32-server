@@ -55,4 +55,13 @@ public interface AiAgentChatHistoryDao extends BaseMapper<AgentChatHistoryEntity
             @Param("agentId") String agentId,
             @Param("macAddress") String macAddress,
             @Param("limit") int limit);
+
+    /**
+     * 按 agent_id + mac_address 查询今日记录（created_at 在 dateStart～dateEnd 之间），兼容 MAC 格式
+     */
+    List<AgentChatHistoryEntity> selectTodayByAgentAndMacVariants(
+            @Param("agentId") String agentId,
+            @Param("macAddress") String macAddress,
+            @Param("dateStart") java.util.Date dateStart,
+            @Param("dateEnd") java.util.Date dateEnd);
 }

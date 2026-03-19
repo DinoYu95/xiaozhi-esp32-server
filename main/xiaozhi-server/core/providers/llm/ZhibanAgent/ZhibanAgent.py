@@ -71,13 +71,36 @@ class LLMProvider(LLMProviderBase):
             logger.bind(tag=TAG).warning("ZhibanAgent: 无用户输入，跳过调用")
             return
 
+        # 家长规则：直接注入到文本前，确保 zhiban-agent 无论是否解析 environment_context 都能看到
+        text_to_send = input_text.strip()
+        env = kwargs.get("environment_context") or {}
+        parent_rules = env.get("parent_rules") or []
+        if not parent_rules:
+            logger.bind(tag=TAG).debug(
+                "ZhibanAgent: environment_context 无 parent_rules，keys=%s",
+                list(env.keys()) if env else None,
+            )
+        if parent_rules:
+            rules_list = [r for r in parent_rules if r and str(r).strip()]
+            if rules_list:
+                prefix = "【家长为本设备设置的规则，请严格遵守】\n" + "\n".join(f"- {r}" for r in rules_list) + "\n\n"
+                text_to_send = prefix + "用户说：" + text_to_send
+                logger.bind(tag=TAG).info("ZhibanAgent: 注入家长规则 %d 条", len(rules_list))
+            else:
+                logger.bind(tag=TAG).warning("ZhibanAgent: environment_context 有 parent_rules 但内容为空")
+        else:
+            logger.bind(tag=TAG).debug(
+                "ZhibanAgent: environment_context 无 parent_rules (keys=%s)",
+                list(env.keys()) if env else [],
+            )
+
         # 构建最近 N 轮对话，供 zhiban 理解上下文（谜语提示、故事续讲等）
         messages = _build_messages_from_dialogue(dialogue, self._max_history_rounds)
 
         # 优先流式：调用 /api/chat/stream，逐块 yield，便于 TTS 边收边播
         yielded_any = False
         for chunk in self._client.stream(
-            text=input_text.strip(),
+            text=text_to_send,
             session_id=session_id or "",
             user_id=kwargs.get("user_id"),
             speaker_context=kwargs.get("speaker_context"),
@@ -90,7 +113,7 @@ class LLMProvider(LLMProviderBase):
         # 若流式无任何输出（如服务未开 stream 或报错），回退为非流式
         if not yielded_any:
             reply = self._client.chat(
-                text=input_text.strip(),
+                text=text_to_send,
                 session_id=session_id or "",
                 user_id=kwargs.get("user_id"),
                 speaker_context=kwargs.get("speaker_context"),

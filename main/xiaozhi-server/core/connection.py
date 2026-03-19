@@ -662,6 +662,26 @@ class ConnectionHandler:
                 ] = plugin_from_server.keys()
         if private_config.get("prompt", None) is not None:
             self.config["prompt"] = private_config["prompt"]
+        # 家长为该设备设置的规则，追加到 prompt 供 LLM 遵守，并单独存储供 ZhibanAgent 通过 environment_context 传递
+        parent_rules = private_config.get("parent_rules")
+        if parent_rules and isinstance(parent_rules, list) and len(parent_rules) > 0:
+            rules_text = "\n".join(f"- {r}" for r in parent_rules if r and str(r).strip())
+            if rules_text:
+                suffix = "\n\n家长为本设备设置的规则（请严格遵守）：\n" + rules_text
+                self.config["prompt"] = (self.config.get("prompt") or "") + suffix
+            self.config["parent_rules"] = parent_rules
+            self.logger.bind(tag=TAG).info(
+                "配置拉取: 家长规则 %d 条 (device-id=%s)",
+                len(parent_rules),
+                self.headers.get("device-id", "")[:20] if self.headers else "",
+            )
+        else:
+            self.config["parent_rules"] = []
+            self.logger.bind(tag=TAG).info(
+                "配置拉取: 无家长规则 (device-id=%s, private_config 含 parent_rules=%s)",
+                self.headers.get("device-id", "")[:20] if self.headers else "",
+                "parent_rules" in (private_config or {}),
+            )
         # 获取声纹信息
         if private_config.get("voiceprint", None) is not None:
             self.config["voiceprint"] = private_config["voiceprint"]
@@ -860,13 +880,33 @@ class ConnectionHandler:
 
     def _build_environment_context(self):
         """多角色：拼装 environment_context，设备字段由 conn 或后续 hello 解析填充。"""
-        return {
+        ctx = {
             "noise_level": getattr(self, "environment_noise_level", None) or "unknown",
             "has_overlapping_voice": getattr(self, "environment_has_overlapping_voice", False),
             "scene": getattr(self, "environment_scene", None) or "unknown",
             "environment_description": getattr(self, "environment_description", None) or "",
             "device_reported_context": getattr(self, "device_reported_context", None) or {},
         }
+        # 家长规则供 ZhibanAgent 注入到 prompt（ZhibanAgent 不接收 xiaozhi 的 system prompt）
+        parent_rules = self.config.get("parent_rules") or []
+        if parent_rules:
+            rules_list = [r for r in parent_rules if r and str(r).strip()]
+            ctx["parent_rules"] = rules_list
+            self.logger.bind(tag=TAG).info(
+                "environment_context 含 parent_rules: %d 条", len(rules_list)
+            )
+        else:
+            self.logger.bind(tag=TAG).info(
+                "environment_context 无 parent_rules（config 中为空，设备可能未配置规则或需重新连接）"
+            )
+        return ctx
+
+    def _is_zhiban_llm(self):
+        """判断当前 LLM 是否为 ZhibanAgent，用于跳过 xiaozhi 侧的 memory/functions 以降低首响延迟。"""
+        if self.llm is None:
+            return False
+        mod = getattr(type(self.llm), "__module__", "") or ""
+        return "ZhibanAgent" in mod
 
     def chat(self, query, depth=0):
         if query is not None:
@@ -903,13 +943,21 @@ class ConnectionHandler:
 
         # Define intent functions
         functions = None
+        t0_chat = time.monotonic() if depth == 0 else None
         # 达到最大深度时，禁用工具调用，强制 LLM 直接回答
+        # ZhibanAgent 不处理 xiaozhi 的 function call，跳过 get_functions 以减少首响延迟
         if (
             self.intent_type == "function_call"
             and hasattr(self, "func_handler")
             and not force_final_answer
+            and not self._is_zhiban_llm()
         ):
+            t_f = time.monotonic()
             functions = self.func_handler.get_functions()
+            if depth == 0:
+                self.logger.bind(tag=TAG).info(
+                    "[RT] get_functions 耗时: %.3fs", time.monotonic() - t_f
+                )
         response_message = []
 
         try:
@@ -933,13 +981,25 @@ class ConnectionHandler:
                 self.memory.switch_role(role_id)
 
             # 使用带记忆的对话
+            # ZhibanAgent 自有长期记忆，跳过 xiaozhi memory 查询以减少首响延迟
             memory_str = None
-            if self.memory is not None:
+            if self.memory is not None and not self._is_zhiban_llm():
+                t_m = time.monotonic()
                 future = asyncio.run_coroutine_threadsafe(
                     self.memory.query_memory(query), self.loop
                 )
                 memory_str = future.result()
+                if depth == 0:
+                    self.logger.bind(tag=TAG).info(
+                        "[RT] memory.query_memory 耗时: %.3fs", time.monotonic() - t_m
+                    )
 
+            t_llm = time.monotonic()
+            if depth == 0 and t0_chat is not None:
+                self.logger.bind(tag=TAG).info(
+                    "[RT] chat 入口到 LLM 调用前: %.3fs (含 get_functions/memory/上下文)",
+                    t_llm - t0_chat,
+                )
             llm_kwargs = {
                 "user_id": role_id,
                 "speaker_context": speaker_context,
@@ -974,6 +1034,7 @@ class ConnectionHandler:
         content_arguments = ""
         self.client_abort = False
         emotion_flag = True
+        first_token_logged = False
         try:
             for response in llm_responses:
                 if self.client_abort:
@@ -1006,6 +1067,14 @@ class ConnectionHandler:
 
                 if content is not None and len(content) > 0:
                     if not tool_call_flag:
+                        if depth == 0 and not first_token_logged:
+                            first_token_logged = True
+                            t_now = time.monotonic()
+                            self.logger.bind(tag=TAG).info(
+                                "[RT] LLM 首 token: %.3fs | chat 入口到首包(TTFT): %.3fs",
+                                t_now - t_llm,
+                                t_now - t0_chat,
+                            )
                         response_message.append(content)
                         self.tts.tts_text_queue.put(
                             TTSMessageDTO(
@@ -1015,6 +1084,12 @@ class ConnectionHandler:
                                 content_detail=content,
                             )
                         )
+            if depth == 0 and t0_chat is not None:
+                self.logger.bind(tag=TAG).info(
+                    "[RT] LLM 流式完成耗时: %.3fs | chat 总耗时: %.3fs",
+                    time.monotonic() - t_llm,
+                    time.monotonic() - t0_chat,
+                )
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"LLM stream processing error: {e}")
             self.tts.tts_text_queue.put(

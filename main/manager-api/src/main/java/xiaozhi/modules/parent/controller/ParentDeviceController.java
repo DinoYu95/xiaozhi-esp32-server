@@ -15,9 +15,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.swagger.v3.oas.annotations.Operation;
-import jakarta.validation.Valid;
-import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.exception.RenException;
@@ -26,8 +25,11 @@ import xiaozhi.modules.parent.context.ParentContext;
 import xiaozhi.modules.parent.dto.ParentDeviceBindDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceSkillBindDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceUnbindDTO;
+import xiaozhi.modules.parent.dto.ParentDeviceRuleAddDTO;
+import xiaozhi.modules.parent.service.ParentDeviceRuleService;
 import xiaozhi.modules.parent.service.ParentDeviceService;
 import xiaozhi.modules.parent.vo.ParentDeviceItemVO;
+import xiaozhi.modules.parent.vo.ParentDeviceRuleVO;
 import xiaozhi.modules.parent.vo.ParentDeviceSkillVO;
 
 @RestController
@@ -37,6 +39,7 @@ import xiaozhi.modules.parent.vo.ParentDeviceSkillVO;
 public class ParentDeviceController {
 
     private final ParentDeviceService parentDeviceService;
+    private final ParentDeviceRuleService parentDeviceRuleService;
 
     @PostMapping("/bind")
     @Operation(summary = "通过绑定码绑定设备")
@@ -118,6 +121,46 @@ public class ParentDeviceController {
         if (StringUtils.isBlank(deviceId)) throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
         deviceId = decodeDeviceId(deviceId);
         parentDeviceService.unbindSkill(parentUserId, deviceId, skillSource, skillId, speakerType);
+        return new Result<Void>().ok(null);
+    }
+
+    @GetMapping(value = { "/{deviceId:.+}/rules", "/rules" })
+    @Operation(summary = "获取设备的家长规则列表")
+    public Result<List<ParentDeviceRuleVO>> listRules(
+            @PathVariable(value = "deviceId", required = false) String pathDeviceId,
+            @RequestParam(value = "deviceId", required = false) String queryDeviceId) {
+        Long parentUserId = ParentContext.getParentUserId();
+        if (parentUserId == null) throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
+        String deviceId = pathDeviceId != null ? pathDeviceId : queryDeviceId;
+        if (StringUtils.isBlank(deviceId)) throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        deviceId = decodeDeviceId(deviceId);
+        List<ParentDeviceRuleVO> list = parentDeviceRuleService.listByDevice(parentUserId, deviceId);
+        return new Result<List<ParentDeviceRuleVO>>().ok(list);
+    }
+
+    @PostMapping(value = { "/{deviceId:.+}/rules", "/rules" })
+    @Operation(summary = "为设备添加一条家长规则")
+    public Result<ParentDeviceRuleVO> addRule(
+            @PathVariable(value = "deviceId", required = false) String pathDeviceId,
+            @RequestParam(value = "deviceId", required = false) String queryDeviceId,
+            @RequestBody @Valid ParentDeviceRuleAddDTO dto) {
+        Long parentUserId = ParentContext.getParentUserId();
+        if (parentUserId == null) throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
+        String deviceId = pathDeviceId != null ? pathDeviceId : queryDeviceId;
+        if (StringUtils.isBlank(deviceId)) deviceId = dto.getDeviceId();
+        if (StringUtils.isBlank(deviceId)) throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        deviceId = decodeDeviceId(deviceId);
+        dto.setDeviceId(deviceId);
+        ParentDeviceRuleVO vo = parentDeviceRuleService.add(parentUserId, dto);
+        return new Result<ParentDeviceRuleVO>().ok(vo);
+    }
+
+    @DeleteMapping("/rules/{id}")
+    @Operation(summary = "删除一条家长规则")
+    public Result<Void> deleteRule(@PathVariable Long id) {
+        Long parentUserId = ParentContext.getParentUserId();
+        if (parentUserId == null) throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
+        parentDeviceRuleService.delete(parentUserId, id);
         return new Result<Void>().ok(null);
     }
 

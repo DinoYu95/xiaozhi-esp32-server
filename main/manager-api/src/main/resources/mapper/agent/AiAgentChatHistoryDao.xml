@@ -56,4 +56,16 @@
     ORDER BY created_at DESC
     LIMIT #{limit}
   </select>
+
+  <!-- 按 agent_id + mac_address + 日期范围查今日记录 -->
+  <select id="selectTodayByAgentAndMacVariants" resultMap="BaseResultMap">
+    SELECT <include refid="Base_Column_List"/>
+    FROM ai_agent_chat_history
+    WHERE agent_id = #{agentId}
+      AND created_at &gt;= #{dateStart} AND created_at &lt; #{dateEnd}
+      AND (mac_address = #{macAddress}
+           OR REPLACE(LOWER(IFNULL(mac_address,'')), ':', '_') = REPLACE(LOWER(IFNULL(#{macAddress},'')), ':', '_')
+           OR REPLACE(LOWER(IFNULL(mac_address,'')), '_', ':') = REPLACE(LOWER(IFNULL(#{macAddress},'')), '_', ':'))
+    ORDER BY created_at ASC
+  </select>
 </mapper>

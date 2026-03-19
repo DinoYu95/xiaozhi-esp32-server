@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 import org.springframework.web.multipart.MultipartFile;
 
 import xiaozhi.modules.parent.dto.ParentChatSendDTO;
+import xiaozhi.modules.parent.vo.ParentChatHistoryPageVO;
 import xiaozhi.modules.parent.vo.ParentChatMessageVO;
 
 /**
@@ -24,9 +25,14 @@ public interface ParentChatService {
     ParentChatMessageVO send(Long parentUserId, ParentChatSendDTO dto);
 
     /**
-     * 获取家长与某孩子的聊天历史
+     * 获取家长与某孩子的聊天历史（全量，兼容旧逻辑）
      */
     List<ParentChatMessageVO> getHistory(Long parentUserId, Long childId);
+
+    /**
+     * 获取家长与某孩子的聊天历史（分页，按 createTime 降序，page=1 为最新）
+     */
+    ParentChatHistoryPageVO getHistoryPage(Long parentUserId, Long childId, int page, int pageSize);
 
     /**
      * 获取语音播放 token（一次性）

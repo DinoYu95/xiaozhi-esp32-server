@@ -115,6 +115,16 @@ public class AgentChatHistoryServiceImpl extends ServiceImpl<AiAgentChatHistoryD
     }
 
     @Override
+    public List<AgentChatHistoryDTO> getTodayByAgentAndMac(String agentId, String macAddress, java.util.Date dateStart, java.util.Date dateEnd) {
+        if (org.apache.commons.lang3.StringUtils.isBlank(agentId) || org.apache.commons.lang3.StringUtils.isBlank(macAddress)
+                || dateStart == null || dateEnd == null) {
+            return List.of();
+        }
+        List<AgentChatHistoryEntity> list = baseMapper.selectTodayByAgentAndMacVariants(agentId, macAddress.trim(), dateStart, dateEnd);
+        return ConvertUtils.sourceToTarget(list, AgentChatHistoryDTO.class);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteByAgentId(String agentId, Boolean deleteAudio, Boolean deleteText) {
         if (deleteAudio) {

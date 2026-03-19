@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import xiaozhi.common.constant.Constant;
 import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.exception.RenException;
@@ -38,6 +39,7 @@ import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.device.service.DeviceService;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
+import xiaozhi.modules.parent.service.ParentDeviceRuleService;
 import xiaozhi.modules.model.entity.ModelConfigEntity;
 import xiaozhi.modules.model.service.ModelConfigService;
 import xiaozhi.modules.sys.dto.SysParamsDTO;
@@ -49,6 +51,7 @@ import xiaozhi.modules.voiceclone.service.VoiceCloneService;
 
 @Service
 @AllArgsConstructor
+@Slf4j
 public class ConfigServiceImpl implements ConfigService {
     private final SysParamsService sysParamsService;
     private final DeviceService deviceService;
@@ -64,6 +67,7 @@ public class ConfigServiceImpl implements ConfigService {
     private final AgentVoicePrintDao agentVoicePrintDao;
     private final AgentSkillMappingDao agentSkillMappingDao;
     private final DeviceChildDao deviceChildDao;
+    private final ParentDeviceRuleService parentDeviceRuleService;
 
     @Override
     public Object getConfig(Boolean isCache) {
@@ -246,6 +250,46 @@ public class ConfigServiceImpl implements ConfigService {
                 null,
                 result,
                 true);
+
+        // 家长为该设备设置的规则（供 xiaozhi-server 注入到 prompt）
+        // 兼容 device_id 格式：ai_device.id 可能为 UUID，parent_device_rule 可能存 mac/b6_c8_35/B6:C8:35 等；依次尝试
+        List<String> parentRules = parentDeviceRuleService.getRuleTextsByDeviceId(device.getId());
+        String matchedBy = null;
+        if (parentRules != null && !parentRules.isEmpty()) {
+            matchedBy = "device.id";
+        } else if (StringUtils.isNotBlank(device.getMacAddress()) && !device.getMacAddress().equals(device.getId())) {
+            parentRules = parentDeviceRuleService.getRuleTextsByDeviceId(device.getMacAddress());
+            if (parentRules != null && !parentRules.isEmpty()) matchedBy = "mac_address";
+        }
+        if ((parentRules == null || parentRules.isEmpty()) && StringUtils.isNotBlank(device.getMacAddress())) {
+            String norm = device.getMacAddress().replace(":", "_").toLowerCase();
+            if (matchedBy == null && !norm.equals(device.getId()) && !norm.equals(device.getMacAddress())) {
+                parentRules = parentDeviceRuleService.getRuleTextsByDeviceId(norm);
+                if (parentRules != null && !parentRules.isEmpty()) matchedBy = "mac_norm";
+            }
+        }
+        if ((parentRules == null || parentRules.isEmpty()) && StringUtils.isNotBlank(device.getMacAddress())) {
+            String macUpper = device.getMacAddress().toUpperCase();
+            if (!macUpper.equals(device.getMacAddress())) {
+                parentRules = parentDeviceRuleService.getRuleTextsByDeviceId(macUpper);
+                if (parentRules != null && !parentRules.isEmpty()) matchedBy = "mac_upper";
+            }
+        }
+        if ((parentRules == null || parentRules.isEmpty()) && StringUtils.isNotBlank(device.getMacAddress())) {
+            String macLower = device.getMacAddress().toLowerCase();
+            if (!macLower.equals(device.getMacAddress()) && !macLower.equals(device.getId())) {
+                parentRules = parentDeviceRuleService.getRuleTextsByDeviceId(macLower);
+                if (parentRules != null && !parentRules.isEmpty()) matchedBy = "mac_lower";
+            }
+        }
+        if (parentRules != null && !parentRules.isEmpty()) {
+            result.put("parent_rules", parentRules);
+            log.info("getAgentModels 下发 parent_rules {} 条，匹配方式: device.id={} mac={}", parentRules.size(),
+                    device.getId(), matchedBy);
+        } else {
+            log.debug("getAgentModels 未查到 parent_rules，device.id={} mac_address={}", device.getId(),
+                    device.getMacAddress());
+        }
 
         return result;
     }

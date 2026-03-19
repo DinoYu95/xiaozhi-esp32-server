@@ -23,6 +23,7 @@ import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.dao.ParentChatHistoryDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dao.ParentUserTokenDao;
+import xiaozhi.modules.parent.service.ParentDeviceRuleService;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.entity.ParentChatHistoryEntity;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
@@ -46,6 +47,7 @@ public class ParentInternalController {
     private final ParentDeviceBindingDao parentDeviceBindingDao;
     private final ParentChatHistoryDao parentChatHistoryDao;
     private final AgentChatHistoryService agentChatHistoryService;
+    private final ParentDeviceRuleService parentDeviceRuleService;
 
     /**
      * 获取孩子与助手的近期对话记录（格式化为「孩子：xxx\n助手：yyy」）。
@@ -149,6 +151,46 @@ public class ParentInternalController {
         assistantMsg.setCreateTime(now);
         parentChatHistoryDao.insert(assistantMsg);
         return new Result<Void>().ok(null);
+    }
+
+    /**
+     * 添加家长设备规则（供 zhiban-agent 在家长对话中识别到设置规则意图时调用）。
+     * 鉴权：Bearer server.secret。
+     *
+     * @param body parentUserId、macAddress、ruleText
+     */
+    @PostMapping("/device-rule")
+    public Result<ParentDeviceRuleAddResult> addDeviceRule(@RequestBody ParentDeviceRuleAddRequest body) {
+        if (body.getParentUserId() == null || StringUtils.isBlank(body.getMacAddress()) || StringUtils.isBlank(body.getRuleText())) {
+            return new Result<ParentDeviceRuleAddResult>().error(ErrorCode.PARAMS_GET_ERROR, "parentUserId、macAddress、ruleText 必填");
+        }
+        try {
+            var vo = parentDeviceRuleService.addByMacAndParent(
+                    body.getParentUserId(), body.getMacAddress().trim(), body.getRuleText().trim());
+            return new Result<ParentDeviceRuleAddResult>().ok(new ParentDeviceRuleAddResult(vo.getId(), vo.getRuleText()));
+        } catch (Exception e) {
+            log.warn("添加家长规则失败: {}", e.getMessage());
+            return new Result<ParentDeviceRuleAddResult>().error(ErrorCode.PARAMS_GET_ERROR, e.getMessage());
+        }
+    }
+
+    /** 添加规则请求体 */
+    @lombok.Data
+    public static class ParentDeviceRuleAddRequest {
+        private Long parentUserId;
+        private String macAddress;
+        private String ruleText;
+    }
+
+    /** 添加规则响应 */
+    @lombok.Data
+    public static class ParentDeviceRuleAddResult {
+        private Long id;
+        private String ruleText;
+        public ParentDeviceRuleAddResult(Long id, String ruleText) {
+            this.id = id;
+            this.ruleText = ruleText;
+        }
     }
 
     /** 保存请求体 */

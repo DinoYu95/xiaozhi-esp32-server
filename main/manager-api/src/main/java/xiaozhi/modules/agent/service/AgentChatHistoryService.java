@@ -59,6 +59,18 @@ public interface AgentChatHistoryService extends IService<AgentChatHistoryEntity
     String getFormattedRecentByAgentAndMac(String agentId, String macAddress, int limit, String childDisplayName);
 
     /**
+     * 按 agent_id + mac_address 查询指定日期的聊天记录（供家长端今日简报）
+     *
+     * @param agentId    智能体ID
+     * @param macAddress 设备MAC地址
+     * @param dateStart  起始时间（当天 00:00:00）
+     * @param dateEnd    结束时间（次日 00:00:00，不包含）
+     * @return 聊天记录列表（按时间正序）
+     */
+    List<AgentChatHistoryDTO> getTodayByAgentAndMac(String agentId, String macAddress,
+            java.util.Date dateStart, java.util.Date dateEnd);
+
+    /**
      * 根据智能体ID删除聊天记录
      *
      * @param agentId     智能体ID

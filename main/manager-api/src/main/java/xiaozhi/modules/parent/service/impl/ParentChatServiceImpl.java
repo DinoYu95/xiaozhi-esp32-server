@@ -21,6 +21,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,7 +48,9 @@ import xiaozhi.modules.parent.entity.ParentChatHistoryEntity;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.service.ParentChatService;
+import xiaozhi.modules.parent.service.ParentDeviceRuleService;
 import xiaozhi.modules.sys.service.SysParamsService;
+import xiaozhi.modules.parent.vo.ParentChatHistoryPageVO;
 import xiaozhi.modules.parent.vo.ParentChatMessageVO;
 
 /**
@@ -70,6 +73,7 @@ public class ParentChatServiceImpl implements ParentChatService {
     private final AgentSkillMappingDao agentSkillMappingDao;
     private final AgentVoicePrintDao agentVoicePrintDao;
     private final ParentUserDao parentUserDao;
+    private final ParentDeviceRuleService parentDeviceRuleService;
     private final RedisUtils redisUtils;
     private final RestTemplate restTemplate;
     private final SysParamsService sysParamsService;
@@ -191,6 +195,7 @@ public class ParentChatServiceImpl implements ParentChatService {
             body.put("speaker_context", speakerContext);
             // 孩子信息 + 家长昵称：供智伴回答「我是谁」「我家孩子是谁」
             Map<String, Object> childContext = new HashMap<>();
+            childContext.put("parent_user_id", parentUserId);  // 供 zhiban 调用 add_parent_rule 时使用
             childContext.put("parent_nickname", parentNickname);
             // 孩子姓名：优先 device_child.name，为空时回退到 ai_agent_voice_print.source_name
             if (child != null) {
@@ -214,6 +219,19 @@ public class ParentChatServiceImpl implements ParentChatService {
             if (StringUtils.isNotBlank(device.getMacAddress())) {
                 childContext.put("mac_address", device.getMacAddress().trim());
                 childContext.put("agent_id", agentId);
+            }
+            // 家长规则：供智伴在家长聊天时也能遵守（如家长问「你跟孩子说话时要遵守哪些规则」）
+            List<String> parentRulesList = parentDeviceRuleService.getRuleTextsByDeviceId(device.getId());
+            if (parentRulesList == null || parentRulesList.isEmpty()) {
+                if (StringUtils.isNotBlank(device.getMacAddress())) {
+                    parentRulesList = parentDeviceRuleService.getRuleTextsByDeviceId(device.getMacAddress());
+                }
+                if ((parentRulesList == null || parentRulesList.isEmpty()) && StringUtils.isNotBlank(device.getMacAddress())) {
+                    parentRulesList = parentDeviceRuleService.getRuleTextsByDeviceId(device.getMacAddress().replace(":", "_").toLowerCase());
+                }
+            }
+            if (parentRulesList != null && !parentRulesList.isEmpty()) {
+                childContext.put("parent_rules", parentRulesList);
             }
             body.put("environment_context", childContext);
             log.info("家长聊天：传递 parent_nickname={}, child_name={}（任一为空则对应数据未配置）", parentNickname, childContext.get("child_name"));
@@ -259,13 +277,25 @@ public class ParentChatServiceImpl implements ParentChatService {
 
     @Override
     public List<ParentChatMessageVO> getHistory(Long parentUserId, Long childId) {
+        ParentChatHistoryPageVO page = getHistoryPage(parentUserId, childId, 1, Integer.MAX_VALUE);
+        return page.getList();
+    }
+
+    @Override
+    public ParentChatHistoryPageVO getHistoryPage(Long parentUserId, Long childId, int page, int pageSize) {
         ensureParentCanAccessChild(parentUserId, childId);
-        List<ParentChatHistoryEntity> list = parentChatHistoryDao.selectList(
+        int p = Math.max(1, page);
+        int size = pageSize <= 0 ? 20 : Math.min(pageSize, 100);
+        Page<ParentChatHistoryEntity> pageReq = new Page<>(p, size);
+        Page<ParentChatHistoryEntity> result = parentChatHistoryDao.selectPage(pageReq,
                 new LambdaQueryWrapper<ParentChatHistoryEntity>()
                         .eq(ParentChatHistoryEntity::getParentUserId, parentUserId)
                         .eq(ParentChatHistoryEntity::getChildId, childId)
-                        .orderByAsc(ParentChatHistoryEntity::getCreateTime));
-        return list.stream().map(this::toVO).toList();
+                        .orderByDesc(ParentChatHistoryEntity::getCreateTime));
+        List<ParentChatMessageVO> list = result.getRecords().stream().map(this::toVO).toList();
+        long total = result.getTotal();
+        boolean hasMore = (long) p * size < total;
+        return new ParentChatHistoryPageVO(list, hasMore);
     }
 
     @Override

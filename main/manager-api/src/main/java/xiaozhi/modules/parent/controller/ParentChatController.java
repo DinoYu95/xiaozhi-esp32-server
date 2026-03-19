@@ -1,7 +1,5 @@
 package xiaozhi.modules.parent.controller;
 
-import java.util.List;
-
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +23,7 @@ import xiaozhi.common.utils.Result;
 import xiaozhi.modules.parent.context.ParentContext;
 import xiaozhi.modules.parent.dto.ParentChatSendDTO;
 import xiaozhi.modules.parent.service.ParentChatService;
+import xiaozhi.modules.parent.vo.ParentChatHistoryPageVO;
 import xiaozhi.modules.parent.vo.ParentChatMessageVO;
 
 /**
@@ -63,15 +62,24 @@ public class ParentChatController {
     }
 
     @GetMapping("/history")
-    @Operation(summary = "获取聊天记录")
-    public Result<List<ParentChatMessageVO>> getHistory(
-            @Parameter(description = "孩子ID", required = true) @RequestParam Long childId) {
+    @Operation(summary = "获取聊天记录（分页）")
+    public Result<ParentChatHistoryPageVO> getHistory(
+            @Parameter(description = "孩子ID", required = true) @RequestParam Long childId,
+            @Parameter(description = "页码，默认1（最新在前）；未传则走旧逻辑返回全部") @RequestParam(required = false) Integer page,
+            @Parameter(description = "每页条数，默认20；未传则走旧逻辑返回全部") @RequestParam(required = false) Integer pageSize) {
         Long parentUserId = ParentContext.getParentUserId();
         if (parentUserId == null) {
             throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
         }
-        List<ParentChatMessageVO> list = parentChatService.getHistory(parentUserId, childId);
-        return new Result<List<ParentChatMessageVO>>().ok(list);
+        // 兼容：page、pageSize 都未传 → 走旧逻辑返回全部，hasMore=false
+        if (page == null && pageSize == null) {
+            var list = parentChatService.getHistory(parentUserId, childId);
+            return new Result<ParentChatHistoryPageVO>().ok(new ParentChatHistoryPageVO(list, false));
+        }
+        int p = (page != null && page > 0) ? page : 1;
+        int size = (pageSize != null && pageSize > 0) ? pageSize : 20;
+        ParentChatHistoryPageVO data = parentChatService.getHistoryPage(parentUserId, childId, p, size);
+        return new Result<ParentChatHistoryPageVO>().ok(data);
     }
 
     @PostMapping("/play-token")

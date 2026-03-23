@@ -13,12 +13,12 @@ COPY main/manager-api/pom.xml .
 COPY main/manager-api/src ./src
 RUN mvn clean package -Dmaven.test.skip=true
 
-# 第三阶段：构建最终镜像
-FROM bellsoft/liberica-runtime-container:jre-21-glibc
+# 第三阶段：构建最终镜像（用 Alpine 替代 Alpaquita，包源更稳定）
+FROM eclipse-temurin:21-jre-alpine
 
 # 安装Nginx、字体库与 ffmpeg（声纹音频转码用）
 RUN apk update && \
-    apk add --no-cache --no-scripts \
+    apk add --no-cache \
         nginx \
         bash \
         fontconfig \

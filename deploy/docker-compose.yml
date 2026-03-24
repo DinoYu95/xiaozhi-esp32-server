@@ -96,9 +96,11 @@ services:
     env_file: .env
     environment:
       TZ: Asia/Shanghai
-    # 部分宿主机把 systemd-resolved(127.0.0.53) 传入容器导致解析失败；显式走 Docker 内置 DNS 以解析 compose 服务名 web
+    # 127.0.0.11：解析 compose 服务名 web；再备公网/阿里云 DNS，避免仅内置转发失败时外网域名（如 TTS openspeech.bytedance.com）解析 -3
     dns:
       - 127.0.0.11
+      - 223.5.5.5
+      - 100.100.2.136
     ports:
       - "${SERVER_WS_PORT:-8000}:8000"
       - "${SERVER_HTTP_PORT:-8003}:8003"

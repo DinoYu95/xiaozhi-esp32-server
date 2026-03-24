@@ -77,7 +77,7 @@ class LLMProvider(LLMProviderBase):
         parent_rules = env.get("parent_rules") or []
         if not parent_rules:
             logger.bind(tag=TAG).debug(
-                "ZhibanAgent: environment_context 无 parent_rules，keys=%s",
+                "ZhibanAgent: environment_context 无 parent_rules，keys={}",
                 list(env.keys()) if env else None,
             )
         if parent_rules:
@@ -85,12 +85,14 @@ class LLMProvider(LLMProviderBase):
             if rules_list:
                 prefix = "【家长为本设备设置的规则，请严格遵守】\n" + "\n".join(f"- {r}" for r in rules_list) + "\n\n"
                 text_to_send = prefix + "用户说：" + text_to_send
-                logger.bind(tag=TAG).info("ZhibanAgent: 注入家长规则 %d 条", len(rules_list))
+                logger.bind(tag=TAG).info(
+                    "ZhibanAgent: 注入家长规则 {} 条", len(rules_list)
+                )
             else:
                 logger.bind(tag=TAG).warning("ZhibanAgent: environment_context 有 parent_rules 但内容为空")
         else:
             logger.bind(tag=TAG).debug(
-                "ZhibanAgent: environment_context 无 parent_rules (keys=%s)",
+                "ZhibanAgent: environment_context 无 parent_rules (keys={})",
                 list(env.keys()) if env else [],
             )
 

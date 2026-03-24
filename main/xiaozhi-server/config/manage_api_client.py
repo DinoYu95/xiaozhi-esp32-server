@@ -37,13 +37,17 @@ class ManageApiClient:
         if not cls.config:
             raise Exception("manager-api配置错误")
 
-        if not cls.config.get("url") or not cls.config.get("secret"):
+        url = (cls.config.get("url") or "").strip()
+        secret = (cls.config.get("secret") or "").strip()
+        if not url or not secret:
             raise Exception("manager-api的url或secret配置错误")
+        cls.config["url"] = url
+        cls.config["secret"] = secret
 
-        if "你" in cls.config.get("secret"):
+        if "你" in secret:
             raise Exception("请先配置manager-api的secret")
 
-        cls._secret = cls.config.get("secret")
+        cls._secret = secret
         cls.max_retries = cls.config.get("max_retries", 6)  # 最大重试次数
         cls.retry_delay = cls.config.get("retry_delay", 10)  # 初始重试延迟(秒)
         # 不在这里创建 AsyncClient，延迟到实际使用时创建
@@ -140,6 +144,7 @@ class ManageApiClient:
                     retry_count += 1
                     print(
                         f"{method} {endpoint} 异步请求失败，将在 {cls.retry_delay:.1f} 秒后进行第 {retry_count} 次重试"
+                        f"（manager-api.url={cls.config.get('url')!r}）"
                     )
                     await asyncio.sleep(cls.retry_delay)
                     continue

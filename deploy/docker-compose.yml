@@ -76,7 +76,9 @@ services:
     volumes:
       - ./uploadfile:/uploadfile
     networks:
-      - xiaozhi
+      xiaozhi:
+        aliases:
+          - manager-api # 与文档中的 manager-api 主机名一致，便于 data/.config.yaml 写 http://manager-api:8002/xiaozhi
 
   # 小智服务端（Python，requirements 在镜像内安装）
   # 镜像：未设 SERVER_IMAGE 时用本地构建（Dockerfile-server-standalone）docker compose up -d --build
@@ -90,16 +92,25 @@ services:
     depends_on:
       - db
       - redis
+      - web # 与 data/.config.yaml 中 manager-api.url（如 http://web:8002/xiaozhi）一致，先起智控台再拉配置
     env_file: .env
     environment:
       TZ: Asia/Shanghai
+    # 部分宿主机把 systemd-resolved(127.0.0.53) 传入容器导致解析失败；显式走 Docker 内置 DNS 以解析 compose 服务名 web
+    dns:
+      - 127.0.0.11
     ports:
       - "${SERVER_WS_PORT:-8000}:8000"
       - "${SERVER_HTTP_PORT:-8003}:8003"
     security_opt:
       - seccomp:unconfined
+    # Linux 下容器内默认无 host.docker.internal，需显式映射到宿主机网关（用于 zhiban_agent.base_url 等）
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/opt/xiaozhi-esp32-server/data
+      # 绑定「单个文件」时，若宿主机上该路径尚不存在，Docker 会创建同名「目录」，导致 wget 报 Is a directory。
+      # 首次部署请先 mkdir -p models/SenseVoiceSmall && touch models/SenseVoiceSmall/model.pt 再 compose up，或先 down 再删掉错误目录后下载模型。
       - ./models/SenseVoiceSmall/model.pt:/opt/xiaozhi-esp32-server/models/SenseVoiceSmall/model.pt
     networks:
       - xiaozhi

@@ -26,7 +26,10 @@ class ZhibanAgentClient:
                       通常来自 self.config.get("zhiban_agent", {}) 或智控台下发的配置。
         """
         self.config = config or {}
-        self.base_url = (self.config.get("base_url") or "").rstrip("/")
+        # 与 OpenAI 等 LLM 一致：智控台「接口地址」可能存为 url，base_url 优先
+        self.base_url = (
+            self.config.get("base_url") or self.config.get("url") or ""
+        ).rstrip("/")
         self.timeout = float(self.config.get("timeout", DEFAULT_TIMEOUT))
         self._client: Optional[httpx.Client] = None
 
@@ -78,7 +81,7 @@ class ZhibanAgentClient:
 
         # 诊断：发往 zhiban-agent 的 payload（排查「我是谁」不生效）
         logger.bind(tag=TAG).info(
-            "zhiban-agent 调用: text前80字=%s, speaker_name=%s, env_parent_nickname=%s",
+            "zhiban-agent 调用: text前80字={}, speaker_name={}, env_parent_nickname={}",
             (payload.get("text") or "")[:80],
             (payload.get("speaker_context") or {}).get("speaker_name"),
             (payload.get("environment_context") or {}).get("parent_nickname"),
@@ -97,13 +100,13 @@ class ZhibanAgentClient:
             reply = data.get("reply") if isinstance(data, dict) else None
             if reply is not None:
                 return reply if isinstance(reply, str) else str(reply)
-            logger.bind(tag=TAG).warning("zhiban_agent 返回无 reply 字段: %s", data)
+            logger.bind(tag=TAG).warning("zhiban_agent 返回无 reply 字段: {}", data)
             return None
         except httpx.HTTPError as e:
-            logger.bind(tag=TAG).error("zhiban_agent 请求失败: %s", e)
+            logger.bind(tag=TAG).error("zhiban_agent 请求失败: {}", e)
             return None
         except Exception as e:
-            logger.bind(tag=TAG).exception("zhiban_agent 调用异常: %s", e)
+            logger.bind(tag=TAG).exception("zhiban_agent 调用异常: {}", e)
             return None
 
     def stream(
@@ -157,6 +160,6 @@ class ZhibanAgentClient:
                         if chunk:
                             yield chunk
         except httpx.HTTPError as e:
-            logger.bind(tag=TAG).error("zhiban_agent 流式请求失败: %s", e)
+            logger.bind(tag=TAG).error("zhiban_agent 流式请求失败: {}", e)
         except Exception as e:
-            logger.bind(tag=TAG).exception("zhiban_agent 流式调用异常: %s", e)
+            logger.bind(tag=TAG).exception("zhiban_agent 流式调用异常: {}", e)

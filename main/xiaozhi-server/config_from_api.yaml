@@ -19,7 +19,11 @@ server:
   vision_explain: http://你的ip或者域名:端口号/mcp/vision/explain
 manager-api:
   # 你的manager-api的地址，最好使用局域网ip
-  # 如果使用docker部署，请使用填写成 http://xiaozhi-esp32-server-web:8002/xiaozhi
+  # Docker Compose 内须用「服务名」或「容器名」解析，不要用宿主机才认识的域名：
+  # - 仓库 deploy/docker-compose.yml：智控台服务名为 web，应写 http://web:8002/xiaozhi（或 http://manager-api:8002/xiaozhi，deploy 已为 web 增加别名）
+  # - main/xiaozhi-server/docker-compose_all.yml：服务名为 xiaozhi-esp32-server-web，写 http://xiaozhi-esp32-server-web:8002/xiaozhi
+  # 若容器内报 Errno -3 name resolution：检查 deploy 已含 server 的 dns: 127.0.0.11，并确认 url 不是宿主机域名
+  # 宿主机浏览器访问智控台仍是 http://服务器IP:8002 ，与上面容器内地址不同
   url: http://127.0.0.1:8002/xiaozhi
   # 你的manager-api的token，就是刚才复制出来的server.secret
   secret: 你的server.secret值

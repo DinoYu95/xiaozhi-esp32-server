@@ -4,6 +4,8 @@ import xiaozhi.modules.parent.dto.ParentPhoneCodeDTO;
 import xiaozhi.modules.parent.dto.ParentPhoneLoginDTO;
 import xiaozhi.modules.parent.dto.ParentProfileDTO;
 import xiaozhi.modules.parent.dto.ParentWechatLoginDTO;
+import org.springframework.web.multipart.MultipartFile;
+
 import xiaozhi.modules.parent.vo.ParentLoginVO;
 import xiaozhi.modules.parent.vo.ParentUserVO;
 
@@ -36,6 +38,11 @@ public interface ParentUserService {
      * 更新当前家长个人信息（昵称、头像、手机号，手机号加密存储）
      */
     void updateProfile(Long parentUserId, ParentProfileDTO dto);
+
+    /**
+     * 保存家长头像图片到本地 uploadfile/parent-avatar，返回存储文件名（不含路径）
+     */
+    String storeParentAvatar(MultipartFile file);
 
     /**
      * 登出，使当前 token 失效

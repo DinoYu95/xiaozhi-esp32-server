@@ -100,6 +100,7 @@ public class ShiroConfig {
         filterMap.put("/parent-api/auth/wechat", "anon");
         filterMap.put("/parent-api/auth/phone/code", "anon");
         filterMap.put("/parent-api/auth/phone/login", "anon");
+        filterMap.put("/parent-api/auth/avatar/file/**", "anon");
         filterMap.put("/parent-api/**", "parentToken");
         filterMap.put("/**", "oauth2");
         shiroFilter.setFilterChainDefinitionMap(filterMap);

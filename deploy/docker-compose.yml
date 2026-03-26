@@ -65,6 +65,8 @@ services:
     env_file: .env
     environment:
       TZ: Asia/Shanghai
+      # 家长头像等外链（含 /xiaozhi）；HTTPS 或网关复杂时可设 https://域名/xiaozhi
+      XIAOZHI_PARENT_PUBLIC_BASE_URL: ${XIAOZHI_PARENT_PUBLIC_BASE_URL:-}
       SPRING_DATASOURCE_DRUID_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE:-xiaozhi_esp32_server}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&connectTimeout=30000&socketTimeout=30000&autoReconnect=true&failOverReadOnly=false&maxReconnects=10
       SPRING_DATASOURCE_DRUID_USERNAME: root
       SPRING_DATASOURCE_DRUID_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}

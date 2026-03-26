@@ -36,6 +36,12 @@ knife4j:
   setting:
     enableFooter: false
 
+# 家长端：上传头像返回的 avatarUrl 依赖此前缀（需与小程序/浏览器实际访问地址一致，含 context-path /xiaozhi）
+# 不填则从请求推断。Docker 仅映射 8002、公网用 IP 访问时易缺端口，建议填例如：http://47.84.15.224:8002/xiaozhi
+xiaozhi:
+  parent:
+    public-base-url:
+
 renren:
   redis:
     open: true

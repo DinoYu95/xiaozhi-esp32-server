@@ -24,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.RequiredArgsConstructor;
 import xiaozhi.common.constant.Constant;
 import xiaozhi.common.exception.ErrorCode;
@@ -44,6 +45,10 @@ import xiaozhi.modules.parent.vo.ParentUserVO;
 @RequiredArgsConstructor
 @Tag(name = "家长端-登录与用户")
 public class ParentAuthController {
+
+    /** 与 xiaozhi.parent.public-base-url 一致；配置了则优先用于拼接头像 URL，避免缺端口或错域名 */
+    @Value("${xiaozhi.parent.public-base-url:}")
+    private String parentPublicBaseUrl;
 
     private static final Pattern PARENT_AVATAR_FILE_PATTERN = Pattern.compile(
             "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|jpeg|png|gif|webp)$",
@@ -93,7 +98,7 @@ public class ParentAuthController {
         }
         String stored = parentUserService.storeParentAvatar(file);
         ParentAvatarUploadVO vo = new ParentAvatarUploadVO();
-        vo.setAvatarUrl(buildApiBaseUrl(request) + "/parent-api/auth/avatar/file/" + stored);
+        vo.setAvatarUrl(resolvePublicBaseUrl(request) + "/parent-api/auth/avatar/file/" + stored);
         return new Result<ParentAvatarUploadVO>().ok(vo);
     }
 
@@ -151,6 +156,18 @@ public class ParentAuthController {
         return null;
     }
 
+    /** 配置的对外前缀优先，否则从请求推断（含 context-path） */
+    private String resolvePublicBaseUrl(HttpServletRequest request) {
+        if (StringUtils.isNotBlank(parentPublicBaseUrl)) {
+            String b = parentPublicBaseUrl.trim();
+            if (b.endsWith("/")) {
+                b = b.substring(0, b.length() - 1);
+            }
+            return b;
+        }
+        return buildApiBaseUrl(request);
+    }
+
     /** 构造对外访问 API 的根 URL（含 context-path，如 http://host:8002/xiaozhi） */
     private static String buildApiBaseUrl(HttpServletRequest request) {
         String scheme = request.getHeader("X-Forwarded-Proto");
@@ -161,6 +178,17 @@ public class ParentAuthController {
         String hostPart;
         if (StringUtils.isNotBlank(hostHeader)) {
             hostPart = hostHeader.split(",")[0].trim();
+            if (!hostPart.contains(":")) {
+                String fp = request.getHeader("X-Forwarded-Port");
+                if (StringUtils.isNotBlank(fp)) {
+                    fp = fp.split(",")[0].trim();
+                    boolean defaultPort = ("80".equals(fp) && "http".equalsIgnoreCase(scheme))
+                            || ("443".equals(fp) && "https".equalsIgnoreCase(scheme));
+                    if (!defaultPort) {
+                        hostPart = hostPart + ":" + fp;
+                    }
+                }
+            }
         } else {
             hostPart = request.getServerName();
             int port = request.getServerPort();

@@ -78,7 +78,9 @@ class LLMProvider(LLMProviderBase):
         cg = (env.get("companion_growth_prompt") or "").strip()
         if cg:
             prefix_blocks.append("【成长陪伴与对话风格】\n" + cg)
-            logger.bind(tag=TAG).info("ZhibanAgent: 注入 companion_growth_prompt，长度=%d", len(cg))
+            logger.bind(tag=TAG).info(
+                f"ZhibanAgent: 注入 companion_growth_prompt，长度={len(cg)}"
+            )
         parent_rules = env.get("parent_rules") or []
         if not parent_rules:
             logger.bind(tag=TAG).debug(

@@ -670,17 +670,15 @@ class ConnectionHandler:
                 suffix = "\n\n家长为本设备设置的规则（请严格遵守）：\n" + rules_text
                 self.config["prompt"] = (self.config.get("prompt") or "") + suffix
             self.config["parent_rules"] = parent_rules
+            did = (self.headers.get("device-id", "") or "")[:20] if self.headers else ""
             self.logger.bind(tag=TAG).info(
-                "配置拉取: 家长规则 %d 条 (device-id=%s)",
-                len(parent_rules),
-                self.headers.get("device-id", "")[:20] if self.headers else "",
+                f"配置拉取: 家长规则 {len(parent_rules)} 条 (device-id={did})"
             )
         else:
             self.config["parent_rules"] = []
+            did = (self.headers.get("device-id", "") or "")[:20] if self.headers else ""
             self.logger.bind(tag=TAG).info(
-                "配置拉取: 无家长规则 (device-id=%s, private_config 含 parent_rules=%s)",
-                self.headers.get("device-id", "")[:20] if self.headers else "",
-                "parent_rules" in (private_config or {}),
+                f"配置拉取: 无家长规则 (device-id={did}, private_config 含 parent_rules={('parent_rules' in (private_config or {}))})"
             )
         # 获取声纹信息
         if private_config.get("voiceprint", None) is not None:
@@ -709,9 +707,9 @@ class ConnectionHandler:
         cgp = private_config.get("companion_growth_prompt")
         if cgp is not None and str(cgp).strip():
             self.config["companion_growth_prompt"] = str(cgp).strip()
+            ln = len(self.config["companion_growth_prompt"])
             self.logger.bind(tag=TAG).info(
-                "配置拉取: companion_growth_prompt 已写入，长度=%d（智控台模板 server.agent_companion_growth_prompt_template）",
-                len(self.config["companion_growth_prompt"]),
+                f"配置拉取: companion_growth_prompt 已写入，长度={ln}（智控台模板 server.agent_companion_growth_prompt_template）"
             )
         else:
             self.config["companion_growth_prompt"] = None
@@ -906,7 +904,7 @@ class ConnectionHandler:
             rules_list = [r for r in parent_rules if r and str(r).strip()]
             ctx["parent_rules"] = rules_list
             self.logger.bind(tag=TAG).info(
-                "environment_context 含 parent_rules: %d 条", len(rules_list)
+                f"environment_context 含 parent_rules: {len(rules_list)} 条"
             )
         else:
             self.logger.bind(tag=TAG).info(
@@ -915,9 +913,8 @@ class ConnectionHandler:
         cgp = (self.config.get("companion_growth_prompt") or "").strip()
         if cgp:
             ctx["companion_growth_prompt"] = cgp
-            self.logger.bind(tag=TAG).debug(
-                "environment_context 含 companion_growth_prompt，长度=%d",
-                len(cgp),
+            self.logger.bind(tag=TAG).info(
+                f"environment_context 含 companion_growth_prompt，长度={len(cgp)}"
             )
         return ctx
 

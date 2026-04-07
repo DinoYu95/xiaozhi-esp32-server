@@ -41,6 +41,19 @@
 
 ## 如何从日志确认「有没有带上」
 
+### xiaozhi-server（连接拉配置时）
+
+设备连上并成功拉取私有配置后，在 **connection** 相关日志里搜：
+
+- **`配置拉取: companion_growth_prompt 已写入，长度=`** → 已从 manager-api 收到并写入 `self.config`。
+- **`配置拉取: 无 companion_growth_prompt`** → 接口没带回该字段，或智控台模板为 `null`/空（检查 manager-api 版本、Liquibase、`server.agent_companion_growth_prompt_template`）。
+
+注：`异步获取差异化配置成功` 后打印的整段 JSON 里理论上也有 `companion_growth_prompt`，但字段多易被忽略，以上两行是专用提示。
+
+调 DEBUG 时还可看到：**`environment_context 含 companion_growth_prompt`**（每轮对话拼装上下文时）。
+
+### zhiban 调用前（xiaozhi-server）
+
 在 **xiaozhi-server** 日志中搜索（模块 `core.zhibanAgent.zhiban_agent_client`）：
 
 - **INFO**：`zhiban-agent 流式:` 或 `zhiban-agent 非流式:` 后字段含义  

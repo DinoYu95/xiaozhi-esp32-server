@@ -709,8 +709,15 @@ class ConnectionHandler:
         cgp = private_config.get("companion_growth_prompt")
         if cgp is not None and str(cgp).strip():
             self.config["companion_growth_prompt"] = str(cgp).strip()
+            self.logger.bind(tag=TAG).info(
+                "配置拉取: companion_growth_prompt 已写入，长度=%d（智控台模板 server.agent_companion_growth_prompt_template）",
+                len(self.config["companion_growth_prompt"]),
+            )
         else:
             self.config["companion_growth_prompt"] = None
+            self.logger.bind(tag=TAG).info(
+                "配置拉取: 无 companion_growth_prompt（接口未返回或模板为空/null；请检查 manager-api 与 sys_params）",
+            )
 
         # 使用 run_in_executor 在线程池中执行 initialize_modules，避免阻塞主循环
         try:
@@ -908,6 +915,10 @@ class ConnectionHandler:
         cgp = (self.config.get("companion_growth_prompt") or "").strip()
         if cgp:
             ctx["companion_growth_prompt"] = cgp
+            self.logger.bind(tag=TAG).debug(
+                "environment_context 含 companion_growth_prompt，长度=%d",
+                len(cgp),
+            )
         return ctx
 
     def _is_zhiban_llm(self):

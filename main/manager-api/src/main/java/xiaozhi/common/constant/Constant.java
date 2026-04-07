@@ -116,6 +116,11 @@ public interface Constant {
     String SERVER_OTA = "server.ota";
 
     /**
+     * 智伴成长陪伴 Prompt 模板（智控台配置，下发时按主孩子档案替换占位符）
+     */
+    String SERVER_AGENT_COMPANION_GROWTH_PROMPT_TEMPLATE = "server.agent_companion_growth_prompt_template";
+
+    /**
      * 是否允许用户注册
      */
     String SERVER_ALLOW_USER_REGISTER = "server.allow_user_register";

@@ -17,6 +17,32 @@ DEFAULT_TIMEOUT = 30.0
 HTTPX_LIMITS = httpx.Limits(max_keepalive_connections=4, max_connections=10)
 
 
+def _log_zhiban_payload_diagnostics(payload: dict, mode: str) -> None:
+    """排查是否带上成长陪伴 / 家长规则：看 text 前缀与 environment_context 键。"""
+    text = payload.get("text") or ""
+    env = payload.get("environment_context") or {}
+    cg = (env.get("companion_growth_prompt") or "").strip()
+    rules = env.get("parent_rules") or []
+    n_rules = len([r for r in rules if r and str(r).strip()]) if isinstance(rules, list) else 0
+    has_growth_block = "【成长陪伴与对话风格】" in text
+    has_rules_block = "【家长为本设备设置的规则" in text
+    logger.bind(tag=TAG).info(
+        "zhiban-agent {}: text总长度={}, 含成长陪伴前缀={}, companion_env长度={}, 家长规则条数={}, 含规则前缀={}, speaker_name={}",
+        mode,
+        len(text),
+        has_growth_block,
+        len(cg),
+        n_rules,
+        has_rules_block,
+        (payload.get("speaker_context") or {}).get("speaker_name"),
+    )
+    if cg:
+        logger.bind(tag=TAG).debug(
+            "zhiban-agent environment_context.companion_growth_prompt 前120字: {}",
+            cg[:120],
+        )
+
+
 class ZhibanAgentClient:
     """调用 zhiban-agent 的 /api/chat 或 /api/chat/stream 接口。"""
 
@@ -79,13 +105,7 @@ class ZhibanAgentClient:
         if messages:
             payload["messages"] = messages
 
-        # 诊断：发往 zhiban-agent 的 payload（排查「我是谁」不生效）
-        logger.bind(tag=TAG).info(
-            "zhiban-agent 调用: text前80字={}, speaker_name={}, env_parent_nickname={}",
-            (payload.get("text") or "")[:80],
-            (payload.get("speaker_context") or {}).get("speaker_name"),
-            (payload.get("environment_context") or {}).get("parent_nickname"),
-        )
+        _log_zhiban_payload_diagnostics(payload, "非流式")
 
         try:
             client = self._get_client()
@@ -143,6 +163,8 @@ class ZhibanAgentClient:
             payload["environment_context"] = environment_context
         if messages:
             payload["messages"] = messages
+
+        _log_zhiban_payload_diagnostics(payload, "流式")
 
         try:
             client = self._get_client()

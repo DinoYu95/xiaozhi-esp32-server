@@ -1,5 +1,7 @@
 package xiaozhi.modules.config.service.impl;
 
+import java.time.LocalDate;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -291,7 +293,62 @@ public class ConfigServiceImpl implements ConfigService {
                     device.getMacAddress());
         }
 
+        String companionPrompt = buildCompanionGrowthPrompt(deviceChild);
+        if (StringUtils.isNotBlank(companionPrompt)) {
+            result.put("companion_growth_prompt", companionPrompt);
+        }
+
         return result;
+    }
+
+    /**
+     * 读取智控台「成长陪伴」模板，按 {@link DeviceChildEntity} 替换占位符，下发为 companion_growth_prompt。
+     * 无模板、模板为 null 或空白则不返回；无主孩子时占位符置空，仍可下发纯静态模板。
+     */
+    private String buildCompanionGrowthPrompt(DeviceChildEntity deviceChild) {
+        String template = sysParamsService.getValue(Constant.SERVER_AGENT_COMPANION_GROWTH_PROMPT_TEMPLATE, true);
+        if (StringUtils.isBlank(template) || "null".equalsIgnoreCase(template.trim())) {
+            return null;
+        }
+        LocalDate today = LocalDate.now();
+        String childName = "";
+        String childAgeYears = "";
+        String childBirthday = "";
+        String ageStage = "";
+        String hobbies = "";
+        String favoriteTopics = "";
+        String favoriteStories = "";
+        String personalityNote = "";
+        String school = "";
+        if (deviceChild != null) {
+            childName = nz(deviceChild.getName());
+            if (deviceChild.getBirthday() != null) {
+                childBirthday = deviceChild.getBirthday().toString();
+                childAgeYears = String.valueOf(Period.between(deviceChild.getBirthday(), today).getYears());
+            }
+            ageStage = nz(deviceChild.getAgeStage());
+            hobbies = nz(deviceChild.getHobbies());
+            favoriteTopics = nz(deviceChild.getFavoriteTopics());
+            favoriteStories = nz(deviceChild.getFavoriteStories());
+            personalityNote = nz(deviceChild.getPersonalityNote());
+            school = nz(deviceChild.getSchool());
+        }
+        String out = template;
+        out = out.replace("{child_name}", childName);
+        out = out.replace("{child_age_years}", childAgeYears);
+        out = out.replace("{child_birthday}", childBirthday);
+        out = out.replace("{age_stage}", ageStage);
+        out = out.replace("{hobbies}", hobbies);
+        out = out.replace("{favorite_topics}", favoriteTopics);
+        out = out.replace("{favorite_stories}", favoriteStories);
+        out = out.replace("{personality_note}", personalityNote);
+        out = out.replace("{school}", school);
+        out = out.trim();
+        return StringUtils.isBlank(out) ? null : out;
+    }
+
+    private static String nz(String s) {
+        return s != null ? s : "";
     }
 
     /**

@@ -705,6 +705,12 @@ class ConnectionHandler:
             self.owner_child_birthday = None
             self.owner_child_voice_print_id = None
         self.skill_mapping = private_config.get("skill_mapping") or {}
+        # 智伴：成长陪伴 Prompt（manager-api 已按模板替换占位符）
+        cgp = private_config.get("companion_growth_prompt")
+        if cgp is not None and str(cgp).strip():
+            self.config["companion_growth_prompt"] = str(cgp).strip()
+        else:
+            self.config["companion_growth_prompt"] = None
 
         # 使用 run_in_executor 在线程池中执行 initialize_modules，避免阻塞主循环
         try:
@@ -899,6 +905,9 @@ class ConnectionHandler:
             self.logger.bind(tag=TAG).info(
                 "environment_context 无 parent_rules（config 中为空，设备可能未配置规则或需重新连接）"
             )
+        cgp = (self.config.get("companion_growth_prompt") or "").strip()
+        if cgp:
+            ctx["companion_growth_prompt"] = cgp
         return ctx
 
     def _is_zhiban_llm(self):

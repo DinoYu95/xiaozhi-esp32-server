@@ -71,9 +71,14 @@ class LLMProvider(LLMProviderBase):
             logger.bind(tag=TAG).warning("ZhibanAgent: 无用户输入，跳过调用")
             return
 
-        # 家长规则：直接注入到文本前，确保 zhiban-agent 无论是否解析 environment_context 都能看到
+        # 成长陪伴 + 家长规则：注入到文本前，确保 zhiban-agent 即使只读纯文本也能看到
         text_to_send = input_text.strip()
         env = kwargs.get("environment_context") or {}
+        prefix_blocks = []
+        cg = (env.get("companion_growth_prompt") or "").strip()
+        if cg:
+            prefix_blocks.append("【成长陪伴与对话风格】\n" + cg)
+            logger.bind(tag=TAG).info("ZhibanAgent: 注入 companion_growth_prompt，长度=%d", len(cg))
         parent_rules = env.get("parent_rules") or []
         if not parent_rules:
             logger.bind(tag=TAG).debug(
@@ -83,8 +88,10 @@ class LLMProvider(LLMProviderBase):
         if parent_rules:
             rules_list = [r for r in parent_rules if r and str(r).strip()]
             if rules_list:
-                prefix = "【家长为本设备设置的规则，请严格遵守】\n" + "\n".join(f"- {r}" for r in rules_list) + "\n\n"
-                text_to_send = prefix + "用户说：" + text_to_send
+                prefix_blocks.append(
+                    "【家长为本设备设置的规则，请严格遵守】\n"
+                    + "\n".join(f"- {r}" for r in rules_list)
+                )
                 logger.bind(tag=TAG).info(
                     "ZhibanAgent: 注入家长规则 {} 条", len(rules_list)
                 )
@@ -95,6 +102,8 @@ class LLMProvider(LLMProviderBase):
                 "ZhibanAgent: environment_context 无 parent_rules (keys={})",
                 list(env.keys()) if env else [],
             )
+        if prefix_blocks:
+            text_to_send = "\n\n".join(prefix_blocks) + "\n\n用户说：" + text_to_send
 
         # 构建最近 N 轮对话，供 zhiban 理解上下文（谜语提示、故事续讲等）
         messages = _build_messages_from_dialogue(dialogue, self._max_history_rounds)

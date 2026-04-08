@@ -5,7 +5,11 @@ from core.utils.util import audio_to_data
 from core.handle.abortHandle import handleAbortMessage
 from core.handle.intentHandler import handle_user_intent
 from core.utils.output_counter import check_device_output_limit
-from core.handle.sendAudioHandle import send_stt_message, SentenceType
+from core.handle.sendAudioHandle import (
+    send_stt_message,
+    SentenceType,
+    AUDIO_FRAME_DURATION,
+)
 
 TAG = __name__
 
@@ -32,10 +36,28 @@ async def handleAudioMessage(conn, audio):
         if not hasattr(conn, "vad_resume_task") or conn.vad_resume_task.done():
             conn.vad_resume_task = asyncio.create_task(resume_vad_detection(conn))
         return
+    # 非播读状态清零去抖累计，避免下一轮误用
+    if not conn.client_is_speaking:
+        conn._barge_in_voice_accum_ms = 0
     # manual 模式下不打断正在播放的内容
+    # 播读打断：可选「最短持续人声」去抖，减弱环境杂音、短促搭话导致的误打断（config: barge_in_min_voice_ms）
     if have_voice:
         if conn.client_is_speaking and conn.client_listen_mode != "manual":
-            await handleAbortMessage(conn)
+            min_ms = int(conn.config.get("barge_in_min_voice_ms", 400))
+            if min_ms <= 0:
+                await handleAbortMessage(conn)
+            else:
+                conn._barge_in_voice_accum_ms += AUDIO_FRAME_DURATION
+                if conn._barge_in_voice_accum_ms >= min_ms:
+                    conn.logger.bind(tag=TAG).info(
+                        "播读中人声累计约 %dms（阈值 %dms），触发打断",
+                        conn._barge_in_voice_accum_ms,
+                        min_ms,
+                    )
+                    conn._barge_in_voice_accum_ms = 0
+                    await handleAbortMessage(conn)
+    elif conn.client_is_speaking:
+        conn._barge_in_voice_accum_ms = 0
     # 设备长时间空闲检测，用于say goodbye
     await no_voice_close_connect(conn, have_voice)
     # 接收音频

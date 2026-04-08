@@ -31,6 +31,6 @@ public class DailyBriefVO {
     @Schema(description = "今日最晚对话时间，HH:mm")
     private String lastChatAt;
 
-    @Schema(description = "今日亮点摘要（用户消息摘要，最多5条）")
+    @Schema(description = "今日亮点（从孩子发言中按信息量打分并参考时段分布选取，最多5条，每条约42字内）")
     private List<String> highlights;
 }

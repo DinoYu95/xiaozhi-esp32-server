@@ -9,7 +9,11 @@ from urllib.parse import parse_qs
 
 from aiohttp import web
 from config.logger import setup_logging
-from config.manage_api_client import validate_parent_token, save_parent_chat
+from config.manage_api_client import (
+    validate_parent_token,
+    save_parent_chat,
+    fetch_parent_zhiban_memory_context,
+)
 from core.zhibanAgent import ZhibanAgentClient
 
 TAG = __name__
@@ -60,7 +64,41 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
                     child_id = int(child_id)
 
                     session_id = f"parent_{parent_user_id}_{child_id}"
-                    user_id = f"parent_{parent_user_id}"
+                    mem_ctx = await fetch_parent_zhiban_memory_context(
+                        parent_user_id, child_id
+                    )
+                    if mem_ctx and mem_ctx.get("zhibanUserId"):
+                        user_id = mem_ctx["zhibanUserId"]
+                        child_nm = (mem_ctx.get("childName") or "").strip()
+                        speaker_context = {
+                            "speaker_type": "parent",
+                            "speaker_name": f"家长（了解孩子：{child_nm}）"
+                            if child_nm
+                            else "家长",
+                            "is_owner_child": False,
+                        }
+                        environment_context = {
+                            "agent_id": mem_ctx.get("agentId") or "",
+                            "mac_address": (mem_ctx.get("macAddress") or "").strip(),
+                            "device_child_profile_for_parent": (
+                                mem_ctx.get("deviceChildProfile") or ""
+                            ).strip(),
+                        }
+                        logger.bind(tag=TAG).info(
+                            "家长端 zhiban user_id=%s agentId 已带 environment",
+                            user_id,
+                        )
+                    else:
+                        user_id = f"parent_{parent_user_id}"
+                        speaker_context = {
+                            "speaker_type": "parent",
+                            "speaker_name": "家长",
+                            "is_owner_child": False,
+                        }
+                        environment_context = {}
+                        logger.bind(tag=TAG).warning(
+                            "未拉到 zhiban-memory-context，仍用 parent_ user_id，长期记忆可能对不齐"
+                        )
                     loop = asyncio.get_event_loop()
                     queue = asyncio.Queue()
 
@@ -70,6 +108,11 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
                                 text=content,
                                 session_id=session_id,
                                 user_id=user_id,
+                                speaker_context=speaker_context,
+                                environment_context=environment_context
+                                if environment_context
+                                else None,
+                                persist_memory=False,
                             ):
                                 asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
                             asyncio.run_coroutine_threadsafe(queue.put(None), loop)

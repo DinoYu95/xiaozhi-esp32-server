@@ -138,6 +138,7 @@ class ZhibanAgentClient:
         skill_ids: Optional[list] = None,
         environment_context: Optional[Dict[str, Any]] = None,
         messages: Optional[List[Dict[str, str]]] = None,
+        persist_memory: bool = True,
     ) -> Iterator[str]:
         """
         流式：POST /api/chat/stream，按 SSE 解析，逐块 yield 文本。
@@ -163,6 +164,8 @@ class ZhibanAgentClient:
             payload["environment_context"] = environment_context
         if messages:
             payload["messages"] = messages
+        if not persist_memory:
+            payload["persist_memory"] = False
 
         _log_zhiban_payload_diagnostics(payload, "流式")
 

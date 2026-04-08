@@ -247,6 +247,26 @@ async def validate_parent_token(token: str) -> Optional[int]:
         return None
 
 
+async def fetch_parent_zhiban_memory_context(
+    parent_user_id: int, child_id: int
+) -> Optional[Dict]:
+    """
+    拉取家长询问孩子时 zhiban 应用的用户命名空间与 agent/mac（与设备端主孩子一致）。
+    需 init_service 已调用；失败返回 None。
+    """
+    if not ManageApiClient._instance:
+        return None
+    try:
+        return await ManageApiClient._async_request(
+            "GET",
+            "config/parent/zhiban-memory-context",
+            params={"parentUserId": parent_user_id, "childId": child_id},
+        )
+    except Exception as e:
+        print(f"fetch_parent_zhiban_memory_context 失败: {e}")
+        return None
+
+
 async def save_parent_chat(
     parent_user_id: int,
     child_id: int,

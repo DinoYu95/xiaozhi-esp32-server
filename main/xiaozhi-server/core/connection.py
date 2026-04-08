@@ -94,6 +94,8 @@ class ConnectionHandler:
         self.client_abort = False
         self.client_is_speaking = False
         self.client_listen_mode = "auto"
+        # TTS 播读中：VAD 累计人声时长(ms)，用于 barge_in_min_voice_ms 去抖
+        self._barge_in_voice_accum_ms = 0
 
         # 线程任务相关
         self.loop = None  # 在 handle_connection 中获取运行中的事件循环

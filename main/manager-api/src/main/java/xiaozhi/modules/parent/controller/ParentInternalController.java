@@ -25,6 +25,7 @@ import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dao.ParentUserTokenDao;
 import xiaozhi.modules.parent.service.ParentDeviceRuleService;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
+import xiaozhi.modules.parent.vo.ParentZhibanMemoryContextVO;
 import xiaozhi.modules.parent.entity.ParentChatHistoryEntity;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserTokenEntity;
@@ -57,6 +58,80 @@ public class ParentInternalController {
      * @param macAddress 设备MAC地址（与 ai_agent_chat_history 一致）
      * @param limit      最多条数，默认 30
      */
+    /**
+     * 家长小程序向 zhiban 询问孩子情况时：提供与设备端一致的 user_id（deviceId_childId）、
+     * agent/mac 以及孩子静态档案摘要，避免记忆命名空间不一致导致检索为空、模型胡编。
+     */
+    @GetMapping("/zhiban-memory-context")
+    public Result<ParentZhibanMemoryContextVO> getZhibanMemoryContext(
+            @RequestParam Long parentUserId,
+            @RequestParam Long childId) {
+        if (parentUserId == null || childId == null) {
+            return new Result<ParentZhibanMemoryContextVO>().error(ErrorCode.PARAMS_GET_ERROR, "parentUserId、childId 必填");
+        }
+        DeviceChildEntity child = deviceChildDao.selectById(childId);
+        if (child == null) {
+            return new Result<ParentZhibanMemoryContextVO>().error(ErrorCode.PARAMS_GET_ERROR, "孩子不存在");
+        }
+        String deviceId = child.getDeviceId();
+        if (StringUtils.isBlank(deviceId)) {
+            return new Result<ParentZhibanMemoryContextVO>().error(ErrorCode.AGENT_NOT_FOUND, "设备未绑定");
+        }
+        DeviceEntity device = deviceDao.selectById(deviceId);
+        if (device == null || StringUtils.isBlank(device.getAgentId())) {
+            return new Result<ParentZhibanMemoryContextVO>().error(ErrorCode.AGENT_NOT_FOUND);
+        }
+        String normalized = deviceId.replace(":", "_").toLowerCase();
+        ParentDeviceBindingEntity binding = parentDeviceBindingDao.selectOne(
+                new LambdaQueryWrapper<ParentDeviceBindingEntity>()
+                        .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId)
+                        .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
+                                .or().eq(ParentDeviceBindingEntity::getDeviceId, normalized)));
+        if (binding == null) {
+            return new Result<ParentZhibanMemoryContextVO>().error(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        String zhibanUserId = deviceId + "_" + child.getId();
+        String mac = StringUtils.isNotBlank(device.getMacAddress()) ? device.getMacAddress().trim() : deviceId;
+        String profile = buildDeviceChildProfileSummary(child);
+        ParentZhibanMemoryContextVO vo = new ParentZhibanMemoryContextVO(
+                zhibanUserId,
+                device.getAgentId(),
+                mac,
+                StringUtils.defaultString(child.getName(), "").trim(),
+                profile);
+        return new Result<ParentZhibanMemoryContextVO>().ok(vo);
+    }
+
+    private String buildDeviceChildProfileSummary(DeviceChildEntity child) {
+        StringBuilder sb = new StringBuilder();
+        if (StringUtils.isNotBlank(child.getName())) {
+            sb.append("姓名/昵称：").append(child.getName().trim()).append("；");
+        }
+        if (child.getBirthday() != null) {
+            sb.append("生日：").append(child.getBirthday()).append("；");
+        }
+        if (StringUtils.isNotBlank(child.getAgeStage())) {
+            sb.append("年龄段：").append(child.getAgeStage().trim()).append("；");
+        }
+        if (StringUtils.isNotBlank(child.getHobbies())) {
+            sb.append("爱好：").append(child.getHobbies().trim()).append("；");
+        }
+        if (StringUtils.isNotBlank(child.getFavoriteTopics())) {
+            sb.append("喜欢的话题：").append(child.getFavoriteTopics().trim()).append("；");
+        }
+        if (StringUtils.isNotBlank(child.getFavoriteStories())) {
+            sb.append("喜欢的故事/绘本：").append(child.getFavoriteStories().trim()).append("；");
+        }
+        if (StringUtils.isNotBlank(child.getPersonalityNote())) {
+            sb.append("性格/偏好备注：").append(child.getPersonalityNote().trim()).append("；");
+        }
+        if (StringUtils.isNotBlank(child.getSchool())) {
+            sb.append("学校/幼儿园：").append(child.getSchool().trim()).append("；");
+        }
+        String s = sb.toString();
+        return s.endsWith("；") ? s.substring(0, s.length() - 1) : s;
+    }
+
     @GetMapping("/child-chat-history")
     public Result<String> getChildChatHistory(
             @RequestParam String agentId,

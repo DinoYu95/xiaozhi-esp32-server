@@ -4,9 +4,12 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
@@ -36,7 +39,11 @@ import xiaozhi.modules.parent.vo.DailyBriefVO;
 public class DailyBriefServiceImpl implements DailyBriefService {
 
     private static final int HIGHLIGHT_MAX_COUNT = 5;
-    private static final int HIGHLIGHT_MAX_LENGTH = 20;
+    /** 亮点摘要单条最大字数（过短会像聊天流水账首句） */
+    private static final int HIGHLIGHT_MAX_LENGTH = 42;
+    /** 内容打分低于此值的用户句不参与亮点（过滤寒暄与敷衍短句） */
+    private static final int HIGHLIGHT_MIN_SCORE = 6;
+    private static final int TIME_BANDS = 4;
     private static final ZoneId ZONE_ASIA_SHANGHAI = ZoneId.of("Asia/Shanghai");
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -44,6 +51,14 @@ public class DailyBriefServiceImpl implements DailyBriefService {
             "设备控制|设备操作|控制设备|设备状态", Pattern.CASE_INSENSITIVE);
     private static final Pattern WEATHER_OR_DATE = Pattern.compile(
             "天气|温度|湿度|降雨|气象|日期|时间|星期|月份|年份", Pattern.CASE_INSENSITIVE);
+    /** 明显只是开场寒暄、信息量低（易占据「按时间正序前几条」） */
+    private static final Pattern GENERIC_OPENER = Pattern.compile(
+            "^(哈喽|哈啰|你好|您好|在吗|在么|hello|hi|hey)[，,。.!！?？…\\s]*$",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern SUBSTANTIVE_TOPIC = Pattern.compile(
+            "故事|游戏|谜语|为什么|怎么办|最喜欢|不喜欢|害怕|开心|难过|聊天|聊聊|讲讲|猜一猜|来猜|想听|想玩|学校|朋友|同学|老师|恐龙|太空|画画|唱歌|动物|植物|科学|作业|一起|好不好|你知道吗|告诉我");
+    private static final Pattern WEAK_DISMISS = Pattern.compile(
+            "^啊?不(用|需要)了.*|^算了.*|^没事.*|^不用.*", Pattern.CASE_INSENSITIVE);
 
     private final DeviceChildDao deviceChildDao;
     private final DeviceDao deviceDao;
@@ -136,8 +151,11 @@ public class DailyBriefServiceImpl implements DailyBriefService {
         return new DailyBriefVO(childName, dateStr, messageCount, firstChatAt, lastChatAt, highlights);
     }
 
+    /**
+     * 从当日全部用户句中选取亮点：先按信息量打分，再在时间轴上分段各取最优，避免只有「早上前五句寒暄」。
+     */
     private List<String> extractHighlights(List<AgentChatHistoryDTO> records) {
-        List<String> result = new ArrayList<>();
+        List<HighlightPick> candidates = new ArrayList<>();
         for (AgentChatHistoryDTO dto : records) {
             if (dto.getChatType() == null || dto.getChatType() != AgentChatHistoryType.USER.getValue()) {
                 continue;
@@ -146,16 +164,88 @@ public class DailyBriefServiceImpl implements DailyBriefService {
             if (!isMeaningfulForHighlight(content)) {
                 continue;
             }
-            String truncated = content.length() > HIGHLIGHT_MAX_LENGTH
-                    ? content.substring(0, HIGHLIGHT_MAX_LENGTH) + "…" : content;
-            if (!result.contains(truncated)) {
-                result.add(truncated);
+            int score = scoreHighlightContent(content);
+            if (score < HIGHLIGHT_MIN_SCORE) {
+                continue;
             }
-            if (result.size() >= HIGHLIGHT_MAX_COUNT) {
-                break;
+            candidates.add(new HighlightPick(content, dto.getCreatedAt(), score));
+        }
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+        candidates.sort(Comparator.comparing(HighlightPick::createdAt, Comparator.nullsLast(Comparator.naturalOrder())));
+        LinkedHashSet<String> ordered = new LinkedHashSet<>();
+        int n = candidates.size();
+        int bands = Math.min(TIME_BANDS, n);
+        for (int b = 0; b < bands && ordered.size() < HIGHLIGHT_MAX_COUNT; b++) {
+            int start = b * n / bands;
+            int end = (b + 1) * n / bands;
+            HighlightPick best = null;
+            for (int i = start; i < end; i++) {
+                HighlightPick c = candidates.get(i);
+                if (best == null || c.score > best.score) {
+                    best = c;
+                }
+            }
+            if (best != null) {
+                ordered.add(truncateHighlight(best.content));
             }
         }
-        return result;
+        candidates.sort(Comparator.comparingInt((HighlightPick c) -> c.score).reversed());
+        for (HighlightPick c : candidates) {
+            if (ordered.size() >= HIGHLIGHT_MAX_COUNT) {
+                break;
+            }
+            ordered.add(truncateHighlight(c.content));
+        }
+        List<String> out = new ArrayList<>(ordered);
+        int cap = Math.min(HIGHLIGHT_MAX_COUNT, out.size());
+        return cap == out.size() ? out : new ArrayList<>(out.subList(0, cap));
+    }
+
+    private static String truncateHighlight(String content) {
+        String t = content.trim();
+        if (t.length() <= HIGHLIGHT_MAX_LENGTH) {
+            return t;
+        }
+        return t.substring(0, HIGHLIGHT_MAX_LENGTH) + "…";
+    }
+
+    /**
+     * 信息量打分：偏长句、含话题词加分；纯寒暄、敷衍短拒答减分。
+     */
+    private int scoreHighlightContent(String content) {
+        String t = content.trim();
+        int len = t.length();
+        int s = Math.min(40, len);
+        if (GENERIC_OPENER.matcher(t).matches()) {
+            s -= 28;
+        }
+        if (len <= 20 && t.matches("(?i).*(hello|hi|hey).*") && t.matches(".*你好.*")) {
+            s -= 22;
+        }
+        if (SUBSTANTIVE_TOPIC.matcher(t).find()) {
+            s += 22;
+        }
+        if (WEAK_DISMISS.matcher(t).find()) {
+            s -= 18;
+        }
+        if (len >= 15) {
+            s += 8;
+        }
+        return s;
+    }
+
+    private static final class HighlightPick {
+        final String content;
+        final Date createdAt;
+        final int score;
+
+        HighlightPick(String content, Date createdAt, int score) {
+            this.content = Objects.requireNonNullElse(content, "");
+            this.createdAt = createdAt;
+            this.score = score;
+        }
     }
 
     private String extractContent(String raw) {

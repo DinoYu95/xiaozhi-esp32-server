@@ -173,7 +173,9 @@ public class DailyBriefServiceImpl implements DailyBriefService {
         if (candidates.isEmpty()) {
             return List.of();
         }
-        candidates.sort(Comparator.comparing(HighlightPick::createdAt, Comparator.nullsLast(Comparator.naturalOrder())));
+        candidates.sort(Comparator.comparing(
+                (HighlightPick c) -> c.createdAt,
+                Comparator.nullsLast(Comparator.naturalOrder())));
         LinkedHashSet<String> ordered = new LinkedHashSet<>();
         int n = candidates.size();
         int bands = Math.min(TIME_BANDS, n);

@@ -17,7 +17,7 @@ public class ParentZhibanMemoryContextVO {
     @Schema(description = "与设备端一致的长期记忆 user_id，格式 deviceId + '_' + device_child.id")
     private String zhibanUserId;
 
-    @Schema(description = "智能体 ID")
+    @Schema(description = "智能体ID")
     private String agentId;
 
     @Schema(description = "设备 MAC（聊天记录查询用）")

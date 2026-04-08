@@ -177,10 +177,23 @@ class ZhibanAgentClient:
             ) as r:
                 r.raise_for_status()
                 for line in r.iter_lines():
-                    if line and line.startswith("data: "):
-                        chunk = line[6:].strip()
-                        if chunk:
-                            yield chunk
+                    if not line:
+                        continue
+                    if line.startswith("data: "):
+                        part = line[6:].strip()
+                        if part:
+                            yield part
+                        continue
+                    s = line.strip()
+                    if not s:
+                        continue
+                    low = s.lower()
+                    if low.startswith(("event:", "id:", "retry:")) or s.startswith(
+                        ":"
+                    ):
+                        continue
+                    # 兼容旧版/错误 SSE：chunk 内换行导致续行无 data: 前缀时被丢行
+                    yield s
         except httpx.HTTPError as e:
             logger.bind(tag=TAG).error("zhiban_agent 流式请求失败: {}", e)
         except Exception as e:

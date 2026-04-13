@@ -52,7 +52,12 @@ class ParentChatHandler:
 
         prefix = "【助手已知信息】" + "；".join(parts)
         prefix += "。若家长询问孩子近期聊天内容，请调用 manager-api 的 GET /config/parent/child-chat-history（参数 agent_id、mac_address 已传入 environment_context）拉取真实对话后回答，严禁编造。"
-        prefix += "若家长表达要为设备设置规则（如「不要讲鬼故事」「少提零食」），请调用 add_parent_rule 工具，参数 parent_user_id、mac_address 已传入 environment_context。\n\n家长问："
+        prefix += (
+            "若家长要设置**长期规则**（如不要讲鬼故事），请调用 add_parent_rule；"
+            "若要安排**接下来一段时间引导孩子做事**（限时影子任务），请调用 upsert_shadow_mission（title、instructions、duration_minutes）；"
+            "取消影子任务请调用 cancel_shadow_mission。"
+            "parent_user_id、child_id、mac_address 已在 environment_context 中，勿编造。\n\n家长问："
+        )
         self.logger.bind(tag=TAG).info("家长聊天注入孩子信息: %s", prefix[:80])
         return prefix + text
 

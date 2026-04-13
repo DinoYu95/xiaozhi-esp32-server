@@ -104,6 +104,17 @@ class LLMProvider(LLMProviderBase):
                 "ZhibanAgent: environment_context 无 parent_rules (keys={})",
                 list(env.keys()) if env else [],
             )
+        sm = env.get("shadow_mission")
+        if isinstance(sm, dict) and (sm.get("title") or sm.get("instructions")):
+            sm_lines = [
+                "【限时影子任务（家长设置，失效前可优先引导；须遵守上文家长规则与安全底线；孩子明显抗拒时退让、不硬推）】",
+                f"标题：{(sm.get('title') or '').strip()}",
+                f"说明：{(sm.get('instructions') or '').strip()}",
+            ]
+            if sm.get("endsAt") is not None:
+                sm_lines.append(f"失效时间：{sm.get('endsAt')}")
+            prefix_blocks.append("\n".join(sm_lines))
+            logger.bind(tag=TAG).info("ZhibanAgent: 注入 shadow_mission id=%s", sm.get("id"))
         if prefix_blocks:
             text_to_send = "\n\n".join(prefix_blocks) + "\n\n用户说：" + text_to_send
 

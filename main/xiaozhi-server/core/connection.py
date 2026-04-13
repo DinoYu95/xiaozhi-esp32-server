@@ -38,7 +38,11 @@ from core.auth import AuthenticationError
 from config.config_loader import get_private_config_from_api
 from core.providers.tts.dto.dto import ContentType, TTSMessageDTO, SentenceType
 from config.logger import setup_logging, build_module_string, create_connection_logger
-from config.manage_api_client import DeviceNotFoundException, DeviceBindException
+from config.manage_api_client import (
+    DeviceNotFoundException,
+    DeviceBindException,
+    fetch_active_shadow_mission_sync,
+)
 from core.utils.prompt_manager import PromptManager
 from core.utils.voiceprint_provider import VoiceprintProvider
 from core.utils.util import get_system_error_response
@@ -145,6 +149,10 @@ class ConnectionHandler:
         self.owner_child_birthday = None
         self.owner_child_voice_print_id = None
         self.skill_mapping = {}
+        # 影子任务拉取短缓存（秒级），减轻 manager-api 压力
+        self._shadow_mission_cache_ts = 0.0
+        self._shadow_mission_cache_key = None
+        self._shadow_mission_cache_val = None
 
         # llm相关变量
         self.dialogue = Dialogue()
@@ -918,7 +926,41 @@ class ConnectionHandler:
             self.logger.bind(tag=TAG).info(
                 f"environment_context 含 companion_growth_prompt，长度={len(cgp)}"
             )
+        self._maybe_attach_shadow_mission(ctx)
         return ctx
+
+    def _maybe_attach_shadow_mission(self, ctx: Dict[str, Any]) -> None:
+        """主孩子对话时附带当前家长影子任务（guest 等不注入）。"""
+        st = (getattr(self, "current_round_speaker_type", None) or "unknown").strip().lower()
+        if st not in ("owner_child", "unknown"):
+            return
+        device_id = self.device_id
+        owner_child_id = getattr(self, "owner_child_id", None)
+        if not device_id or owner_child_id is None:
+            return
+        mission = self._get_shadow_mission_cached(device_id, int(owner_child_id))
+        if mission:
+            ctx["shadow_mission"] = mission
+            self.logger.bind(tag=TAG).info(
+                "environment_context 含 shadow_mission: id=%s title=%s",
+                mission.get("id"),
+                (mission.get("title") or "")[:40],
+            )
+
+    def _get_shadow_mission_cached(self, device_id: str, child_id: int):
+        key = (device_id, child_id)
+        now = time.time()
+        ttl = 20.0
+        if (
+            self._shadow_mission_cache_key == key
+            and (now - self._shadow_mission_cache_ts) < ttl
+        ):
+            return self._shadow_mission_cache_val
+        data = fetch_active_shadow_mission_sync(device_id, child_id)
+        self._shadow_mission_cache_key = key
+        self._shadow_mission_cache_ts = now
+        self._shadow_mission_cache_val = data
+        return data
 
     def _is_zhiban_llm(self):
         """判断当前 LLM 是否为 ZhibanAgent，用于跳过 xiaozhi 侧的 memory/functions 以降低首响延迟。"""

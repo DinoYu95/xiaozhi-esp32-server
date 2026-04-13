@@ -83,6 +83,8 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
                             "device_child_profile_for_parent": (
                                 mem_ctx.get("deviceChildProfile") or ""
                             ).strip(),
+                            "parent_user_id": parent_user_id,
+                            "child_id": child_id,
                         }
                         logger.bind(tag=TAG).info(
                             "家长端 zhiban user_id=%s agentId 已带 environment",
@@ -95,7 +97,10 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
                             "speaker_name": "家长",
                             "is_owner_child": False,
                         }
-                        environment_context = {}
+                        environment_context = {
+                            "parent_user_id": parent_user_id,
+                            "child_id": child_id,
+                        }
                         logger.bind(tag=TAG).warning(
                             "未拉到 zhiban-memory-context，仍用 parent_ user_id，长期记忆可能对不齐"
                         )

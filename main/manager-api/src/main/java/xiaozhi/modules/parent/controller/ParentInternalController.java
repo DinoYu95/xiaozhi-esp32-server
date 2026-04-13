@@ -24,6 +24,9 @@ import xiaozhi.modules.parent.dao.ParentChatHistoryDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dao.ParentUserTokenDao;
 import xiaozhi.modules.parent.service.ParentDeviceRuleService;
+import xiaozhi.modules.parent.service.ParentShadowMissionService;
+import xiaozhi.modules.parent.vo.ParentShadowMissionActiveVO;
+import xiaozhi.modules.parent.vo.ParentShadowMissionUpsertResultVO;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.vo.ParentZhibanMemoryContextVO;
 import xiaozhi.modules.parent.entity.ParentChatHistoryEntity;
@@ -49,6 +52,7 @@ public class ParentInternalController {
     private final ParentChatHistoryDao parentChatHistoryDao;
     private final AgentChatHistoryService agentChatHistoryService;
     private final ParentDeviceRuleService parentDeviceRuleService;
+    private final ParentShadowMissionService parentShadowMissionService;
 
     /**
      * 获取孩子与助手的近期对话记录（格式化为「孩子：xxx\n助手：yyy」）。
@@ -234,6 +238,60 @@ public class ParentInternalController {
      *
      * @param body parentUserId、macAddress、ruleText
      */
+    /**
+     * 当前生效的影子任务（供 xiaozhi-server 注入孩子对话）。Bearer server.secret。
+     */
+    @GetMapping("/shadow-mission/active")
+    public Result<ParentShadowMissionActiveVO> getActiveShadowMission(
+            @RequestParam String deviceId,
+            @RequestParam Long childId) {
+        if (StringUtils.isBlank(deviceId) || childId == null) {
+            return new Result<ParentShadowMissionActiveVO>().error(ErrorCode.PARAMS_GET_ERROR, "deviceId、childId 必填");
+        }
+        ParentShadowMissionActiveVO vo = parentShadowMissionService.getActive(deviceId.trim(), childId);
+        return new Result<ParentShadowMissionActiveVO>().ok(vo);
+    }
+
+    /**
+     * 创建或替换影子任务（供 zhiban-agent 工具调用）。Bearer server.secret。
+     */
+    @PostMapping("/shadow-mission")
+    public Result<ParentShadowMissionUpsertResultVO> upsertShadowMission(@RequestBody ShadowMissionUpsertRequest body) {
+        if (body == null || body.getParentUserId() == null || body.getChildId() == null) {
+            return new Result<ParentShadowMissionUpsertResultVO>().error(ErrorCode.PARAMS_GET_ERROR, "parentUserId、childId 必填");
+        }
+        try {
+            int dm = body.getDurationMinutes() != null ? body.getDurationMinutes().intValue() : 30;
+            var vo = parentShadowMissionService.upsert(
+                    body.getParentUserId(),
+                    body.getChildId(),
+                    body.getTitle(),
+                    body.getInstructions(),
+                    dm);
+            return new Result<ParentShadowMissionUpsertResultVO>().ok(vo);
+        } catch (Exception e) {
+            log.warn("影子任务创建失败: {}", e.getMessage());
+            return new Result<ParentShadowMissionUpsertResultVO>().error(ErrorCode.PARAMS_GET_ERROR, e.getMessage());
+        }
+    }
+
+    /**
+     * 取消当前 active 影子任务（供 zhiban-agent 工具调用）。
+     */
+    @PostMapping("/shadow-mission/cancel")
+    public Result<Void> cancelShadowMission(@RequestBody ShadowMissionCancelRequest body) {
+        if (body == null || body.getParentUserId() == null || body.getChildId() == null) {
+            return new Result<Void>().error(ErrorCode.PARAMS_GET_ERROR, "parentUserId、childId 必填");
+        }
+        try {
+            parentShadowMissionService.cancel(body.getParentUserId(), body.getChildId());
+            return new Result<Void>().ok(null);
+        } catch (Exception e) {
+            log.warn("影子任务取消失败: {}", e.getMessage());
+            return new Result<Void>().error(ErrorCode.PARAMS_GET_ERROR, e.getMessage());
+        }
+    }
+
     @PostMapping("/device-rule")
     public Result<ParentDeviceRuleAddResult> addDeviceRule(@RequestBody ParentDeviceRuleAddRequest body) {
         if (body.getParentUserId() == null || StringUtils.isBlank(body.getMacAddress()) || StringUtils.isBlank(body.getRuleText())) {
@@ -247,6 +305,22 @@ public class ParentInternalController {
             log.warn("添加家长规则失败: {}", e.getMessage());
             return new Result<ParentDeviceRuleAddResult>().error(ErrorCode.PARAMS_GET_ERROR, e.getMessage());
         }
+    }
+
+    @lombok.Data
+    public static class ShadowMissionUpsertRequest {
+        private Long parentUserId;
+        private Long childId;
+        private String title;
+        private String instructions;
+        /** 有效时长（分钟），默认 30，范围由服务端裁剪为 5～180 */
+        private Integer durationMinutes;
+    }
+
+    @lombok.Data
+    public static class ShadowMissionCancelRequest {
+        private Long parentUserId;
+        private Long childId;
     }
 
     /** 添加规则请求体 */

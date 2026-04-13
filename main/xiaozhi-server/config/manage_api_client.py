@@ -297,6 +297,46 @@ async def save_parent_chat(
         return False
 
 
+def fetch_active_shadow_mission_sync(device_id: str, child_id: int) -> Optional[Dict]:
+    """
+    同步拉取当前生效的家长影子任务（供设备端构建 environment_context）。
+    需在 init_service 之后调用；失败或无任务返回 None。
+    """
+    inst = ManageApiClient._instance
+    if not inst or not device_id or child_id is None:
+        return None
+    try:
+        import httpx
+
+        url = (inst.config.get("url") or "").rstrip("/")
+        secret = (inst.config.get("secret") or "").strip()
+        if not url or not secret:
+            return None
+        with httpx.Client(
+            base_url=url,
+            headers={
+                "Authorization": "Bearer " + secret,
+                "Accept": "application/json",
+            },
+            timeout=float(inst.config.get("timeout", 30)),
+        ) as client:
+            r = client.get(
+                "config/parent/shadow-mission/active",
+                params={"deviceId": device_id, "childId": int(child_id)},
+            )
+            r.raise_for_status()
+            body = r.json()
+            if body.get("code") != 0:
+                return None
+            data = body.get("data")
+            if not isinstance(data, dict):
+                return None
+            return data
+    except Exception as e:
+        print(f"fetch_active_shadow_mission_sync 失败: {e}")
+        return None
+
+
 def init_service(config):
     ManageApiClient(config)
 

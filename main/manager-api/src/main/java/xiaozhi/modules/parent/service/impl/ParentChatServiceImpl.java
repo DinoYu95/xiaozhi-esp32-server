@@ -199,6 +199,7 @@ public class ParentChatServiceImpl implements ParentChatService {
             childContext.put("parent_nickname", parentNickname);
             // 孩子姓名：优先 device_child.name，为空时回退到 ai_agent_voice_print.source_name
             if (child != null) {
+                childContext.put("child_id", child.getId());
                 String childName = StringUtils.isNotBlank(child.getName()) ? child.getName().trim() : null;
                 if (childName == null) {
                     AgentVoicePrintEntity vp = agentVoicePrintDao.selectOne(

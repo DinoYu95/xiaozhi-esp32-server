@@ -36,43 +36,21 @@ public class ParentShadowMissionServiceImpl implements ParentShadowMissionServic
     private final DeviceChildDao deviceChildDao;
     private final ParentDeviceBindingDao parentDeviceBindingDao;
 
+    /**
+     * 按 child_id 查 active。deviceId 仅作兼容入参：设备 WS 头里常为 MAC，库表存的是 ai_device.id（UUID），
+     * 用 device_id+child_id 双条件会查不到；child_id 与 device_child 一致即可唯一定位。
+     */
     @Override
     public ParentShadowMissionActiveVO getActive(String deviceId, Long childId) {
-        if (StringUtils.isBlank(deviceId) || childId == null) {
+        if (childId == null) {
+            return null;
+        }
+        if (deviceChildDao.selectById(childId) == null) {
             return null;
         }
         Date now = new Date();
         List<ParentShadowMissionEntity> candidates = parentShadowMissionDao.selectList(
                 new LambdaQueryWrapper<ParentShadowMissionEntity>()
-                        .eq(ParentShadowMissionEntity::getDeviceId, deviceId)
-                        .eq(ParentShadowMissionEntity::getChildId, childId)
-                        .eq(ParentShadowMissionEntity::getStatus, ParentShadowMissionEntity.STATUS_ACTIVE)
-                        .orderByDesc(ParentShadowMissionEntity::getId)
-                        .last("LIMIT 5"));
-        if (candidates == null || candidates.isEmpty()) {
-            return tryNormalizedDevice(deviceId, childId, now);
-        }
-        for (ParentShadowMissionEntity e : candidates) {
-            if (e.getEndsAt() != null && e.getEndsAt().before(now)) {
-                ParentShadowMissionEntity patch = new ParentShadowMissionEntity();
-                patch.setId(e.getId());
-                patch.setStatus(ParentShadowMissionEntity.STATUS_EXPIRED);
-                parentShadowMissionDao.updateById(patch);
-                continue;
-            }
-            return toActiveVO(e);
-        }
-        return null;
-    }
-
-    private ParentShadowMissionActiveVO tryNormalizedDevice(String deviceId, Long childId, Date now) {
-        String norm = deviceId.replace(":", "_").toLowerCase();
-        if (norm.equals(deviceId)) {
-            return null;
-        }
-        List<ParentShadowMissionEntity> candidates = parentShadowMissionDao.selectList(
-                new LambdaQueryWrapper<ParentShadowMissionEntity>()
-                        .eq(ParentShadowMissionEntity::getDeviceId, norm)
                         .eq(ParentShadowMissionEntity::getChildId, childId)
                         .eq(ParentShadowMissionEntity::getStatus, ParentShadowMissionEntity.STATUS_ACTIVE)
                         .orderByDesc(ParentShadowMissionEntity::getId)

@@ -2,6 +2,7 @@ package xiaozhi.modules.parent.service.impl;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -62,6 +63,8 @@ import xiaozhi.modules.parent.vo.ParentChatMessageVO;
 public class ParentChatServiceImpl implements ParentChatService {
 
     private static final int PLAY_TOKEN_EXPIRE_SECONDS = 300;
+    /** 发往 zhiban 的多轮上下文条数上限（user/assistant 各算一条） */
+    private static final int MAX_PARENT_CHAT_MESSAGES_FOR_ZHIBAN = 24;
     private static final byte CHAT_TYPE_PARENT = 1;
     private static final byte CHAT_TYPE_ASSISTANT = 2;
 
@@ -162,6 +165,43 @@ public class ParentChatServiceImpl implements ParentChatService {
         return toVO(assistantMsg);
     }
 
+    /**
+     * 从库中拉取本 session 近期家长与助手消息，拼上本轮用户句，供 zhiban 多轮澄清（如影子任务细节）。
+     * 仅当总条数≥2（至少含一条历史 + 本轮）时写入 body，否则仍只传 text（与旧行为一致）。
+     */
+    private List<Map<String, String>> buildZhibanChatMessages(String sessionId, String currentUserText) {
+        List<ParentChatHistoryEntity> rows = parentChatHistoryDao.selectList(
+                new LambdaQueryWrapper<ParentChatHistoryEntity>()
+                        .eq(ParentChatHistoryEntity::getSessionId, sessionId)
+                        .orderByDesc(ParentChatHistoryEntity::getCreateTime)
+                        .last("LIMIT " + MAX_PARENT_CHAT_MESSAGES_FOR_ZHIBAN));
+        Collections.reverse(rows);
+        List<Map<String, String>> out = new ArrayList<>();
+        for (ParentChatHistoryEntity row : rows) {
+            String role;
+            if (row.getChatType() == CHAT_TYPE_PARENT) {
+                role = "user";
+            } else if (row.getChatType() == CHAT_TYPE_ASSISTANT) {
+                role = "assistant";
+            } else {
+                continue;
+            }
+            String c = row.getContent();
+            if (StringUtils.isBlank(c)) {
+                continue;
+            }
+            Map<String, String> m = new HashMap<>(2);
+            m.put("role", role);
+            m.put("content", c.trim());
+            out.add(m);
+        }
+        Map<String, String> cur = new HashMap<>(2);
+        cur.put("role", "user");
+        cur.put("content", currentUserText.trim());
+        out.add(cur);
+        return out;
+    }
+
     private String callXiaozhiServerForChat(Long parentUserId, String text, String sessionId, String userId,
             DeviceEntity device, DeviceChildEntity child) {
         String deviceId = device.getId();
@@ -246,6 +286,12 @@ public class ParentChatServiceImpl implements ParentChatService {
                             .eq(AgentSkillMappingEntity::getSpeakerType, "parent"));
             if (parentMappings != null && !parentMappings.isEmpty()) {
                 body.put("skill_ids", parentMappings.stream().map(AgentSkillMappingEntity::getSkillId).toList());
+            }
+            List<Map<String, String>> zhibanMessages = buildZhibanChatMessages(sessionId, text);
+            if (zhibanMessages.size() >= 2) {
+                body.put("messages", zhibanMessages);
+                log.debug("家长聊天：附带多轮 messages共 {} 条, sessionId={}, childId={}",
+                        zhibanMessages.size(), sessionId, child != null ? child.getId() : null);
             }
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);

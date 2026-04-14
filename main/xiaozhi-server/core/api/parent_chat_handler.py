@@ -14,6 +14,27 @@ TAG = __name__
 logger = setup_logging()
 
 
+def _normalize_openai_messages(raw) -> list | None:
+    """将请求体中的 messages 规范为 [{role, content}]，仅保留 user/assistant。"""
+    if not isinstance(raw, list):
+        return None
+    out = []
+    for m in raw:
+        if not isinstance(m, dict):
+            continue
+        role = m.get("role")
+        content = m.get("content")
+        if role not in ("user", "assistant"):
+            continue
+        if content is None:
+            continue
+        s = str(content).strip()
+        if not s:
+            continue
+        out.append({"role": role, "content": s})
+    return out or None
+
+
 class ParentChatHandler:
     """家长聊天 HTTP 处理器"""
 
@@ -56,10 +77,29 @@ class ParentChatHandler:
             "若家长要设置**长期规则**（如不要讲鬼故事），请调用 add_parent_rule；"
             "若要安排**接下来一段时间引导孩子做事**（限时影子任务），请调用 upsert_shadow_mission（title、instructions、duration_minutes）；"
             "取消影子任务请调用 cancel_shadow_mission。"
+            "若任务描述模糊（如「提醒完成学习任务」），先与家长多轮追问：具体科目或作业项、校内作业还是家庭任务、截止时间或完成标准，再 upsert；信息不足时不要调用 upsert_shadow_mission。"
             "parent_user_id、child_id、mac_address 已在 environment_context 中，勿编造。\n\n家长问："
         )
         self.logger.bind(tag=TAG).info("家长聊天注入孩子信息: %s", prefix[:80])
         return prefix + text
+
+    def _prepare_text_and_messages(
+        self,
+        text: str,
+        environment_context: dict | None,
+        messages_raw,
+    ) -> tuple[str, list | None]:
+        """
+        多轮时：仅对最后一条 user 注入【助手已知信息】前缀，历史轮次保持原文（与库中一致）。
+        单轮或 messages 无效时：整段 text 注入。
+        """
+        env = environment_context if isinstance(environment_context, dict) else {}
+        msgs = _normalize_openai_messages(messages_raw)
+        if msgs and len(msgs) >= 2 and msgs[-1].get("role") == "user":
+            msgs = [dict(x) for x in msgs]
+            msgs[-1]["content"] = self._inject_child_context(msgs[-1]["content"], env)
+            return msgs[-1]["content"], msgs
+        return self._inject_child_context(text, env), None
 
     def _check_auth(self, request: web.Request) -> bool:
         """校验 Authorization: Bearer {secret}"""
@@ -116,8 +156,14 @@ class ParentChatHandler:
             list(environment_context.keys()) if isinstance(environment_context, dict) else None,
             environment_context.get("parent_nickname") if isinstance(environment_context, dict) else None,
         )
-        text_to_send = self._inject_child_context(text, environment_context)
-        self.logger.bind(tag=TAG).info("家长聊天发往 zhiban-agent 的文本前 200 字: %s", (text_to_send or "")[:200])
+        text_to_send, zhiban_messages = self._prepare_text_and_messages(
+            text, environment_context, body.get("messages")
+        )
+        self.logger.bind(tag=TAG).info(
+            "家长聊天发往 zhiban-agent: 文本前200字=%s, 附带messages条数=%s",
+            (text_to_send or "")[:200],
+            len(zhiban_messages) if zhiban_messages else 0,
+        )
 
         client = ZhibanAgentClient(self._zhiban_config)
         reply = client.chat(
@@ -127,6 +173,7 @@ class ParentChatHandler:
             speaker_context=speaker_context if isinstance(speaker_context, dict) else None,
             skill_ids=skill_ids if isinstance(skill_ids, list) else None,
             environment_context=environment_context if isinstance(environment_context, dict) else None,
+            messages=zhiban_messages,
         )
         result = {"reply": reply or ""}
         return web.json_response(result)
@@ -154,7 +201,9 @@ class ParentChatHandler:
         if not session_id:
             return web.json_response({"detail": "session_id 不能为空"}, status=400)
 
-        text_to_send = self._inject_child_context(text, environment_context)
+        text_to_send, zhiban_messages = self._prepare_text_and_messages(
+            text, environment_context, body.get("messages")
+        )
 
         response = web.StreamResponse(
             status=200,
@@ -179,6 +228,7 @@ class ParentChatHandler:
                     speaker_context=speaker_context,
                     skill_ids=skill_ids,
                     environment_context=environment_context,
+                    messages=zhiban_messages,
                 ):
                     asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
                 asyncio.run_coroutine_threadsafe(queue.put(None), loop)

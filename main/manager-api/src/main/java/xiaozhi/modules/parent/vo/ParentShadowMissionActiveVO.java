@@ -21,4 +21,6 @@ public class ParentShadowMissionActiveVO {
     private String instructions;
     @Schema(description = "失效时间")
     private Date endsAt;
+    @Schema(description = "优先级，越小越优先")
+    private Integer priority;
 }

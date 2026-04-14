@@ -41,7 +41,7 @@ from config.logger import setup_logging, build_module_string, create_connection_
 from config.manage_api_client import (
     DeviceNotFoundException,
     DeviceBindException,
-    fetch_active_shadow_mission_sync,
+    fetch_active_shadow_missions_sync,
 )
 from core.utils.prompt_manager import PromptManager
 from core.utils.voiceprint_provider import VoiceprintProvider
@@ -938,16 +938,18 @@ class ConnectionHandler:
         owner_child_id = getattr(self, "owner_child_id", None)
         if not device_id or owner_child_id is None:
             return
-        mission = self._get_shadow_mission_cached(device_id, int(owner_child_id))
-        if mission:
-            ctx["shadow_mission"] = mission
+        missions = self._get_shadow_missions_cached(device_id, int(owner_child_id))
+        if missions:
+            ctx["shadow_missions"] = missions
+            ctx["shadow_mission"] = missions[0]
+            ctx["child_id"] = int(owner_child_id)
             self.logger.bind(tag=TAG).info(
-                "environment_context 含 shadow_mission: id=%s title=%s",
-                mission.get("id"),
-                (mission.get("title") or "")[:40],
+                "environment_context 含 shadow_missions: count=%s first_id=%s",
+                len(missions),
+                missions[0].get("id"),
             )
 
-    def _get_shadow_mission_cached(self, device_id: str, child_id: int):
+    def _get_shadow_missions_cached(self, device_id: str, child_id: int):
         key = (device_id, child_id)
         now = time.time()
         ttl = 20.0
@@ -956,7 +958,7 @@ class ConnectionHandler:
             and (now - self._shadow_mission_cache_ts) < ttl
         ):
             return self._shadow_mission_cache_val
-        data = fetch_active_shadow_mission_sync(device_id, child_id)
+        data = fetch_active_shadow_missions_sync(device_id, child_id)
         self._shadow_mission_cache_key = key
         self._shadow_mission_cache_ts = now
         self._shadow_mission_cache_val = data

@@ -1,6 +1,7 @@
 package xiaozhi.modules.parent.controller;
 
 import java.util.Date;
+import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -242,18 +243,35 @@ public class ParentInternalController {
      * 当前生效的影子任务（供 xiaozhi-server 注入孩子对话）。Bearer server.secret。
      */
     @GetMapping("/shadow-mission/active")
-    public Result<ParentShadowMissionActiveVO> getActiveShadowMission(
+    public Result<List<ParentShadowMissionActiveVO>> getActiveShadowMission(
             @RequestParam String deviceId,
             @RequestParam Long childId) {
         if (StringUtils.isBlank(deviceId) || childId == null) {
-            return new Result<ParentShadowMissionActiveVO>().error(ErrorCode.PARAMS_GET_ERROR, "deviceId、childId 必填");
+            return new Result<List<ParentShadowMissionActiveVO>>().error(ErrorCode.PARAMS_GET_ERROR, "deviceId、childId 必填");
         }
-        ParentShadowMissionActiveVO vo = parentShadowMissionService.getActive(deviceId.trim(), childId);
-        return new Result<ParentShadowMissionActiveVO>().ok(vo);
+        List<ParentShadowMissionActiveVO> list = parentShadowMissionService.listActive(deviceId.trim(), childId);
+        return new Result<List<ParentShadowMissionActiveVO>>().ok(list);
     }
 
     /**
-     * 创建或替换影子任务（供 zhiban-agent 工具调用）。Bearer server.secret。
+     * 孩子侧对话工具：将影子任务标为已完成。Bearer server.secret。
+     */
+    @PostMapping("/shadow-mission/complete")
+    public Result<Void> completeShadowMissionByChild(@RequestBody ShadowMissionCompleteRequest body) {
+        if (body == null || body.getChildId() == null || body.getMissionId() == null) {
+            return new Result<Void>().error(ErrorCode.PARAMS_GET_ERROR, "childId、missionId 必填");
+        }
+        try {
+            parentShadowMissionService.completeByChild(body.getChildId(), body.getMissionId());
+            return new Result<Void>().ok(null);
+        } catch (Exception e) {
+            log.warn("影子任务完成回写失败: {}", e.getMessage());
+            return new Result<Void>().error(ErrorCode.PARAMS_GET_ERROR, e.getMessage());
+        }
+    }
+
+    /**
+     * 新增一条影子任务（不取消其他进行中的任务；同孩子最多 5 条 active）。Bearer server.secret。
      */
     @PostMapping("/shadow-mission")
     public Result<ParentShadowMissionUpsertResultVO> upsertShadowMission(@RequestBody ShadowMissionUpsertRequest body) {
@@ -321,6 +339,12 @@ public class ParentInternalController {
     public static class ShadowMissionCancelRequest {
         private Long parentUserId;
         private Long childId;
+    }
+
+    @lombok.Data
+    public static class ShadowMissionCompleteRequest {
+        private Long childId;
+        private Long missionId;
     }
 
     /** 添加规则请求体 */

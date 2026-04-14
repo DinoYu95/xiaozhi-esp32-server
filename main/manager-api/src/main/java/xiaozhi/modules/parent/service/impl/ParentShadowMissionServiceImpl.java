@@ -1,5 +1,6 @@
 package xiaozhi.modules.parent.service.impl;
 
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
@@ -31,34 +32,30 @@ public class ParentShadowMissionServiceImpl implements ParentShadowMissionServic
     private static final int INSTRUCTIONS_MAX = 2000;
     private static final int DURATION_MIN = 5;
     private static final int DURATION_MAX = 180;
+    /** 同一孩子并发的 active 影子任务上限 */
+    private static final int MAX_ACTIVE_SHADOW = 5;
 
     private final ParentShadowMissionDao parentShadowMissionDao;
     private final DeviceChildDao deviceChildDao;
     private final ParentDeviceBindingDao parentDeviceBindingDao;
 
-    /**
-     * 按 child_id 查 active。deviceId 仅作兼容入参：设备 WS 头里常为 MAC，库表存的是 ai_device.id（UUID），
-     * 用 device_id+child_id 双条件会查不到；child_id 与 device_child 一致即可唯一定位。
-     */
     @Override
-    public ParentShadowMissionActiveVO getActive(String deviceId, Long childId) {
-        if (childId == null) {
-            return null;
-        }
-        if (deviceChildDao.selectById(childId) == null) {
-            return null;
+    public List<ParentShadowMissionActiveVO> listActive(String deviceId, Long childId) {
+        if (childId == null || deviceChildDao.selectById(childId) == null) {
+            return List.of();
         }
         Date now = new Date();
-        List<ParentShadowMissionEntity> candidates = parentShadowMissionDao.selectList(
+        List<ParentShadowMissionEntity> rows = parentShadowMissionDao.selectList(
                 new LambdaQueryWrapper<ParentShadowMissionEntity>()
                         .eq(ParentShadowMissionEntity::getChildId, childId)
                         .eq(ParentShadowMissionEntity::getStatus, ParentShadowMissionEntity.STATUS_ACTIVE)
-                        .orderByDesc(ParentShadowMissionEntity::getId)
-                        .last("LIMIT 5"));
-        if (candidates == null || candidates.isEmpty()) {
-            return null;
+                        .orderByAsc(ParentShadowMissionEntity::getPriority)
+                        .orderByAsc(ParentShadowMissionEntity::getId));
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
         }
-        for (ParentShadowMissionEntity e : candidates) {
+        List<ParentShadowMissionActiveVO> out = new ArrayList<>();
+        for (ParentShadowMissionEntity e : rows) {
             if (e.getEndsAt() != null && e.getEndsAt().before(now)) {
                 ParentShadowMissionEntity patch = new ParentShadowMissionEntity();
                 patch.setId(e.getId());
@@ -66,9 +63,15 @@ public class ParentShadowMissionServiceImpl implements ParentShadowMissionServic
                 parentShadowMissionDao.updateById(patch);
                 continue;
             }
-            return toActiveVO(e);
+            out.add(toActiveVO(e));
         }
-        return null;
+        return out;
+    }
+
+    @Override
+    public ParentShadowMissionActiveVO getActive(String deviceId, Long childId) {
+        List<ParentShadowMissionActiveVO> list = listActive(deviceId, childId);
+        return list.isEmpty() ? null : list.get(0);
     }
 
     @Override
@@ -110,8 +113,27 @@ public class ParentShadowMissionServiceImpl implements ParentShadowMissionServic
         }
         ensureParentCanAccessChild(parentUserId, deviceId);
 
+        long activeCount = parentShadowMissionDao.selectCount(
+                new LambdaQueryWrapper<ParentShadowMissionEntity>()
+                        .eq(ParentShadowMissionEntity::getChildId, childId)
+                        .eq(ParentShadowMissionEntity::getStatus, ParentShadowMissionEntity.STATUS_ACTIVE));
+        if (activeCount >= MAX_ACTIVE_SHADOW) {
+            throw new RenException("进行中影子任务最多" + MAX_ACTIVE_SHADOW + "条，请先让孩子完成部分任务或由家长取消后再添加");
+        }
+
+        int nextPriority = 0;
+        List<ParentShadowMissionEntity> top = parentShadowMissionDao.selectList(
+                new LambdaQueryWrapper<ParentShadowMissionEntity>()
+                        .eq(ParentShadowMissionEntity::getChildId, childId)
+                        .eq(ParentShadowMissionEntity::getStatus, ParentShadowMissionEntity.STATUS_ACTIVE)
+                        .orderByDesc(ParentShadowMissionEntity::getPriority)
+                        .orderByDesc(ParentShadowMissionEntity::getId)
+                        .last("LIMIT 1"));
+        if (top != null && !top.isEmpty() && top.get(0).getPriority() != null) {
+            nextPriority = top.get(0).getPriority() + 1;
+        }
+
         Date endsAt = addMinutes(new Date(), dm);
-        cancelActiveRows(deviceId, childId);
 
         ParentShadowMissionEntity entity = new ParentShadowMissionEntity();
         entity.setDeviceId(deviceId);
@@ -121,6 +143,7 @@ public class ParentShadowMissionServiceImpl implements ParentShadowMissionServic
         entity.setInstructions(ins);
         entity.setEndsAt(endsAt);
         entity.setStatus(ParentShadowMissionEntity.STATUS_ACTIVE);
+        entity.setPriority(nextPriority);
         Date now = new Date();
         entity.setCreateTime(now);
         entity.setUpdateTime(now);
@@ -150,13 +173,34 @@ public class ParentShadowMissionServiceImpl implements ParentShadowMissionServic
                         .set(ParentShadowMissionEntity::getStatus, ParentShadowMissionEntity.STATUS_CANCELLED));
     }
 
-    private void cancelActiveRows(String deviceId, Long childId) {
-        parentShadowMissionDao.update(null,
-                new LambdaUpdateWrapper<ParentShadowMissionEntity>()
-                        .eq(ParentShadowMissionEntity::getDeviceId, deviceId)
-                        .eq(ParentShadowMissionEntity::getChildId, childId)
-                        .eq(ParentShadowMissionEntity::getStatus, ParentShadowMissionEntity.STATUS_ACTIVE)
-                        .set(ParentShadowMissionEntity::getStatus, ParentShadowMissionEntity.STATUS_CANCELLED));
+    @Override
+    public void completeByChild(Long childId, Long missionId) {
+        if (childId == null || missionId == null) {
+            throw new RenException("childId、missionId 必填");
+        }
+        ParentShadowMissionEntity e = parentShadowMissionDao.selectById(missionId);
+        if (e == null) {
+            throw new RenException("影子任务不存在");
+        }
+        if (!childId.equals(e.getChildId())) {
+            throw new RenException("任务与当前孩子不匹配");
+        }
+        if (!ParentShadowMissionEntity.STATUS_ACTIVE.equals(e.getStatus())) {
+            throw new RenException("任务已不是进行中状态");
+        }
+        Date now = new Date();
+        if (e.getEndsAt() != null && e.getEndsAt().before(now)) {
+            ParentShadowMissionEntity patch = new ParentShadowMissionEntity();
+            patch.setId(e.getId());
+            patch.setStatus(ParentShadowMissionEntity.STATUS_EXPIRED);
+            parentShadowMissionDao.updateById(patch);
+            throw new RenException("任务已过期");
+        }
+        ParentShadowMissionEntity patch = new ParentShadowMissionEntity();
+        patch.setId(e.getId());
+        patch.setStatus(ParentShadowMissionEntity.STATUS_COMPLETED);
+        patch.setUpdateTime(now);
+        parentShadowMissionDao.updateById(patch);
     }
 
     private void ensureParentCanAccessChild(Long parentUserId, String deviceId) {
@@ -179,10 +223,12 @@ public class ParentShadowMissionServiceImpl implements ParentShadowMissionServic
     }
 
     private static ParentShadowMissionActiveVO toActiveVO(ParentShadowMissionEntity e) {
+        int pri = e.getPriority() != null ? e.getPriority() : 0;
         return new ParentShadowMissionActiveVO(
                 e.getId(),
                 e.getTitle(),
                 e.getInstructions(),
-                e.getEndsAt());
+                e.getEndsAt(),
+                pri);
     }
 }

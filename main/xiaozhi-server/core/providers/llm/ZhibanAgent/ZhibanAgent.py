@@ -104,17 +104,39 @@ class LLMProvider(LLMProviderBase):
                 "ZhibanAgent: environment_context 无 parent_rules (keys={})",
                 list(env.keys()) if env else [],
             )
-        sm = env.get("shadow_mission")
-        if isinstance(sm, dict) and (sm.get("title") or sm.get("instructions")):
-            sm_lines = [
-                "【限时影子任务（家长设置，失效前可优先引导；须遵守上文家长规则与安全底线；孩子明显抗拒时退让、不硬推）】",
-                f"标题：{(sm.get('title') or '').strip()}",
-                f"说明：{(sm.get('instructions') or '').strip()}",
+        sms = env.get("shadow_missions")
+        if isinstance(sms, list) and len(sms) > 0:
+            parts = [
+                "【限时影子任务（可多条；priority 越小越优先；须遵守家长规则与安全底线；孩子抗拒则退让；"
+                "当语境表明某条任务已达成时，可调用 complete_shadow_mission(mission_id)，mission_id 须为下列 id 之一）】"
             ]
-            if sm.get("endsAt") is not None:
-                sm_lines.append(f"失效时间：{sm.get('endsAt')}")
-            prefix_blocks.append("\n".join(sm_lines))
-            logger.bind(tag=TAG).info("ZhibanAgent: 注入 shadow_mission id=%s", sm.get("id"))
+            for sm in sms:
+                if not isinstance(sm, dict):
+                    continue
+                if not (sm.get("title") or sm.get("instructions")):
+                    continue
+                mid = sm.get("id")
+                pri = sm.get("priority", 0)
+                parts.append(
+                    f"- id={mid} priority={pri} 标题：{(sm.get('title') or '').strip()} "
+                    f"说明：{(sm.get('instructions') or '').strip()} "
+                    f"失效：{sm.get('endsAt')}"
+                )
+            if len(parts) > 1:
+                prefix_blocks.append("\n".join(parts))
+                logger.bind(tag=TAG).info("ZhibanAgent: 注入 shadow_missions count=%s", len(parts) - 1)
+        else:
+            sm = env.get("shadow_mission")
+            if isinstance(sm, dict) and (sm.get("title") or sm.get("instructions")):
+                sm_lines = [
+                    "【限时影子任务（家长设置，失效前可优先引导；须遵守上文家长规则与安全底线；孩子明显抗拒时退让、不硬推）】",
+                    f"标题：{(sm.get('title') or '').strip()}",
+                    f"说明：{(sm.get('instructions') or '').strip()}",
+                ]
+                if sm.get("endsAt") is not None:
+                    sm_lines.append(f"失效时间：{sm.get('endsAt')}")
+                prefix_blocks.append("\n".join(sm_lines))
+                logger.bind(tag=TAG).info("ZhibanAgent: 注入 shadow_mission id=%s", sm.get("id"))
         if prefix_blocks:
             text_to_send = "\n\n".join(prefix_blocks) + "\n\n用户说：" + text_to_send
 

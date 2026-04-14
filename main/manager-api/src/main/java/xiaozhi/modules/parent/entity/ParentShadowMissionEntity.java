@@ -18,6 +18,7 @@ public class ParentShadowMissionEntity {
     public static final String STATUS_ACTIVE = "active";
     public static final String STATUS_CANCELLED = "cancelled";
     public static final String STATUS_EXPIRED = "expired";
+    public static final String STATUS_COMPLETED = "completed";
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -28,6 +29,8 @@ public class ParentShadowMissionEntity {
     private String instructions;
     private Date endsAt;
     private String status;
+    /** 越小越优先 */
+    private Integer priority;
     private Date createTime;
     private Date updateTime;
 }

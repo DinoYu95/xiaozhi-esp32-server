@@ -1,6 +1,6 @@
 import os
 import base64
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Any
 
 import httpx
 
@@ -297,21 +297,21 @@ async def save_parent_chat(
         return False
 
 
-def fetch_active_shadow_mission_sync(device_id: str, child_id: int) -> Optional[Dict]:
+def fetch_active_shadow_missions_sync(device_id: str, child_id: int) -> List[Dict[str, Any]]:
     """
-    同步拉取当前生效的家长影子任务（供设备端构建 environment_context）。
-    需在 init_service 之后调用；失败或无任务返回 None。
+    同步拉取当前生效的影子任务列表（按 priority、id 排序）。
+    失败返回 []。
     """
     inst = ManageApiClient._instance
     if not inst or not device_id or child_id is None:
-        return None
+        return []
     try:
         import httpx
 
         url = (inst.config.get("url") or "").rstrip("/")
         secret = (inst.config.get("secret") or "").strip()
         if not url or not secret:
-            return None
+            return []
         with httpx.Client(
             base_url=url,
             headers={
@@ -327,14 +327,24 @@ def fetch_active_shadow_mission_sync(device_id: str, child_id: int) -> Optional[
             r.raise_for_status()
             body = r.json()
             if body.get("code") != 0:
-                return None
+                return []
             data = body.get("data")
-            if not isinstance(data, dict):
-                return None
-            return data
+            if data is None:
+                return []
+            if isinstance(data, list):
+                return [x for x in data if isinstance(x, dict)]
+            if isinstance(data, dict):
+                return [data]
+            return []
     except Exception as e:
-        print(f"fetch_active_shadow_mission_sync 失败: {e}")
-        return None
+        print(f"fetch_active_shadow_missions_sync 失败: {e}")
+        return []
+
+
+def fetch_active_shadow_mission_sync(device_id: str, child_id: int) -> Optional[Dict]:
+    """兼容：仅返回列表首条，无则 None。"""
+    lst = fetch_active_shadow_missions_sync(device_id, child_id)
+    return lst[0] if lst else None
 
 
 def init_service(config):

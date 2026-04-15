@@ -37,6 +37,7 @@ import xiaozhi.modules.agent.dto.IdentifyVoicePrintResponse;
 import xiaozhi.modules.agent.entity.AgentVoicePrintEntity;
 import xiaozhi.modules.agent.service.AgentChatAudioService;
 import xiaozhi.modules.agent.service.AgentChatHistoryService;
+import xiaozhi.modules.agent.service.AgentService;
 import xiaozhi.modules.agent.service.AgentVoicePrintService;
 import xiaozhi.modules.agent.service.VoiceprintAudioConvertService;
 import xiaozhi.modules.agent.vo.AgentVoicePrintVO;
@@ -53,6 +54,7 @@ public class AgentVoicePrintServiceImpl extends ServiceImpl<AgentVoicePrintDao, 
     private final RestTemplate restTemplate;
     private final SysParamsService sysParamsService;
     private final AgentChatHistoryService agentChatHistoryService;
+    private final AgentService agentService;
     private final VoiceprintAudioConvertService voiceprintAudioConvertService;
     // Springboot提供的编程事务类
     private final TransactionTemplate transactionTemplate;
@@ -62,15 +64,33 @@ public class AgentVoicePrintServiceImpl extends ServiceImpl<AgentVoicePrintDao, 
 
     public AgentVoicePrintServiceImpl(AgentChatAudioService agentChatAudioService, RestTemplate restTemplate,
                                       SysParamsService sysParamsService, AgentChatHistoryService agentChatHistoryService,
+                                      AgentService agentService,
                                       VoiceprintAudioConvertService voiceprintAudioConvertService,
                                       TransactionTemplate transactionTemplate, @Qualifier("taskExecutor") Executor taskExecutor) {
         this.agentChatAudioService = agentChatAudioService;
         this.restTemplate = restTemplate;
         this.sysParamsService = sysParamsService;
         this.agentChatHistoryService = agentChatHistoryService;
+        this.agentService = agentService;
         this.voiceprintAudioConvertService = voiceprintAudioConvertService;
         this.transactionTemplate = transactionTemplate;
         this.taskExecutor = taskExecutor;
+    }
+
+    /**
+     * 智控台录入的声纹 creator=当前用户；家长端主孩子声纹可能 creator 为空，按智能体归属校验。
+     */
+    private boolean canManageVoicePrint(AgentVoicePrintEntity vp, Long userId) {
+        if (vp == null || userId == null) {
+            return false;
+        }
+        if (vp.getCreator() != null && vp.getCreator().equals(userId)) {
+            return true;
+        }
+        if (vp.getCreator() == null) {
+            return agentService.checkAgentPermission(vp.getAgentId(), userId);
+        }
+        return false;
     }
 
     @Override
@@ -113,12 +133,13 @@ public class AgentVoicePrintServiceImpl extends ServiceImpl<AgentVoicePrintDao, 
     @Override
     public boolean delete(Long userId, String voicePrintId) {
         // 开启事务
+        AgentVoicePrintEntity vp = baseMapper.selectById(voicePrintId);
+        if (vp == null || !canManageVoicePrint(vp, userId)) {
+            return false;
+        }
         boolean b = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
             try {
-                // 删除声纹,按照指定当前登录用户和智能体
-                int row = baseMapper.delete(new LambdaQueryWrapper<AgentVoicePrintEntity>()
-                        .eq(AgentVoicePrintEntity::getId, voicePrintId)
-                        .eq(AgentVoicePrintEntity::getCreator, userId));
+                int row = baseMapper.deleteById(voicePrintId);
                 if (row != 1) {
                     status.setRollbackOnly(); // 标记事务回滚
                     return false;
@@ -157,11 +178,8 @@ public class AgentVoicePrintServiceImpl extends ServiceImpl<AgentVoicePrintDao, 
 
     @Override
     public boolean update(Long userId, AgentVoicePrintUpdateDTO dto) {
-        AgentVoicePrintEntity agentVoicePrintEntity = baseMapper
-                .selectOne(new LambdaQueryWrapper<AgentVoicePrintEntity>()
-                        .eq(AgentVoicePrintEntity::getId, dto.getId())
-                        .eq(AgentVoicePrintEntity::getCreator, userId));
-        if (agentVoicePrintEntity == null) {
+        AgentVoicePrintEntity agentVoicePrintEntity = baseMapper.selectById(dto.getId());
+        if (agentVoicePrintEntity == null || !canManageVoicePrint(agentVoicePrintEntity, userId)) {
             return false;
         }
         // 获取音频Id

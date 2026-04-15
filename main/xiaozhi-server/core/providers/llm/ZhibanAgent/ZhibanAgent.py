@@ -127,10 +127,12 @@ class LLMProvider(LLMProviderBase):
         if isinstance(sms, list) and len(sms) > 0:
             parts = [
                 "【限时影子任务（可多条；priority 越小越优先；须遵守家长规则与安全底线；孩子抗拒则退让；"
-                "当语境表明某条任务已达成时，可调用 complete_shadow_mission(mission_id)，mission_id 须为下列 id 之一。"
-                "**本条在 user 正文里，你必须按下列待办落实：**只要本轮没有更紧急的安全/情绪问题，"
-                "回复里**至少一句**自然口语提醒孩子（点出标题或说明里的具体事，如穿校服、写作业）；"
-                "可先接孩子话再提醒，禁止整段回复完全不提下列任务。）】"
+                "**完成标准（提醒义务）：**以「提醒到位 + 孩子明确回应知晓/答应」为完成条件，不要求实际行为全部做完再关单。"
+                "当孩子已回应提醒（如「好的」「知道了」「我会…」等），你应调用 complete_shadow_mission(mission_id)，"
+                "mission_id 须为下列 id 之一；若孩子明确拒绝或强烈抵触则不要调用。"
+                "**本条在 user 正文里须落实提醒：**只要本轮没有更紧急的安全/情绪问题，回复里**至少一句**自然口语点到任务；"
+                "可先接孩子话再提醒；禁止整段回复完全不提下列任务。"
+                "**勿将下列任务当作长期个人事实写入记忆：**状态以服务端为准，不要抽成「孩子有某某待办」类长期 fact。）】"
             ]
             for sm in sms:
                 if not isinstance(sm, dict):
@@ -151,8 +153,9 @@ class LLMProvider(LLMProviderBase):
             sm = env.get("shadow_mission")
             if isinstance(sm, dict) and (sm.get("title") or sm.get("instructions")):
                 sm_lines = [
-                    "【限时影子任务（家长设置，失效前须落实提醒：只要本轮无更紧急事项，回复中要用自然口语点到任务内容，"
-                    "不要只闲聊完全不提；孩子明显抗拒时退让、不硬推；须遵守上文家长规则与安全底线）】",
+                    "【限时影子任务（提醒义务：孩子明确回应知晓/答应后即可调用 complete_shadow_mission，"
+                    "不必等实际行为全部完成；抗拒则不调用。回复须自然点到任务，不要只闲聊；遵守家长规则与安全底线。"
+                    "勿将此任务写入长期记忆 fact。）】",
                     f"标题：{(sm.get('title') or '').strip()}",
                     f"说明：{(sm.get('instructions') or '').strip()}",
                 ]

@@ -23,6 +23,9 @@ public class ParentZhibanMemoryContextVO {
     @Schema(description = "设备 MAC（聊天记录查询用）")
     private String macAddress;
 
+    @Schema(description = "设备主键 ai_device.id，与 shadow-mission/active 的 deviceId 一致")
+    private String deviceId;
+
     @Schema(description = "孩子昵称/姓名")
     private String childName;
 

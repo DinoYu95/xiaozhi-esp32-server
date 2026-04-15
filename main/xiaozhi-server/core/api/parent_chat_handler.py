@@ -66,12 +66,33 @@ class ParentChatHandler:
         if child_school and str(child_school).strip():
             parts.append(f"学校：{child_school.strip()}")
 
+        # 服务端权威状态：仅 active 影子任务；空列表 = 当前无进行中任务（非「记忆」或历史对话）
+        shadow_missions = environment_context.get("shadow_missions")
+        shadow_suffix = ""
+        if isinstance(shadow_missions, list):
+            if len(shadow_missions) == 0:
+                shadow_suffix = (
+                    "【影子任务状态】当前**没有**进行中的家长影子任务（与库 active 一致）。"
+                    "多轮历史里若曾讨论过学习任务/影子任务，视为已结束或旧话题；除非家长明确要新布置，否则勿再追问是否还要做之前的任务，勿默认孩子仍有待办。"
+                    "zhiban 长期记忆若与上述冲突，以本段为准。"
+                )
+            else:
+                shadow_suffix = (
+                    f"【影子任务状态】当前有 {len(shadow_missions)} 条进行中的家长影子任务，"
+                    "条目与 id以 environment_context.shadow_missions 为准；仅可围绕这些任务引导。"
+                    "不要把对话历史里已结束或过期的任务当成仍有效。"
+                )
+
         # 孩子近期对话改由 zhiban-agent 按需拉取（见 environment_context 中的 agent_id、mac_address）
-        if not parts:
+        if not parts and not shadow_suffix:
             self.logger.bind(tag=TAG).debug("家长聊天无孩子信息可注入，environment_context=%s", environment_context)
             return text
 
-        prefix = "【助手已知信息】" + "；".join(parts)
+        prefix = ""
+        if parts:
+            prefix = "【助手已知信息】" + "；".join(parts)
+        if shadow_suffix:
+            prefix = (prefix + "。" if prefix else "") + shadow_suffix
         prefix += "。若家长询问孩子近期聊天内容，请调用 manager-api 的 GET /config/parent/child-chat-history（参数 agent_id、mac_address 已传入 environment_context）拉取真实对话后回答，严禁编造。"
         prefix += (
             "若家长要设置**长期规则**（如不要讲鬼故事），请调用 add_parent_rule；"

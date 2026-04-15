@@ -47,6 +47,25 @@ def _build_messages_from_dialogue(dialogue, max_rounds=MAX_HISTORY_ROUNDS):
     return turns[-max_messages:] if len(turns) > max_messages else turns
 
 
+def _inject_full_user_text_into_messages(messages: list, full_user_text: str) -> None:
+    """
+    zhiban-agent 侧通常用 messages 拼装 LLM 输入；有多轮 history 时可能只认 messages、忽略单独的 text。
+    必须把「成长陪伴 / 家长规则 / 影子任务 + 用户说：…」整段写进**最后一条 user**，
+    否则影子任务只进 environment_context、主模型仍按孩子原话闲聊。
+    """
+    s = (full_user_text or "").strip()
+    if not s:
+        return
+    if not messages:
+        messages.append({"role": "user", "content": s})
+        return
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].get("role") == "user":
+            messages[i] = {"role": "user", "content": s}
+            return
+    messages.append({"role": "user", "content": s})
+
+
 class LLMProvider(LLMProviderBase):
     def __init__(self, config):
         """
@@ -108,7 +127,10 @@ class LLMProvider(LLMProviderBase):
         if isinstance(sms, list) and len(sms) > 0:
             parts = [
                 "【限时影子任务（可多条；priority 越小越优先；须遵守家长规则与安全底线；孩子抗拒则退让；"
-                "当语境表明某条任务已达成时，可调用 complete_shadow_mission(mission_id)，mission_id 须为下列 id 之一）】"
+                "当语境表明某条任务已达成时，可调用 complete_shadow_mission(mission_id)，mission_id 须为下列 id 之一。"
+                "**本条在 user 正文里，你必须按下列待办落实：**只要本轮没有更紧急的安全/情绪问题，"
+                "回复里**至少一句**自然口语提醒孩子（点出标题或说明里的具体事，如穿校服、写作业）；"
+                "可先接孩子话再提醒，禁止整段回复完全不提下列任务。）】"
             ]
             for sm in sms:
                 if not isinstance(sm, dict):
@@ -129,7 +151,8 @@ class LLMProvider(LLMProviderBase):
             sm = env.get("shadow_mission")
             if isinstance(sm, dict) and (sm.get("title") or sm.get("instructions")):
                 sm_lines = [
-                    "【限时影子任务（家长设置，失效前可优先引导；须遵守上文家长规则与安全底线；孩子明显抗拒时退让、不硬推）】",
+                    "【限时影子任务（家长设置，失效前须落实提醒：只要本轮无更紧急事项，回复中要用自然口语点到任务内容，"
+                    "不要只闲聊完全不提；孩子明显抗拒时退让、不硬推；须遵守上文家长规则与安全底线）】",
                     f"标题：{(sm.get('title') or '').strip()}",
                     f"说明：{(sm.get('instructions') or '').strip()}",
                 ]
@@ -142,6 +165,8 @@ class LLMProvider(LLMProviderBase):
 
         # 构建最近 N 轮对话，供 zhiban 理解上下文（谜语提示、故事续讲等）
         messages = _build_messages_from_dialogue(dialogue, self._max_history_rounds)
+        if prefix_blocks:
+            _inject_full_user_text_into_messages(messages, text_to_send)
 
         # 优先流式：调用 /api/chat/stream，逐块 yield，便于 TTS 边收边播
         yielded_any = False

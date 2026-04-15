@@ -102,6 +102,7 @@ public class ParentInternalController {
                 zhibanUserId,
                 device.getAgentId(),
                 mac,
+                device.getId(),
                 StringUtils.defaultString(child.getName(), "").trim(),
                 profile);
         return new Result<ParentZhibanMemoryContextVO>().ok(vo);

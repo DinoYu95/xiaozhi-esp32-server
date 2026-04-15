@@ -50,9 +50,11 @@ import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.service.ParentChatService;
 import xiaozhi.modules.parent.service.ParentDeviceRuleService;
+import xiaozhi.modules.parent.service.ParentShadowMissionService;
 import xiaozhi.modules.sys.service.SysParamsService;
 import xiaozhi.modules.parent.vo.ParentChatHistoryPageVO;
 import xiaozhi.modules.parent.vo.ParentChatMessageVO;
+import xiaozhi.modules.parent.vo.ParentShadowMissionActiveVO;
 
 /**
  * 家长端聊天服务实现
@@ -77,6 +79,7 @@ public class ParentChatServiceImpl implements ParentChatService {
     private final AgentVoicePrintDao agentVoicePrintDao;
     private final ParentUserDao parentUserDao;
     private final ParentDeviceRuleService parentDeviceRuleService;
+    private final ParentShadowMissionService parentShadowMissionService;
     private final RedisUtils redisUtils;
     private final RestTemplate restTemplate;
     private final SysParamsService sysParamsService;
@@ -273,6 +276,11 @@ public class ParentChatServiceImpl implements ParentChatService {
             }
             if (parentRulesList != null && !parentRulesList.isEmpty()) {
                 childContext.put("parent_rules", parentRulesList);
+            }
+            // 与库一致：仅 active 且未过期；空列表表示当前无进行中影子任务，供智伴勿延续历史里的旧任务话题
+            if (child != null) {
+                List<ParentShadowMissionActiveVO> shadowActive = parentShadowMissionService.listActive(deviceId, child.getId());
+                childContext.put("shadow_missions", shadowActive != null ? shadowActive : List.of());
             }
             body.put("environment_context", childContext);
             log.info("家长聊天：传递 parent_nickname={}, child_name={}（任一为空则对应数据未配置）", parentNickname, childContext.get("child_name"));

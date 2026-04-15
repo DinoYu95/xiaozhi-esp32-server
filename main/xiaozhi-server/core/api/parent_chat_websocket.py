@@ -12,8 +12,10 @@ from config.logger import setup_logging
 from config.manage_api_client import (
     validate_parent_token,
     save_parent_chat,
+    fetch_active_shadow_missions_sync,
     fetch_parent_zhiban_memory_context,
 )
+from core.api.parent_chat_handler import ParentChatHandler
 from core.zhibanAgent import ZhibanAgentClient
 
 TAG = __name__
@@ -86,6 +88,13 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
                             "parent_user_id": parent_user_id,
                             "child_id": child_id,
                         }
+                        dev_id = (mem_ctx.get("deviceId") or "").strip()
+                        if dev_id:
+                            environment_context["shadow_missions"] = (
+                                fetch_active_shadow_missions_sync(dev_id, child_id)
+                            )
+                        else:
+                            environment_context["shadow_missions"] = []
                         logger.bind(tag=TAG).info(
                             "家长端 zhiban user_id=%s agentId 已带 environment",
                             user_id,
@@ -100,17 +109,22 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
                         environment_context = {
                             "parent_user_id": parent_user_id,
                             "child_id": child_id,
+                            "shadow_missions": [],
                         }
                         logger.bind(tag=TAG).warning(
                             "未拉到 zhiban-memory-context，仍用 parent_ user_id，长期记忆可能对不齐"
                         )
+                    chat_handler = ParentChatHandler(config)
+                    text_for_zhiban = chat_handler._inject_child_context(
+                        content, environment_context
+                    )
                     loop = asyncio.get_event_loop()
                     queue = asyncio.Queue()
 
                     def _run_stream():
                         try:
                             for chunk in client.stream(
-                                text=content,
+                                text=text_for_zhiban,
                                 session_id=session_id,
                                 user_id=user_id,
                                 speaker_context=speaker_context,

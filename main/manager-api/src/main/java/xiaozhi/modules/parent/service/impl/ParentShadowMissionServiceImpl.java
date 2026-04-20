@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import lombok.RequiredArgsConstructor;
 import xiaozhi.common.exception.ErrorCode;
@@ -17,11 +18,15 @@ import xiaozhi.common.exception.RenException;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dao.ParentShadowMissionDao;
+import xiaozhi.modules.parent.dto.ParentShadowMissionCreateDTO;
+import xiaozhi.modules.parent.dto.ParentShadowMissionUpdateDTO;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentShadowMissionEntity;
 import xiaozhi.modules.parent.service.ParentShadowMissionService;
 import xiaozhi.modules.parent.vo.ParentShadowMissionActiveVO;
+import xiaozhi.modules.parent.vo.ParentShadowMissionDetailVO;
+import xiaozhi.modules.parent.vo.ParentShadowMissionPageVO;
 import xiaozhi.modules.parent.vo.ParentShadowMissionUpsertResultVO;
 
 @Service
@@ -203,6 +208,197 @@ public class ParentShadowMissionServiceImpl implements ParentShadowMissionServic
         parentShadowMissionDao.updateById(patch);
     }
 
+    @Override
+    public List<ParentShadowMissionActiveVO> listActiveForParent(Long parentUserId, Long childId) {
+        if (parentUserId == null || childId == null) {
+            throw new RenException("参数不完整");
+        }
+        DeviceChildEntity child = deviceChildDao.selectById(childId);
+        if (child == null) {
+            throw new RenException("孩子不存在");
+        }
+        String deviceId = child.getDeviceId();
+        if (StringUtils.isBlank(deviceId)) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        ensureParentCanAccessChild(parentUserId, deviceId);
+        return listActive(deviceId, childId);
+    }
+
+    @Override
+    public ParentShadowMissionPageVO pageForParent(
+            Long parentUserId, Long childId, String status, int page, int pageSize) {
+        if (parentUserId == null || childId == null) {
+            throw new RenException("参数不完整");
+        }
+        ensureParentCanAccessChildByChildId(parentUserId, childId);
+        int p = Math.max(1, page);
+        int size = pageSize <= 0 ? 20 : Math.min(pageSize, 100);
+        LambdaQueryWrapper<ParentShadowMissionEntity> w = new LambdaQueryWrapper<ParentShadowMissionEntity>()
+                .eq(ParentShadowMissionEntity::getChildId, childId);
+        if (StringUtils.isNotBlank(status)) {
+            w.eq(ParentShadowMissionEntity::getStatus, status.trim());
+        }
+        w.orderByDesc(ParentShadowMissionEntity::getId);
+        Page<ParentShadowMissionEntity> pageReq = new Page<>(p, size);
+        Page<ParentShadowMissionEntity> result = parentShadowMissionDao.selectPage(pageReq, w);
+        Date now = new Date();
+        List<ParentShadowMissionDetailVO> list = new ArrayList<>();
+        for (ParentShadowMissionEntity e : result.getRecords()) {
+            if (ParentShadowMissionEntity.STATUS_ACTIVE.equals(e.getStatus())
+                    && e.getEndsAt() != null
+                    && e.getEndsAt().before(now)) {
+                ParentShadowMissionEntity patch = new ParentShadowMissionEntity();
+                patch.setId(e.getId());
+                patch.setStatus(ParentShadowMissionEntity.STATUS_EXPIRED);
+                parentShadowMissionDao.updateById(patch);
+                e.setStatus(ParentShadowMissionEntity.STATUS_EXPIRED);
+            }
+            list.add(toDetailVO(e));
+        }
+        long total = result.getTotal();
+        boolean hasMore = (long) p * size < total;
+        return new ParentShadowMissionPageVO(list, total, p, size, hasMore);
+    }
+
+    @Override
+    public ParentShadowMissionDetailVO getDetailForParent(Long parentUserId, Long missionId) {
+        if (parentUserId == null || missionId == null) {
+            throw new RenException("参数不完整");
+        }
+        ParentShadowMissionEntity e = parentShadowMissionDao.selectById(missionId);
+        if (e == null) {
+            throw new RenException("影子任务不存在");
+        }
+        ensureParentCanAccessChildByChildId(parentUserId, e.getChildId());
+        Date now = new Date();
+        if (ParentShadowMissionEntity.STATUS_ACTIVE.equals(e.getStatus())
+                && e.getEndsAt() != null
+                && e.getEndsAt().before(now)) {
+            ParentShadowMissionEntity patch = new ParentShadowMissionEntity();
+            patch.setId(e.getId());
+            patch.setStatus(ParentShadowMissionEntity.STATUS_EXPIRED);
+            parentShadowMissionDao.updateById(patch);
+            e.setStatus(ParentShadowMissionEntity.STATUS_EXPIRED);
+        }
+        return toDetailVO(e);
+    }
+
+    @Override
+    public ParentShadowMissionUpsertResultVO createForParent(
+            Long parentUserId, ParentShadowMissionCreateDTO dto) {
+        if (dto == null || dto.getChildId() == null) {
+            throw new RenException("孩子不能为空");
+        }
+        int dm = dto.getDurationMinutes() != null ? dto.getDurationMinutes() : 30;
+        return upsert(
+                parentUserId,
+                dto.getChildId(),
+                dto.getTitle(),
+                dto.getInstructions(),
+                dm);
+    }
+
+    @Override
+    public void updateForParent(Long parentUserId, Long missionId, ParentShadowMissionUpdateDTO dto) {
+        if (parentUserId == null || missionId == null || dto == null) {
+            throw new RenException("参数不完整");
+        }
+        ParentShadowMissionEntity e = parentShadowMissionDao.selectById(missionId);
+        if (e == null) {
+            throw new RenException("影子任务不存在");
+        }
+        ensureParentCanAccessChildByChildId(parentUserId, e.getChildId());
+        if (!ParentShadowMissionEntity.STATUS_ACTIVE.equals(e.getStatus())) {
+            throw new RenException("仅进行中的任务可编辑");
+        }
+        Date now = new Date();
+        if (e.getEndsAt() != null && e.getEndsAt().before(now)) {
+            ParentShadowMissionEntity patch = new ParentShadowMissionEntity();
+            patch.setId(e.getId());
+            patch.setStatus(ParentShadowMissionEntity.STATUS_EXPIRED);
+            parentShadowMissionDao.updateById(patch);
+            throw new RenException("任务已过期，请新建任务");
+        }
+        boolean touchTitle = dto.getTitle() != null;
+        boolean touchIns = dto.getInstructions() != null;
+        boolean touchDm = dto.getDurationMinutes() != null;
+        if (!touchTitle && !touchIns && !touchDm) {
+            throw new RenException("至少填写一项要修改的内容");
+        }
+        ParentShadowMissionEntity patch = new ParentShadowMissionEntity();
+        patch.setId(e.getId());
+        patch.setUpdateTime(now);
+        if (touchTitle) {
+            String t = StringUtils.trimToEmpty(dto.getTitle());
+            if (StringUtils.isBlank(t)) {
+                throw new RenException("标题不能为空");
+            }
+            if (t.length() > TITLE_MAX) {
+                throw new RenException("标题不超过" + TITLE_MAX + "字");
+            }
+            patch.setTitle(t);
+        }
+        if (touchIns) {
+            String ins = StringUtils.trimToEmpty(dto.getInstructions());
+            if (StringUtils.isBlank(ins)) {
+                throw new RenException("说明不能为空");
+            }
+            if (ins.length() > INSTRUCTIONS_MAX) {
+                throw new RenException("说明不超过" + INSTRUCTIONS_MAX + "字");
+            }
+            patch.setInstructions(ins);
+        }
+        if (touchDm) {
+            int dm = dto.getDurationMinutes();
+            if (dm < DURATION_MIN) {
+                dm = DURATION_MIN;
+            }
+            if (dm > DURATION_MAX) {
+                dm = DURATION_MAX;
+            }
+            patch.setEndsAt(addMinutes(now, dm));
+        }
+        parentShadowMissionDao.updateById(patch);
+    }
+
+    @Override
+    public void cancelOneForParent(Long parentUserId, Long missionId) {
+        if (parentUserId == null || missionId == null) {
+            throw new RenException("参数不完整");
+        }
+        ParentShadowMissionEntity e = parentShadowMissionDao.selectById(missionId);
+        if (e == null) {
+            throw new RenException("影子任务不存在");
+        }
+        ensureParentCanAccessChildByChildId(parentUserId, e.getChildId());
+        if (!ParentShadowMissionEntity.STATUS_ACTIVE.equals(e.getStatus())) {
+            throw new RenException("仅进行中的任务可取消");
+        }
+        ParentShadowMissionEntity patch = new ParentShadowMissionEntity();
+        patch.setId(e.getId());
+        patch.setStatus(ParentShadowMissionEntity.STATUS_CANCELLED);
+        patch.setUpdateTime(new Date());
+        parentShadowMissionDao.updateById(patch);
+    }
+
+    @Override
+    public void cancelAllForParent(Long parentUserId, Long childId) {
+        cancel(parentUserId, childId);
+    }
+
+    private void ensureParentCanAccessChildByChildId(Long parentUserId, Long childId) {
+        DeviceChildEntity child = deviceChildDao.selectById(childId);
+        if (child == null) {
+            throw new RenException("孩子不存在");
+        }
+        String deviceId = child.getDeviceId();
+        if (StringUtils.isBlank(deviceId)) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        ensureParentCanAccessChild(parentUserId, deviceId);
+    }
+
     private void ensureParentCanAccessChild(Long parentUserId, String deviceId) {
         String normalized = deviceId.replace(":", "_").toLowerCase();
         ParentDeviceBindingEntity binding = parentDeviceBindingDao.selectOne(
@@ -230,5 +426,20 @@ public class ParentShadowMissionServiceImpl implements ParentShadowMissionServic
                 e.getInstructions(),
                 e.getEndsAt(),
                 pri);
+    }
+
+    private static ParentShadowMissionDetailVO toDetailVO(ParentShadowMissionEntity e) {
+        int pri = e.getPriority() != null ? e.getPriority() : 0;
+        return new ParentShadowMissionDetailVO(
+                e.getId(),
+                e.getDeviceId(),
+                e.getChildId(),
+                e.getTitle(),
+                e.getInstructions(),
+                e.getEndsAt(),
+                pri,
+                e.getStatus(),
+                e.getCreateTime(),
+                e.getUpdateTime());
     }
 }

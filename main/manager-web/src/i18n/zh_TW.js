@@ -24,6 +24,7 @@ export default {
   'header.serverSideManagement': '服務端管理',
   'header.featureManagement': '系統功能配置',
   'header.skillManagement': '技能管理',
+  'header.childRiskManagement': '兒童風險預警',
   'header.changePassword': '修改密碼',
   'header.logout': '退出登錄',
   'header.searchPlaceholder': '輸入名稱或mac搜索',

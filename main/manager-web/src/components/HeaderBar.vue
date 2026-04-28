@@ -91,7 +91,8 @@
             $route.path === '/ota-management' ||
             $route.path === '/user-management' ||
             $route.path === '/feature-management' ||
-            $route.path === '/skill-management',
+            $route.path === '/skill-management' ||
+            $route.path === '/child-risk-management',
         }" @visible-change="handleParamDropdownVisibleChange">
           <span class="el-dropdown-link">
             <img loading="lazy" alt="" src="@/assets/header/param_management.png" :style="{
@@ -104,7 +105,8 @@
                   $route.path === '/ota-management' ||
                   $route.path === '/user-management' ||
                   $route.path === '/feature-management' ||
-                  $route.path === '/skill-management'
+                  $route.path === '/skill-management' ||
+                  $route.path === '/child-risk-management'
                   ? 'brightness(0) invert(1)'
                   : 'None',
             }" />
@@ -138,6 +140,9 @@
               </el-dropdown-item>
             <el-dropdown-item @click.native="goSkillManagement">
               {{ $t("header.skillManagement") }}
+            </el-dropdown-item>
+            <el-dropdown-item @click.native="goChildRiskManagement">
+              {{ $t("header.childRiskManagement") }}
             </el-dropdown-item>
           </el-dropdown-menu>
         </el-dropdown>
@@ -380,6 +385,9 @@ export default {
     },
     goSkillManagement() {
       this.$router.push("/skill-management");
+    },
+    goChildRiskManagement() {
+      this.$router.push("/child-risk-management");
     },
     // 加载功能状态
     async loadFeatureStatus() {

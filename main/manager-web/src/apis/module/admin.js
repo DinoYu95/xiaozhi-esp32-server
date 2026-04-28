@@ -165,6 +165,98 @@ export default {
                     this.sendWsServerAction(data, callback)
                 })
             }).send();
-    }
+    },
+
+    /** 儿童风险：全局配置 */
+    getChildRiskConfig(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/child-risk/config`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getChildRiskConfig(callback)
+                })
+            }).send()
+    },
+    saveChildRiskConfig(data, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/child-risk/config`)
+            .method('PUT')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.saveChildRiskConfig(data, callback)
+                })
+            }).send()
+    },
+    getChildRiskEventPage(page, limit, callback) {
+        const q = new URLSearchParams({
+            page: page || 1,
+            limit: limit || 20,
+        }).toString()
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/child-risk/event/page?${q}`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getChildRiskEventPage(page, limit, callback)
+                })
+            }).send()
+    },
+    listChildRiskRules(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/child-risk/rule/list`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.listChildRiskRules(callback)
+                })
+            }).send()
+    },
+    saveChildRiskRule(data, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/child-risk/rule`)
+            .method('POST')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.saveChildRiskRule(data, callback)
+                })
+            }).send()
+    },
+    deleteChildRiskRule(id, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/child-risk/rule?id=${encodeURIComponent(id)}`)
+            .method('DELETE')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.deleteChildRiskRule(id, callback)
+                })
+            }).send()
+    },
 
 }

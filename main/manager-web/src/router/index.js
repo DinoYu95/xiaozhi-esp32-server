@@ -110,6 +110,17 @@ const routes = [
     }
   },
   {
+    path: '/child-risk-management',
+    name: 'ChildRiskManagement',
+    component: function () {
+      return import('../views/ChildRiskManagement.vue')
+    },
+    meta: {
+      requiresAuth: true,
+      title: '儿童风险预警'
+    }
+  },
+  {
     path: '/knowledge-file-upload',
     name: 'KnowledgeFileUpload',
     component: function () {

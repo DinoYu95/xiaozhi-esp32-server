@@ -908,6 +908,10 @@ class ConnectionHandler:
             "environment_description": getattr(self, "environment_description", None) or "",
             "device_reported_context": getattr(self, "device_reported_context", None) or {},
         }
+        # 智伴 / manager-api（儿童风险等）需稳定设备标识
+        dev = getattr(self, "device_id", None)
+        if dev:
+            ctx["device_id"] = dev
         # 家长规则供 ZhibanAgent 注入到 prompt（ZhibanAgent 不接收 xiaozhi 的 system prompt）
         parent_rules = self.config.get("parent_rules") or []
         if parent_rules:

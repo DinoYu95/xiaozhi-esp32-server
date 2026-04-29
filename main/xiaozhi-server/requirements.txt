@@ -25,7 +25,8 @@ cozepy==0.20.0
 mem0ai==1.0.0
 bs4==0.0.2
 modelscope==1.32.0
-sherpa_onnx==1.12.19
+# 1.12.19 已从 PyPI 下架；Docker/python3.10 可用 1.12.x（requires_python>=3.7）
+sherpa_onnx==1.12.40
 mcp==1.22.0
 cnlunar==0.2.0
 PySocks==1.7.1

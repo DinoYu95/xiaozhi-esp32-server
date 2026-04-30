@@ -52,7 +52,7 @@ export default {
   'childRisk.rule.name': 'Name',
   'childRisk.rule.pattern': 'Pattern',
   'childRisk.rule.patternKeywordAltTip':
-    'KEYWORD: substring match. List variants with "|", fullwidth "｜", or newlines — any hit triggers (no synonym inference). Use REGEX for complex patterns.',
+    'KEYWORD: substring match; use "|", fullwidth "｜", or newlines. Patterns like 「同学都…」also match 「同学们都…」for common prefixes (同学/朋友/老师等 × 们都). REGEX for other cases.',
   'childRisk.rule.riskLevel': 'Risk level',
   'childRisk.rule.riskLevelTip': '1 = most severe, 3 = mildest',
   'childRisk.rule.category': 'Category',

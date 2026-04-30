@@ -52,7 +52,7 @@ export default {
   'childRisk.rule.name': '名称',
   'childRisk.rule.pattern': '模式',
   'childRisk.rule.patternKeywordAltTip':
-    'KEYWORD：子串命中。多种说法可用半角 | 或 ｜ 或换行隔开，任一出现即触发（无语义推断；更复杂请用 REGEX）。',
+    'KEYWORD：子串命中。可用 |、｜ 或换行列表多种说法。若日常说「同学们都…」而你规则写「同学都…」（少「们」），也会尽量等价匹配。',
   'childRisk.rule.riskLevel': '风险级别',
   'childRisk.rule.riskLevelTip': '1 最严重，3 最轻',
   'childRisk.rule.category': '分类',

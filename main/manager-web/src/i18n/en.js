@@ -51,6 +51,8 @@ export default {
   'childRisk.rule.add': 'New rule',
   'childRisk.rule.name': 'Name',
   'childRisk.rule.pattern': 'Pattern',
+  'childRisk.rule.patternKeywordAltTip':
+    'KEYWORD: substring match. List variants with "|", fullwidth "｜", or newlines — any hit triggers (no synonym inference). Use REGEX for complex patterns.',
   'childRisk.rule.riskLevel': 'Risk level',
   'childRisk.rule.riskLevelTip': '1 = most severe, 3 = mildest',
   'childRisk.rule.category': 'Category',

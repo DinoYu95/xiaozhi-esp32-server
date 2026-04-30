@@ -51,6 +51,8 @@ export default {
   'childRisk.rule.add': '新建规则',
   'childRisk.rule.name': '名称',
   'childRisk.rule.pattern': '模式',
+  'childRisk.rule.patternKeywordAltTip':
+    'KEYWORD：子串命中。多种说法可用半角 | 或 ｜ 或换行隔开，任一出现即触发（无语义推断；更复杂请用 REGEX）。',
   'childRisk.rule.riskLevel': '风险级别',
   'childRisk.rule.riskLevelTip': '1 最严重，3 最轻',
   'childRisk.rule.category': '分类',

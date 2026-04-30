@@ -108,6 +108,7 @@
         </el-form-item>
         <el-form-item :label="$t('childRisk.rule.pattern')" required>
           <el-input v-model="ruleForm.pattern" type="textarea" :rows="3" maxlength="512" show-word-limit />
+          <span class="form-tip">{{ $t('childRisk.rule.patternKeywordAltTip') }}</span>
         </el-form-item>
         <el-form-item :label="$t('childRisk.rule.riskLevel')" required>
           <el-input-number v-model="ruleForm.riskLevel" :min="1" :max="3" />

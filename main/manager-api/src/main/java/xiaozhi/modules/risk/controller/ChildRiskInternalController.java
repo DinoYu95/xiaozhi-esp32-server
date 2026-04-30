@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import xiaozhi.common.utils.Result;
 import xiaozhi.modules.risk.dto.ChildRiskSignalDTO;
 import xiaozhi.modules.risk.service.ChildRiskService;
+import xiaozhi.modules.risk.vo.ChildRiskAgentRuntimeVO;
 import xiaozhi.modules.risk.vo.ChildRiskRulePublicVO;
 import xiaozhi.modules.risk.vo.ChildRiskSignalResultVO;
 
@@ -25,12 +26,20 @@ public class ChildRiskInternalController {
 
     private final ChildRiskService childRiskService;
 
+    /** 智伴拉取：每 N 轮扫描、总开关（与参数页 evalEveryNRounds 一致） */
+    @GetMapping("/runtime")
+    public Result<ChildRiskAgentRuntimeVO> runtime() {
+        return new Result<ChildRiskAgentRuntimeVO>().ok(childRiskService.getAgentRiskRuntime());
+    }
+
     @PostMapping("/signal")
     public Result<ChildRiskSignalResultVO> signal(@RequestBody ChildRiskSignalDTO body) {
         ChildRiskSignalResultVO vo = childRiskService.receiveSignal(body);
         log.info(
-                "POST /config/child/risk/signal childId={} needAlert={} suppressed={} eventId={} reason={}",
+                "POST /config/child/risk/signal childId={} riskLevel={} category={} needAlert={} suppressed={} eventId={} reason={}",
                 body != null ? body.getChildId() : null,
+                body != null ? body.getRiskLevel() : null,
+                body != null ? body.getCategory() : null,
                 body != null ? body.getNeedAlert() : null,
                 vo != null && vo.isSuppressed(),
                 vo != null ? vo.getEventId() : null,

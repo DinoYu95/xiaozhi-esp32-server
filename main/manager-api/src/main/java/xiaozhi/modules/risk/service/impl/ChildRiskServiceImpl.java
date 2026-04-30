@@ -34,6 +34,7 @@ import xiaozhi.modules.risk.entity.ChildRiskOutboxEntity;
 import xiaozhi.modules.risk.entity.ChildRiskRuleEntity;
 import xiaozhi.modules.risk.entity.ParentRiskNotificationEntity;
 import xiaozhi.modules.risk.service.ChildRiskService;
+import xiaozhi.modules.risk.vo.ChildRiskAgentRuntimeVO;
 import xiaozhi.modules.risk.vo.ChildRiskConfigVO;
 import xiaozhi.modules.risk.vo.ChildRiskEventAdminVO;
 import xiaozhi.modules.risk.vo.ChildRiskRulePublicVO;
@@ -105,13 +106,38 @@ public class ChildRiskServiceImpl implements ChildRiskService {
     @Override
     public ChildRiskSignalResultVO receiveSignal(ChildRiskSignalDTO dto) {
         RiskCfg cfg = loadCfg();
+        Long ingressChild =
+                dto == null ? null : dto.getChildId();
+        String ingressDev =
+                dto == null ? null : dto.getDeviceId();
+        Integer ingressLevel = dto == null ? null : dto.getRiskLevel();
+        Boolean ingressNeed = dto == null ? null : dto.getNeedAlert();
+        String ingressCat = dto == null ? null : dto.getCategory();
+        String ingressSrc = dto == null ? null : dto.getSource();
+
+        log.info(
+                "[child_risk signal] ingress childId={} deviceId={} riskLevel={} needAlert={} category={} source={}; "
+                        + "cfg(enabled={}, notifyIfRiskLevelLte={}, cooldownMinutes={}, evalEveryNRounds={})",
+                ingressChild,
+                ingressDev,
+                ingressLevel,
+                ingressNeed,
+                ingressCat,
+                ingressSrc,
+                cfg.isEnabled(),
+                cfg.getNotifyIfRiskLevelLte(),
+                cfg.getCooldownMinutes(),
+                cfg.getEvalEveryNRounds());
+
         if (!cfg.enabled) {
+            log.info("[child_risk signal] outcome=DISABLED (global switch off)，不写 event/outbox");
             return new ChildRiskSignalResultVO(null, true, "DISABLED");
         }
         if (dto == null || dto.getChildId() == null || StringUtils.isBlank(dto.getDeviceId())) {
             throw new RenException(ErrorCode.PARAMS_GET_ERROR, "childId、deviceId 必填");
         }
         if (dto.getNeedAlert() == null || !Boolean.TRUE.equals(dto.getNeedAlert())) {
+            log.info("[child_risk signal] outcome=NO_ALERT_FLAG childId={} needAlert=false，不写 event/outbox", dto.getChildId());
             return new ChildRiskSignalResultVO(null, true, "NO_ALERT_FLAG");
         }
         int level = dto.getRiskLevel() == null ? 3 : Math.max(1, Math.min(3, dto.getRiskLevel()));
@@ -129,6 +155,10 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         }
 
         if (level > cfg.notifyIfRiskLevelLte) {
+            log.info(
+                    "[child_risk signal] branch=LEVEL_FILTER level={} gt notifyIfRiskLevelLte={} → 写入 SUPPRESSED 行",
+                    level,
+                    cfg.getNotifyIfRiskLevelLte());
             return insertSuppressed(child, dto, level, category, source, "LEVEL_FILTER");
         }
 
@@ -145,6 +175,11 @@ public class ChildRiskServiceImpl implements ChildRiskService {
                         .orderByDesc(ChildRiskEventEntity::getCreateTime)
                         .last("LIMIT 1"));
         if (last != null) {
+            log.info(
+                    "[child_risk signal] branch=COOLDOWN childId={} category={} lastEventId={} → 写入 SUPPRESSED",
+                    dto.getChildId(),
+                    category,
+                    last.getId());
             return insertSuppressed(child, dto, level, category, source, "COOLDOWN");
         }
 
@@ -173,6 +208,13 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         ob.setUpdateTime(new Date());
         childRiskOutboxDao.insert(ob);
 
+        log.info(
+                "[child_risk signal] outcome=WAIT_NOTIFY eventId={} outboxId={} childId={} category={} level={} status=SUPPRESSED?=false → 待发小程序通知",
+                ev.getId(),
+                ob.getId(),
+                dto.getChildId(),
+                category,
+                level);
         return new ChildRiskSignalResultVO(ev.getId(), false, null);
     }
 
@@ -226,6 +268,13 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         ev.setSuppressedReason(reason);
         ev.setCreateTime(new Date());
         childRiskEventDao.insert(ev);
+        log.info(
+                "[child_risk signal] outcome={} persisted eventId={} status=SUPPRESSED childId={} category={} level={}",
+                reason,
+                ev.getId(),
+                dto.getChildId(),
+                category,
+                level);
         return new ChildRiskSignalResultVO(ev.getId(), true, reason);
     }
 
@@ -258,6 +307,16 @@ public class ChildRiskServiceImpl implements ChildRiskService {
     }
 
     @Override
+    public ChildRiskAgentRuntimeVO getAgentRiskRuntime() {
+        RiskCfg c = loadCfg();
+        ChildRiskAgentRuntimeVO v = new ChildRiskAgentRuntimeVO();
+        v.setEnabled(c.isEnabled());
+        int ev = c.getEvalEveryNRounds();
+        v.setEvalEveryNRounds(Math.max(1, Math.min(99, ev <= 0 ? 3 : ev)));
+        return v;
+    }
+
+    @Override
     public ChildRiskConfigVO getAdminChildRiskConfig() {
         RiskCfg c = loadCfg();
         ChildRiskConfigVO v = new ChildRiskConfigVO();
@@ -283,6 +342,7 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         if (n <= 0) {
             throw new RenException(ErrorCode.PARAMS_GET_ERROR, "未找到参数 server.child_risk_config，请确认已执行数据库迁移");
         }
+        log.info("[child_risk config] admin saved {}", json);
     }
 
     private ChildRiskRulePublicVO toRulePub(ChildRiskRuleEntity e) {

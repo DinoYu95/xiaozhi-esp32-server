@@ -6,6 +6,7 @@ import xiaozhi.modules.risk.dto.ChildRiskConfigSaveDTO;
 import xiaozhi.modules.risk.dto.ChildRiskRuleSaveDTO;
 import xiaozhi.modules.risk.dto.ChildRiskSignalDTO;
 import xiaozhi.common.page.PageData;
+import xiaozhi.modules.risk.vo.ChildRiskAgentRuntimeVO;
 import xiaozhi.modules.risk.vo.ChildRiskConfigVO;
 import xiaozhi.modules.risk.vo.ChildRiskEventAdminVO;
 import xiaozhi.modules.risk.vo.ChildRiskRulePublicVO;
@@ -23,6 +24,8 @@ public interface ChildRiskService {
     void verifyParentOwnsChild(Long parentUserId, Long childId);
 
     List<ChildRiskRulePublicVO> listEnabledRulesForAgent();
+
+    ChildRiskAgentRuntimeVO getAgentRiskRuntime();
 
     PageData<ChildRiskEventAdminVO> pageEvents(int page, int limit);
 

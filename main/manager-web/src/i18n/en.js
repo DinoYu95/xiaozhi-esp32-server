@@ -47,7 +47,7 @@ export default {
   'childRisk.config.notifyIfRiskLevelLte': 'Notify up to level',
   'childRisk.config.notifyLevelTip': 'Level 1 is most severe, 3 mildest. If set to 3, levels 1–3 may notify (subject to cooldown).',
   'childRisk.config.evalEveryNRounds': 'Eval every N rounds',
-  'childRisk.config.evalTip': 'Optional: align zhiban-agent CHILD_RISK_EVAL_EVERY_N with this value',
+  'childRisk.config.evalTip': 'zhiban pulls this from GET /config/child/risk/runtime (~45s cache). Env CHILD_RISK_EVAL_EVERY_N overrides when set.',
   'childRisk.rule.add': 'New rule',
   'childRisk.rule.name': 'Name',
   'childRisk.rule.pattern': 'Pattern',

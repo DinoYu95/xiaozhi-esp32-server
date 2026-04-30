@@ -47,7 +47,7 @@ export default {
   'childRisk.config.notifyIfRiskLevelLte': '通知级别上限',
   'childRisk.config.notifyLevelTip': '风险级别 1 最严重，3 最轻；若填 3 则 1～3 级均可通知家长（仍受阈值与冷却约束）',
   'childRisk.config.evalEveryNRounds': '评估间隔（轮）',
-  'childRisk.config.evalTip': '智伴侧按会话每 N 轮做一次本地规则扫描（需与 agent 环境对齐）',
+  'childRisk.config.evalTip': '智伴会定期向智控台 GET /config/child/risk/runtime 读取此值（约 45 秒缓存）。若容器内设置了环境变量 CHILD_RISK_EVAL_EVERY_N，则优先用环境变量。',
   'childRisk.rule.add': '新建规则',
   'childRisk.rule.name': '名称',
   'childRisk.rule.pattern': '模式',

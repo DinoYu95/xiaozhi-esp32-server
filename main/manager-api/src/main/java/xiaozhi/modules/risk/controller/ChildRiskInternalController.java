@@ -28,6 +28,13 @@ public class ChildRiskInternalController {
     @PostMapping("/signal")
     public Result<ChildRiskSignalResultVO> signal(@RequestBody ChildRiskSignalDTO body) {
         ChildRiskSignalResultVO vo = childRiskService.receiveSignal(body);
+        log.info(
+                "POST /config/child/risk/signal childId={} needAlert={} suppressed={} eventId={} reason={}",
+                body != null ? body.getChildId() : null,
+                body != null ? body.getNeedAlert() : null,
+                vo != null && vo.isSuppressed(),
+                vo != null ? vo.getEventId() : null,
+                vo != null ? vo.getSuppressedReason() : null);
         return new Result<ChildRiskSignalResultVO>().ok(vo);
     }
 

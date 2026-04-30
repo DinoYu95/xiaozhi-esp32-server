@@ -943,10 +943,11 @@ class ConnectionHandler:
         if not device_id or owner_child_id is None:
             return
         missions = self._get_shadow_missions_cached(device_id, int(owner_child_id))
+        # 无论是否有影子任务，主孩子都应有稳定 child_id（智伴报送风险 / API 校验依赖）
+        ctx["child_id"] = int(owner_child_id)
         if missions:
             ctx["shadow_missions"] = missions
             ctx["shadow_mission"] = missions[0]
-            ctx["child_id"] = int(owner_child_id)
             self.logger.bind(tag=TAG).info(
                 "environment_context 含 shadow_missions: count=%s first_id=%s",
                 len(missions),

@@ -16,6 +16,7 @@ import xiaozhi.common.exception.RenException;
 import xiaozhi.common.utils.Result;
 import xiaozhi.modules.parent.context.ParentContext;
 import xiaozhi.modules.risk.service.ChildRiskService;
+import xiaozhi.modules.risk.vo.ParentRiskNotificationDetailVO;
 import xiaozhi.modules.risk.vo.ParentRiskNotificationPageVO;
 
 @RestController
@@ -52,6 +53,14 @@ public class ParentRiskAlertController {
             @RequestParam(required = false) Long childId) {
         Long pid = requirePid();
         return new Result<Long>().ok(childRiskService.countUnreadForParent(pid, childId));
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "单条风险提示详情（含 category、reasonPublic、会话等）")
+    public Result<ParentRiskNotificationDetailVO> detail(@PathVariable("id") Long id) {
+        Long pid = requirePid();
+        return new Result<ParentRiskNotificationDetailVO>()
+                .ok(childRiskService.getRiskNotificationDetail(pid, id));
     }
 
     @PostMapping("/{id}/read")

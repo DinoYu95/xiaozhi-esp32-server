@@ -39,6 +39,7 @@ import xiaozhi.modules.risk.vo.ChildRiskConfigVO;
 import xiaozhi.modules.risk.vo.ChildRiskEventAdminVO;
 import xiaozhi.modules.risk.vo.ChildRiskRulePublicVO;
 import xiaozhi.modules.risk.vo.ChildRiskSignalResultVO;
+import xiaozhi.modules.risk.vo.ParentRiskNotificationDetailVO;
 import xiaozhi.modules.risk.vo.ParentRiskNotificationPageVO;
 import xiaozhi.modules.risk.vo.ParentRiskNotificationVO;
 import xiaozhi.modules.sys.service.SysParamsService;
@@ -485,6 +486,39 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         p.setId(n.getId());
         p.setIsRead(1);
         parentRiskNotificationDao.updateById(p);
+    }
+
+    @Override
+    public ParentRiskNotificationDetailVO getRiskNotificationDetail(
+            Long parentUserId, Long notificationId) {
+        ParentRiskNotificationEntity n = parentRiskNotificationDao.selectById(notificationId);
+        if (n == null || !parentUserId.equals(n.getParentUserId())) {
+            throw new RenException(ErrorCode.PARAMS_GET_ERROR, "通知不存在或无权限");
+        }
+        verifyParentOwnsChild(parentUserId, n.getChildId());
+
+        ParentRiskNotificationDetailVO vo = new ParentRiskNotificationDetailVO();
+        vo.setId(n.getId());
+        vo.setChildId(n.getChildId());
+        vo.setEventId(n.getEventId());
+        vo.setTitle(n.getTitle());
+        vo.setSummary(n.getSummary());
+        vo.setRiskLevel(n.getRiskLevel());
+        vo.setIsRead(n.getIsRead());
+        vo.setCreateTime(n.getCreateTime());
+
+        if (n.getEventId() != null) {
+            ChildRiskEventEntity ev = childRiskEventDao.selectById(n.getEventId());
+            if (ev != null) {
+                vo.setCategory(ev.getCategory());
+                vo.setReasonPublic(ev.getReasonPublic());
+                vo.setSessionId(ev.getSessionId());
+                vo.setSource(ev.getSource());
+                vo.setEventStatus(ev.getStatus());
+                vo.setEventCreateTime(ev.getCreateTime());
+            }
+        }
+        return vo;
     }
 
     /** outbox worker：成功后写「家长小程序」通知列表。 */

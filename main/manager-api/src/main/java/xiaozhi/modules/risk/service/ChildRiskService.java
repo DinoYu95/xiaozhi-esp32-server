@@ -11,6 +11,7 @@ import xiaozhi.modules.risk.vo.ChildRiskConfigVO;
 import xiaozhi.modules.risk.vo.ChildRiskEventAdminVO;
 import xiaozhi.modules.risk.vo.ChildRiskRulePublicVO;
 import xiaozhi.modules.risk.vo.ChildRiskSignalResultVO;
+import xiaozhi.modules.risk.vo.ParentRiskNotificationDetailVO;
 import xiaozhi.modules.risk.vo.ParentRiskNotificationPageVO;
 
 public interface ChildRiskService {
@@ -44,4 +45,7 @@ public interface ChildRiskService {
     long countUnreadForParent(Long parentUserId, Long childId);
 
     void markReadForParent(Long parentUserId, Long notificationId);
+
+    /** 单条通知详情（校验归属当前家长） */
+    ParentRiskNotificationDetailVO getRiskNotificationDetail(Long parentUserId, Long notificationId);
 }

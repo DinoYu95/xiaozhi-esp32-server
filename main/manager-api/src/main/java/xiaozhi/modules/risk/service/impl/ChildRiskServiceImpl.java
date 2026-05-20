@@ -1,5 +1,8 @@
 package xiaozhi.modules.risk.service.impl;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,13 +25,16 @@ import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
+import xiaozhi.modules.risk.dao.ChildRiskEvaluatorDao;
 import xiaozhi.modules.risk.dao.ChildRiskEventDao;
 import xiaozhi.modules.risk.dao.ChildRiskOutboxDao;
 import xiaozhi.modules.risk.dao.ChildRiskRuleDao;
 import xiaozhi.modules.risk.dao.ParentRiskNotificationDao;
 import xiaozhi.modules.risk.dto.ChildRiskConfigSaveDTO;
+import xiaozhi.modules.risk.dto.ChildRiskEvaluatorSaveDTO;
 import xiaozhi.modules.risk.dto.ChildRiskRuleSaveDTO;
 import xiaozhi.modules.risk.dto.ChildRiskSignalDTO;
+import xiaozhi.modules.risk.entity.ChildRiskEvaluatorEntity;
 import xiaozhi.modules.risk.entity.ChildRiskEventEntity;
 import xiaozhi.modules.risk.entity.ChildRiskOutboxEntity;
 import xiaozhi.modules.risk.entity.ChildRiskRuleEntity;
@@ -36,6 +42,8 @@ import xiaozhi.modules.risk.entity.ParentRiskNotificationEntity;
 import xiaozhi.modules.risk.service.ChildRiskService;
 import xiaozhi.modules.risk.vo.ChildRiskAgentRuntimeVO;
 import xiaozhi.modules.risk.vo.ChildRiskConfigVO;
+import xiaozhi.modules.risk.vo.ChildRiskDomainVO;
+import xiaozhi.modules.risk.vo.ChildRiskEvaluatorPublicVO;
 import xiaozhi.modules.risk.vo.ChildRiskEventAdminVO;
 import xiaozhi.modules.risk.vo.ChildRiskRulePublicVO;
 import xiaozhi.modules.risk.vo.ChildRiskSignalResultVO;
@@ -55,6 +63,7 @@ public class ChildRiskServiceImpl implements ChildRiskService {
     private final DeviceChildDao deviceChildDao;
     private final ParentDeviceBindingDao parentDeviceBindingDao;
     private final ChildRiskRuleDao childRiskRuleDao;
+    private final ChildRiskEvaluatorDao childRiskEvaluatorDao;
     private final ChildRiskEventDao childRiskEventDao;
     private final ChildRiskOutboxDao childRiskOutboxDao;
     private final ParentRiskNotificationDao parentRiskNotificationDao;
@@ -66,6 +75,10 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         /** 上报的 risk_level 小于等于该值则通知（1 最严重；设为 3 即 1~3 皆可） */
         private int notifyIfRiskLevelLte = 3;
         private int evalEveryNRounds = 3;
+        private String judgmentMode = "HYBRID";
+        private boolean routerEnabled = true;
+        private int maxDomainsPerRound = 2;
+        private double minConfidenceToAlert = 0.65;
     }
 
     private RiskCfg loadCfg() {
@@ -314,6 +327,12 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         v.setEnabled(c.isEnabled());
         int ev = c.getEvalEveryNRounds();
         v.setEvalEveryNRounds(Math.max(1, Math.min(99, ev <= 0 ? 3 : ev)));
+        v.setJudgmentMode(StringUtils.defaultIfBlank(c.getJudgmentMode(), "HYBRID"));
+        v.setRouterEnabled(c.isRouterEnabled());
+        int md = c.getMaxDomainsPerRound();
+        v.setMaxDomainsPerRound(Math.max(1, Math.min(3, md <= 0 ? 2 : md)));
+        double mc = c.getMinConfidenceToAlert();
+        v.setMinConfidenceToAlert(mc <= 0 ? 0.65 : Math.min(1.0, mc));
         return v;
     }
 
@@ -325,6 +344,10 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         v.setCooldownMinutes(c.getCooldownMinutes());
         v.setNotifyIfRiskLevelLte(c.getNotifyIfRiskLevelLte());
         v.setEvalEveryNRounds(c.getEvalEveryNRounds());
+        v.setJudgmentMode(StringUtils.defaultIfBlank(c.getJudgmentMode(), "HYBRID"));
+        v.setRouterEnabled(c.isRouterEnabled());
+        v.setMaxDomainsPerRound(c.getMaxDomainsPerRound());
+        v.setMinConfidenceToAlert(c.getMinConfidenceToAlert());
         return v;
     }
 
@@ -338,6 +361,13 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         m.put("cooldownMinutes", cd);
         m.put("notifyIfRiskLevelLte", nfl);
         m.put("evalEveryNRounds", ev);
+        String jm = StringUtils.trimToEmpty(dto.getJudgmentMode());
+        m.put("judgmentMode", jm.isEmpty() ? "HYBRID" : jm.toUpperCase());
+        m.put("routerEnabled", dto.getRouterEnabled() == null || Boolean.TRUE.equals(dto.getRouterEnabled()));
+        int md = dto.getMaxDomainsPerRound() == null ? 2 : Math.max(1, Math.min(3, dto.getMaxDomainsPerRound()));
+        m.put("maxDomainsPerRound", md);
+        double mc = dto.getMinConfidenceToAlert() == null ? 0.65 : Math.max(0, Math.min(1, dto.getMinConfidenceToAlert()));
+        m.put("minConfidenceToAlert", mc);
         String json = JsonUtils.toJsonString(m);
         int n = sysParamsService.updateValueByCode(PARAM_KEY, json);
         if (n <= 0) {
@@ -430,6 +460,116 @@ public class ChildRiskServiceImpl implements ChildRiskService {
                 .stream()
                 .map(this::toRulePub)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ChildRiskEvaluatorPublicVO> listEnabledEvaluatorsForAgent() {
+        return childRiskEvaluatorDao
+                .selectList(new LambdaQueryWrapper<ChildRiskEvaluatorEntity>()
+                        .eq(ChildRiskEvaluatorEntity::getStatus, 1)
+                        .orderByAsc(ChildRiskEvaluatorEntity::getSortOrder)
+                        .orderByAsc(ChildRiskEvaluatorEntity::getId))
+                .stream()
+                .map(this::toEvaluatorPub)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ChildRiskEvaluatorPublicVO> listAllEvaluatorsForAdmin() {
+        return childRiskEvaluatorDao
+                .selectList(new LambdaQueryWrapper<ChildRiskEvaluatorEntity>()
+                        .orderByAsc(ChildRiskEvaluatorEntity::getRiskDomain)
+                        .orderByDesc(ChildRiskEvaluatorEntity::getVersion)
+                        .orderByAsc(ChildRiskEvaluatorEntity::getId))
+                .stream()
+                .map(this::toEvaluatorPub)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void saveOrUpdateEvaluator(ChildRiskEvaluatorSaveDTO dto) {
+        Date now = new Date();
+        if (dto.getId() == null) {
+            Long dup = childRiskEvaluatorDao.selectCount(new LambdaQueryWrapper<ChildRiskEvaluatorEntity>()
+                    .eq(ChildRiskEvaluatorEntity::getCode, dto.getCode().trim()));
+            if (dup != null && dup > 0) {
+                throw new RenException("code 已存在");
+            }
+            ChildRiskEvaluatorEntity e = new ChildRiskEvaluatorEntity();
+            fillEvaluatorEntity(dto, e);
+            e.setCreateTime(now);
+            e.setUpdateTime(now);
+            childRiskEvaluatorDao.insert(e);
+            return;
+        }
+        ChildRiskEvaluatorEntity old = childRiskEvaluatorDao.selectById(dto.getId());
+        if (old == null) {
+            throw new RenException("判别器不存在");
+        }
+        fillEvaluatorEntity(dto, old);
+        old.setUpdateTime(now);
+        childRiskEvaluatorDao.updateById(old);
+    }
+
+    @Override
+    public void deleteEvaluator(Long id) {
+        childRiskEvaluatorDao.deleteById(id);
+    }
+
+    @Override
+    public List<ChildRiskDomainVO> listRiskDomains() {
+        List<ChildRiskDomainVO> list = new ArrayList<>();
+        list.add(domain("psychological", "心理情绪",
+                Arrays.asList("emotion_distress", "self_harm_hint", "hopelessness", "anxiety_severe", "other")));
+        list.add(domain("peer_relation", "同伴关系",
+                Arrays.asList("social_exclusion", "bullying", "peer_conflict", "loneliness_school", "other")));
+        list.add(domain("family", "家庭关系",
+                Arrays.asList("family_conflict", "neglect_hint", "abuse_hint", "other")));
+        list.add(domain("school", "学业校园",
+                Arrays.asList("school_stress", "academic_burnout", "school_refusal", "other")));
+        list.add(domain("online_safety", "网络安全",
+                Arrays.asList("grooming_hint", "privacy_leak", "cyberbullying", "inappropriate_content", "other")));
+        list.add(domain("physical_health", "身心健康",
+                Arrays.asList("eating_disorder_hint", "substance_hint", "sleep_severe", "other")));
+        return list;
+    }
+
+    private static ChildRiskDomainVO domain(String code, String name, List<String> cats) {
+        ChildRiskDomainVO v = new ChildRiskDomainVO();
+        v.setCode(code);
+        v.setName(name);
+        v.setSuggestedCategories(cats);
+        return v;
+    }
+
+    private ChildRiskEvaluatorPublicVO toEvaluatorPub(ChildRiskEvaluatorEntity e) {
+        ChildRiskEvaluatorPublicVO v = new ChildRiskEvaluatorPublicVO();
+        v.setId(e.getId());
+        v.setCode(e.getCode());
+        v.setName(e.getName());
+        v.setRiskDomain(e.getRiskDomain());
+        v.setVersion(e.getVersion());
+        v.setModelName(e.getModelName());
+        v.setTemperature(e.getTemperature());
+        v.setTimeoutMs(e.getTimeoutMs());
+        v.setInstructions(e.getInstructions());
+        v.setAllowedCategories(e.getAllowedCategories());
+        v.setSortOrder(e.getSortOrder());
+        return v;
+    }
+
+    private static void fillEvaluatorEntity(ChildRiskEvaluatorSaveDTO dto, ChildRiskEvaluatorEntity e) {
+        e.setCode(dto.getCode().trim());
+        e.setName(dto.getName().trim());
+        e.setRiskDomain(dto.getRiskDomain().trim());
+        e.setVersion(dto.getVersion() == null ? 1 : dto.getVersion());
+        e.setStatus(dto.getStatus());
+        e.setModelName(StringUtils.trimToNull(dto.getModelName()));
+        e.setTemperature(dto.getTemperature() == null ? BigDecimal.ZERO : dto.getTemperature());
+        e.setTimeoutMs(dto.getTimeoutMs() == null ? 45000 : dto.getTimeoutMs());
+        e.setInstructions(dto.getInstructions());
+        e.setAllowedCategories(dto.getAllowedCategories().trim());
+        e.setSortOrder(dto.getSortOrder() == null ? 0 : dto.getSortOrder());
     }
 
     @Override

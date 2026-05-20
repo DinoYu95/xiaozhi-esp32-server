@@ -14,6 +14,8 @@ import xiaozhi.common.utils.Result;
 import xiaozhi.modules.risk.dto.ChildRiskSignalDTO;
 import xiaozhi.modules.risk.service.ChildRiskService;
 import xiaozhi.modules.risk.vo.ChildRiskAgentRuntimeVO;
+import xiaozhi.modules.risk.vo.ChildRiskDomainVO;
+import xiaozhi.modules.risk.vo.ChildRiskEvaluatorPublicVO;
 import xiaozhi.modules.risk.vo.ChildRiskRulePublicVO;
 import xiaozhi.modules.risk.vo.ChildRiskSignalResultVO;
 
@@ -51,5 +53,15 @@ public class ChildRiskInternalController {
     @GetMapping("/rules")
     public Result<List<ChildRiskRulePublicVO>> rules() {
         return new Result<List<ChildRiskRulePublicVO>>().ok(childRiskService.listEnabledRulesForAgent());
+    }
+
+    @GetMapping("/evaluators")
+    public Result<List<ChildRiskEvaluatorPublicVO>> evaluators() {
+        return new Result<List<ChildRiskEvaluatorPublicVO>>().ok(childRiskService.listEnabledEvaluatorsForAgent());
+    }
+
+    @GetMapping("/domains")
+    public Result<List<ChildRiskDomainVO>> domains() {
+        return new Result<List<ChildRiskDomainVO>>().ok(childRiskService.listRiskDomains());
     }
 }

@@ -28,6 +28,22 @@
                 <el-input-number v-model="configForm.evalEveryNRounds" :min="1" :max="99" />
                 <span class="form-tip">{{ $t('childRisk.config.evalTip') }}</span>
               </el-form-item>
+              <el-form-item :label="$t('childRisk.config.judgmentMode')">
+                <el-select v-model="configForm.judgmentMode" style="width: 200px">
+                  <el-option label="HYBRID" value="HYBRID" />
+                  <el-option label="RULES_ONLY" value="RULES_ONLY" />
+                </el-select>
+              </el-form-item>
+              <el-form-item :label="$t('childRisk.config.routerEnabled')">
+                <el-switch v-model="configForm.routerEnabled" />
+              </el-form-item>
+              <el-form-item :label="$t('childRisk.config.maxDomainsPerRound')">
+                <el-input-number v-model="configForm.maxDomainsPerRound" :min="1" :max="3" />
+              </el-form-item>
+              <el-form-item :label="$t('childRisk.config.minConfidenceToAlert')">
+                <el-input-number v-model="configForm.minConfidenceToAlert" :min="0" :max="1" :step="0.05" :precision="2" />
+                <span class="form-tip">{{ $t('childRisk.config.minConfidenceTip') }}</span>
+              </el-form-item>
               <el-form-item>
                 <el-button type="primary" :loading="configSaving" @click="saveConfig">
                   {{ $t('childRisk.save') }}
@@ -65,6 +81,31 @@
           </el-table>
         </el-tab-pane>
 
+        <el-tab-pane :label="$t('childRisk.tab.evaluators')" name="evaluators">
+          <div class="toolbar-row">
+            <el-button type="primary" size="small" @click="openEvaluatorDialog(null)">{{ $t('childRisk.evaluator.add') }}</el-button>
+          </div>
+          <el-table :data="evaluatorList" border v-loading="evaluatorsLoading" style="width: 100%">
+            <el-table-column prop="code" label="code" width="160" />
+            <el-table-column prop="name" :label="$t('childRisk.evaluator.name')" width="140" />
+            <el-table-column prop="riskDomain" :label="$t('childRisk.evaluator.domain')" width="130" />
+            <el-table-column prop="version" label="ver" width="64" />
+            <el-table-column prop="status" :label="$t('childRisk.rule.status')" width="88">
+              <template slot-scope="scope">
+                <el-tag :type="scope.row.status === 1 ? 'success' : 'info'" size="small">
+                  {{ scope.row.status === 1 ? $t('childRisk.rule.enabled') : $t('childRisk.rule.disabled') }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('childRisk.operation')" width="160" fixed="right">
+              <template slot-scope="scope">
+                <el-button type="text" size="small" @click="openEvaluatorDialog(scope.row)">{{ $t('childRisk.edit') }}</el-button>
+                <el-button type="text" size="small" class="danger-text" @click="removeEvaluator(scope.row)">{{ $t('childRisk.delete') }}</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
         <el-tab-pane :label="$t('childRisk.tab.events')" name="events">
           <el-table :data="eventList" border v-loading="eventsLoading" style="width: 100%">
             <el-table-column prop="id" label="ID" width="72" />
@@ -94,6 +135,44 @@
         </el-tab-pane>
       </el-tabs>
     </div>
+
+    <el-dialog :title="evaluatorForm.id ? $t('childRisk.evaluator.editTitle') : $t('childRisk.evaluator.addTitle')" :visible.sync="evaluatorDialogVisible" width="720px" @closed="resetEvaluatorForm">
+      <el-form :model="evaluatorForm" label-width="120px">
+        <el-form-item label="code" required>
+          <el-input v-model="evaluatorForm.code" :disabled="!!evaluatorForm.id" maxlength="64" />
+        </el-form-item>
+        <el-form-item :label="$t('childRisk.evaluator.name')" required>
+          <el-input v-model="evaluatorForm.name" maxlength="128" />
+        </el-form-item>
+        <el-form-item :label="$t('childRisk.evaluator.domain')" required>
+          <el-select v-model="evaluatorForm.riskDomain" filterable style="width: 100%">
+            <el-option v-for="d in domainList" :key="d.code" :label="d.name + ' (' + d.code + ')'" :value="d.code" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="version">
+          <el-input-number v-model="evaluatorForm.version" :min="1" :max="9999" />
+        </el-form-item>
+        <el-form-item :label="$t('childRisk.evaluator.instructions')" required>
+          <el-input v-model="evaluatorForm.instructions" type="textarea" :rows="12" />
+        </el-form-item>
+        <el-form-item :label="$t('childRisk.evaluator.allowedCategories')" required>
+          <el-input v-model="evaluatorForm.allowedCategories" placeholder='["self_harm_hint","other"]' />
+        </el-form-item>
+        <el-form-item label="model">
+          <el-input v-model="evaluatorForm.modelName" placeholder="空=智伴默认 OPENAI_MODEL" />
+        </el-form-item>
+        <el-form-item :label="$t('childRisk.rule.status')">
+          <el-radio-group v-model="evaluatorForm.status">
+            <el-radio :label="1">{{ $t('childRisk.rule.enabled') }}</el-radio>
+            <el-radio :label="0">{{ $t('childRisk.rule.disabled') }}</el-radio>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+      <span slot="footer">
+        <el-button @click="evaluatorDialogVisible = false">{{ $t('button.cancel') }}</el-button>
+        <el-button type="primary" :loading="evaluatorSaving" @click="submitEvaluator">{{ $t('button.ok') }}</el-button>
+      </span>
+    </el-dialog>
 
     <el-dialog :title="ruleForm.id ? $t('childRisk.rule.editTitle') : $t('childRisk.rule.addTitle')" :visible.sync="ruleDialogVisible" width="560px" @closed="resetRuleForm">
       <el-form :model="ruleForm" label-width="112px">
@@ -157,6 +236,27 @@ export default {
         cooldownMinutes: 30,
         notifyIfRiskLevelLte: 3,
         evalEveryNRounds: 3,
+        judgmentMode: 'HYBRID',
+        routerEnabled: true,
+        maxDomainsPerRound: 2,
+        minConfidenceToAlert: 0.65,
+      },
+      domainList: [],
+      evaluatorList: [],
+      evaluatorsLoading: false,
+      evaluatorDialogVisible: false,
+      evaluatorSaving: false,
+      evaluatorForm: {
+        id: null,
+        code: '',
+        name: '',
+        riskDomain: 'psychological',
+        version: 1,
+        status: 1,
+        modelName: '',
+        instructions: '',
+        allowedCategories: '["other"]',
+        sortOrder: 0,
       },
       ruleList: [],
       rulesLoading: false,
@@ -181,6 +281,7 @@ export default {
   },
   mounted() {
     this.loadConfig();
+    this.loadDomains();
   },
   methods: {
     formatTime(val) {
@@ -191,6 +292,7 @@ export default {
     },
     onTabChange(tab) {
       if (tab.name === 'rules') this.fetchRules();
+      if (tab.name === 'evaluators') this.fetchEvaluators();
       if (tab.name === 'events') this.loadEvents(1);
     },
     loadConfig() {
@@ -204,6 +306,10 @@ export default {
             cooldownMinutes: Number(x.cooldownMinutes) || 30,
             notifyIfRiskLevelLte: Number(x.notifyIfRiskLevelLte) || 3,
             evalEveryNRounds: Number(x.evalEveryNRounds) || 3,
+            judgmentMode: x.judgmentMode || 'HYBRID',
+            routerEnabled: x.routerEnabled !== false,
+            maxDomainsPerRound: Number(x.maxDomainsPerRound) || 2,
+            minConfidenceToAlert: x.minConfidenceToAlert != null ? Number(x.minConfidenceToAlert) : 0.65,
           };
         }
       });
@@ -215,6 +321,10 @@ export default {
         cooldownMinutes: this.configForm.cooldownMinutes,
         notifyIfRiskLevelLte: this.configForm.notifyIfRiskLevelLte,
         evalEveryNRounds: this.configForm.evalEveryNRounds,
+        judgmentMode: this.configForm.judgmentMode,
+        routerEnabled: this.configForm.routerEnabled,
+        maxDomainsPerRound: this.configForm.maxDomainsPerRound,
+        minConfidenceToAlert: this.configForm.minConfidenceToAlert,
       };
       Api.admin.saveChildRiskConfig(payload, ({ data }) => {
         this.configSaving = false;
@@ -296,6 +406,97 @@ export default {
             if (data.code === 0) {
               this.$message.success(this.$t('childRisk.deleteOk'));
               this.fetchRules();
+            }
+          });
+        })
+        .catch(() => {});
+    },
+    loadDomains() {
+      Api.admin.listChildRiskDomains(({ data }) => {
+        if (data.code === 0 && Array.isArray(data.data)) {
+          this.domainList = data.data;
+        }
+      });
+    },
+    fetchEvaluators() {
+      this.evaluatorsLoading = true;
+      Api.admin.listChildRiskEvaluators(({ data }) => {
+        this.evaluatorsLoading = false;
+        if (data.code === 0 && Array.isArray(data.data)) {
+          this.evaluatorList = data.data;
+        }
+      });
+    },
+    openEvaluatorDialog(row) {
+      if (row) {
+        this.evaluatorForm = {
+          id: row.id,
+          code: row.code || '',
+          name: row.name || '',
+          riskDomain: row.riskDomain || 'psychological',
+          version: row.version != null ? row.version : 1,
+          status: row.status != null ? row.status : 1,
+          modelName: row.modelName || '',
+          instructions: row.instructions || '',
+          allowedCategories: row.allowedCategories || '["other"]',
+          sortOrder: row.sortOrder != null ? row.sortOrder : 0,
+        };
+      } else {
+        this.resetEvaluatorForm();
+      }
+      this.evaluatorDialogVisible = true;
+    },
+    resetEvaluatorForm() {
+      this.evaluatorForm = {
+        id: null,
+        code: '',
+        name: '',
+        riskDomain: 'psychological',
+        version: 1,
+        status: 1,
+        modelName: '',
+        instructions: '',
+        allowedCategories: '["other"]',
+        sortOrder: 0,
+      };
+    },
+    submitEvaluator() {
+      const f = this.evaluatorForm;
+      if (!f.code || !f.name || !f.instructions || !f.allowedCategories) {
+        this.$message.warning(this.$t('childRisk.evaluator.required'));
+        return;
+      }
+      this.evaluatorSaving = true;
+      Api.admin.saveChildRiskEvaluator(
+        {
+          id: f.id,
+          code: f.code.trim(),
+          name: f.name.trim(),
+          riskDomain: f.riskDomain,
+          version: f.version,
+          status: f.status,
+          modelName: f.modelName || null,
+          instructions: f.instructions,
+          allowedCategories: f.allowedCategories.trim(),
+          sortOrder: f.sortOrder,
+        },
+        ({ data }) => {
+          this.evaluatorSaving = false;
+          if (data.code === 0) {
+            this.$message.success(this.$t('childRisk.saveOk'));
+            this.evaluatorDialogVisible = false;
+            this.fetchEvaluators();
+          }
+        },
+      );
+    },
+    removeEvaluator(row) {
+      this.$confirm(this.$t('childRisk.evaluator.deleteConfirm'), '', { type: 'warning' })
+        .then(() => {
+          Api.admin.deleteChildRiskEvaluator(row.id, ({ data }) => {
+            if (data.code === 0) {
+              this.$message.success(this.$t('childRisk.deleteOk'));
+              this.fetchEvaluators();
             }
           });
         })

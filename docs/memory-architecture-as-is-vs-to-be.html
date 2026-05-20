@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Memory 模块：现状 vs 改造目标（设计说明）</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2332;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3d8bfd;
+      --border: #2d3a4d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      padding: 2rem 1.25rem 4rem;
+      max-width: 1120px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    h1 {
+      font-size: 1.65rem;
+      font-weight: 650;
+      margin-bottom: 0.35rem;
+      letter-spacing: -0.02em;
+    }
+    .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 2rem; }
+    h2 {
+      font-size: 1.2rem;
+      margin-top: 2.25rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      color: #c5d4e8;
+    }
+    h3 { font-size: 1.05rem; margin-top: 1.35rem; color: #b8c9df; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 1.35rem;
+      margin: 1rem 0;
+    }
+    .note {
+      border-left: 4px solid var(--accent);
+      padding: 0.65rem 1rem;
+      background: rgba(61, 139, 253, 0.08);
+      margin: 1rem 0;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.92rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin: 1rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.65rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: rgba(61, 139, 253, 0.12); color: #dbe8ff; }
+    code {
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.84em;
+      background: rgba(0,0,0,0.35);
+      padding: 0.12rem 0.38rem;
+      border-radius: 4px;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    ul.tight li { margin: 0.35rem 0; }
+    footer {
+      margin-top: 3rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<h1>Memory 模块：现状 vs 改造目标</h1>
+<p class="subtitle">
+  基于仓库实现梳理：<strong>zhiban-agent</strong>（<code>LongTermMemory</code> + <code>load_memory_node</code> / <code>save_memory_node</code>）与 <strong>xiaozhi-server</strong>（可选 <code>MemoryProviderBase</code> 多实现）。图表可用浏览器直接打开本文件查看。
+</p>
+
+<div class="note">
+  <strong>说明：</strong>「接近 ChatGPT 体感」在工程上通常依赖 <em>主体连续检索 + 滚动摘要 + 可选结构化事实</em>，而非单靠向量维度堆砌。
+  下文「改造后」为<strong>目标架构示意</strong>，便于对齐迭代范围。
+</div>
+
+<h2>一、现状（As-Is）：智伴 zhiban-agent 长期记忆</h2>
+
+<h3>1.1 存储与元数据</h3>
+<div class="card">
+  <ul class="tight">
+    <li><strong>引擎：</strong>LangChain <code>PGVector</code>，PostgreSQL + 向量扩展；集合名 <code>zhiban_long_term_memory</code>（连接串 <code>POSTGRES_MEMORY_URL</code>）。</li>
+    <li><strong>写入粒度：</strong>每条文档是一段<strong>抽取后的「事实」短文本</strong>（不是整轮对话 raw chunk）。</li>
+    <li><strong>核心 metadata：</strong><code>user_id</code>、<code>scope</code>（<code>global</code> 或当前 intent 衍生出的 agent 名）、<code>speaker_type</code>（如 <code>owner_child</code> / <code>parent</code>）、<code>uuid</code>。</li>
+    <li><strong>Embedding：</strong>由环境配置的模型（如 OpenAI 兼容或 DashScope）生成。</li>
+  </ul>
+</div>
+
+<h3>1.2 读取路径（每轮对话前）</h3>
+<div class="card">
+  <ul class="tight">
+    <li>入口：<code>load_memory_node</code>（LangGraph 状态）。</li>
+    <li><strong>Query：</strong>取<strong>最近一条用户消息</strong>作为检索 query；若无则用占位「最近对话」。 </li>
+    <li><strong>两次向量检索后拼接：</strong>
+      <ul>
+        <li><code>scope = global</code>，<code>top_k = 5</code>，<code>speaker_types</code> 按角色规则（例：主孩子查 global 时包含 <code>owner_child</code> + <code>parent</code>）。</li>
+        <li><code>scope = current_agent</code>（intent 映射），<code>top_k = 3</code>，speaker 规则另一套。</li>
+      </ul>
+    </li>
+    <li>输出注入：<code>long_term_context</code> → 与 system / messages 一并交给 LLM。</li>
+  </ul>
+</div>
+
+<h3>1.3 写入路径（回复生成之后）</h3>
+<div class="card">
+  <ul class="tight">
+    <li>入口：<code>main.py</code> 在流式/非流式结束后线程调用 <code>_save_memory_after_reply</code> → <code>save_memory_node</code>。</li>
+    <li><strong>抽取：</strong>专用 LLM prompt 从最近若干轮对话抽出 JSON 事实数组；含过滤（影子任务、系统结束语噪声等）。</li>
+    <li><strong>分桶：</strong>启发式关键词决定事实写入 <code>global</code> 还是当前 agent <code>scope</code>；家长代述孩子信息可映射到 <code>speaker_type = owner_child</code> 存储。</li>
+    <li><strong>冲突消解：</strong>对每条事实 <code>search_similar</code> → 决策 LLM（ADD / UPDATE / DELETE / NOOP）→ <code>add_one</code> / <code>delete_by_ids</code>。</li>
+  </ul>
+</div>
+
+<h3>1.4 现状数据流总览（Mermaid）</h3>
+<div class="mermaid">
+flowchart TB
+  subgraph Req["请求入口"]
+    API["zhiban-agent /api/chat 等"]
+    Graph["编排：load_memory → LLM → reply"]
+  end
+
+  subgraph Load["load_memory_node"]
+    QU["query_text = 最近一条 user 内容"]
+    GV["PGVector 相似检索<br/>scope=global · top_k=5<br/>speaker_types 按角色"]
+    AV["PGVector 相似检索<br/>scope=agent(intent)<br/>top_k=3"]
+    LT["拼接 → long_term_context"]
+  end
+
+  subgraph LLM["生成"]
+    SYS["system + long_term_context + 本轮 messages"]
+  end
+
+  subgraph Save["save_memory_node（异步线程）"]
+    EX["LLM 抽取事实 JSON"]
+    SC["关键词启发式 → scope global/agent"]
+    SM["search_similar + 决策 LLM<br/>ADD/UPDATE/DELETE/NOOP"]
+    WR["写入/删除向量文档"]
+  end
+
+  DB[("Postgres + PGVector<br/>LangChain PGVector<br/>元数据: user_id, scope,<br/>speaker_type, uuid")]
+
+  API --> Graph
+  Graph --> QU --> GV --> DB
+  QU --> AV --> DB
+  GV --> LT
+  AV --> LT
+  LT --> SYS
+  Graph --> LLM
+  LLM --> EX --> SC --> SM --> WR --> DB
+</div>
+
+<h3>1.5 xiaozhi-server 侧（并行存在）</h3>
+<div class="card">
+  <p><code>xiaozhi-server/core/providers/memory/</code> 提供 <code>MemoryProviderBase</code> 抽象，可实现本地短记忆、mem0 云客户端等；与智伴自建 PGVector 链路<strong>可能并行部署</strong>，依具体接入配置而定。本页主线以 <strong>zhiban-agent 自建长期记忆</strong>为准。</p>
+</div>
+
+<h3>1.6 PGVector 里到底是什么：「一条记录」一直在原地更新吗？</h3>
+<div class="card">
+  <p><strong>不是。</strong>当前实现里，PGVector（LangChain）侧存的是<strong>多篇向量文档</strong>，每一篇对应：</p>
+  <ul class="tight">
+    <li>一段<strong>抽取后的短文本</strong>（一条「事实」）；</li>
+    <li>自己的 embedding；</li>
+    <li>metadata：<code>user_id</code>、<code>scope</code>、<code>speaker_type</code>、<code>uuid</code>（文档 id）等。</li>
+  </ul>
+  <p><strong>每次对话结束（且开启持久化）</strong>：<code>save_memory_node</code> 可能抽出<strong>多条</strong>事实，对<strong>每一条</strong>分别走一遍「相似检索 → 决策」，而不是把整个库揉成一行。</p>
+  <table>
+    <thead>
+      <tr><th>决策（示意）</th><th>对库里数据意味着什么</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>ADD</code></td>
+        <td><strong>新增</strong>一篇文档（新的 <code>uuid</code>、新向量），库里的条数 +1。</td>
+      </tr>
+      <tr>
+        <td><code>UPDATE</code></td>
+        <td>代码路径是先 <code>delete_by_ids</code> 删掉<strong>被选中的旧文档</strong>，再 <code>add_one</code> 写入<strong>修正后的新文本</strong>——本质是<strong>删旧 + 插新</strong>（新向量），不是「表里永远只有一行、只改这一行的文本」那种心智。</td>
+      </tr>
+      <tr>
+        <td><code>DELETE</code></td>
+        <td>按 id 删除对应文档。</td>
+      </tr>
+      <tr>
+        <td><code>NOOP</code></td>
+        <td>本条候选事实不写库。</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="note" style="margin-top:1rem;border-left-color:#6e7681;background:rgba(110,118,129,0.12);">
+    <strong>小结：</strong>库里通常是<strong>越来越多条「事实文档」</strong>（减去被删掉、被替换的旧条）。读取时 <code>load_memory_node</code> 用<strong>相似度 Top-K</strong> 在多文档里捞若干条拼成 <code>long_term_context</code>，并不是每次只读「固定那一行」。
+  </div>
+</div>
+
+<h2>过渡：原架构的主要问题 &amp; 为什么要做后续改造</h2>
+
+<h3>A. 现有方案已经做对的部分（不必全盘否定）</h3>
+<div class="card">
+  <ul class="tight">
+    <li>用向量库做<strong>跨轮、跨会话</strong>召回，方向正确；</li>
+    <li><strong>抽取事实 + 冲突消解</strong>有利于控制上下文长度、去掉废话；</li>
+    <li><code>speaker_type</code>、<code>scope</code> 分流减轻角色串味。</li>
+  </ul>
+</div>
+
+<h3>B. 体验上容易「不如 ChatGPT 顺滑」的根因（为何要演进）</h3>
+<div class="card">
+  <ul class="tight">
+    <li><strong>检索 query 过窄：</strong>仅用<strong>最近一条 user</strong> 当 query，用户承接上文、换说法、指代省略时，向量召回容易<strong>偏题或空召回</strong>。</li>
+    <li><strong>只有「事实碎片」，缺「叙事层」：</strong>仅存抽取句，<strong>对话脉络、场景、前后因果</strong>大量丢失；模型只能靠几条 bullet 自己脑补，<strong>整合感</strong>不稳定。</li>
+    <li><strong>global / agent 双桶 + 关键词分桶：</strong>启发式难免<strong>分错桶或重复写</strong>，跨 skill/intent 时可能出现「该记的记在某一 scope，另一路检索搜不到」之类断层。</li>
+    <li><strong>主体维度若与孩子/设备未对齐：</strong>仅用 <code>user_id</code>（会话维度）在多孩、多设备场景下可能<strong>串味或检索不准</strong>（视你们线上绑定策略而定）。</li>
+    <li><strong>没有滚动摘要层：</strong>远期内容无法压缩成可持续注入的「脉络段落」，长期对话越多，越依赖<strong>稀疏事实命中</strong>，体感会像「偶尔记起一句」而非「连贯上下文」。</li>
+    <li><strong>写入链路强依赖抽取：</strong>抽漏则永远不入库；抽噪声则污染向量；冲突消解再调用 LLM，有<strong>成本与延迟</strong>。</li>
+  </ul>
+</div>
+
+<h3>C. 改造目标要解决什么（对应关系）</h3>
+<table>
+  <thead>
+    <tr><th>痛点</th><th>目标架构里的抓手</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>单句 query 不稳</td><td>更丰富的 query 构造 + 摘要常驻 + 可选 Rerank</td></tr>
+    <tr><td>缺脉络</td><td><strong>滚动摘要</strong> + <strong>情景切块向量</strong>（Episodic）</td></tr>
+    <tr><td>双桶 / skill 割裂</td><td>倾向<strong>统一索引</strong> + metadata <strong>加权</strong></td></tr>
+    <tr><td>主体混淆</td><td>检索过滤以 <code>child_id</code> / 家长账号等为<strong>一等公民</strong></td></tr>
+    <tr><td>稳定偏好要像「记忆开关」</td><td><strong>结构化 Facts 表</strong>少量 bullet 注入</td></tr>
+  </tbody>
+</table>
+
+<h2>二、改造目标（To-Be）：接近 ChatGPT 式「跨会话整合」</h2>
+
+<h3>2.1 设计原则</h3>
+<div class="card">
+  <ul class="tight">
+    <li><strong>主体优先：</strong>检索过滤以 <code>child_id</code> / 家长账号等<strong>稳定主体</strong>为主键；<code>session_id</code> 用于衰减或加权，不作为唯一围墙。</li>
+    <li><strong>三层记忆：</strong>情景块（Episodic）+ 滚动摘要（Consolidated）+ 结构化事实（Profile/Facts）。</li>
+    <li><strong>Skill：</strong>统一向量索引 + metadata 中的 skill 做 <strong>boost</strong>，避免物理分库导致跨 skill「失忆」。</li>
+    <li><strong>读路径：</strong>并行召回 → 可选 Rerank → 固定顺序打包上下文（Facts → Summary → Episodic → 近期原文）。</li>
+  </ul>
+</div>
+
+<h3>2.2 目标架构总览（Mermaid）</h3>
+<div class="mermaid">
+flowchart TB
+  subgraph In["写入（可多队列异步）"]
+    T["每轮对话结束"]
+    E["Episodic：对话切块 + embedding<br/>丰富 metadata<br/>child_id / session / time / skill"]
+    S["Summary Job：滚动摘要文档<br/>（按孩子或家长视角）"]
+    F["Facts Job：结构化事实表<br/>（偏好、禁忌、稳定约定）"]
+  end
+
+  subgraph Store["存储（逻辑视图）"]
+    PG[("PostgreSQL")]
+    VE["pgvector：情景向量索引"]
+    VS["pgvector：摘要向量索引"]
+    TB["关系表：user_facts / summaries_meta"]
+    PG --- VE
+    PG --- VS
+    PG --- TB
+  end
+
+  subgraph Out["读取（每轮请求）"]
+    Q["当前用户 utterance"]
+    P["并行召回<br/>Facts + Summary + Episodic<br/>统一主体过滤 + 时间衰减"]
+    RR{"可选 Rerank"}
+    PK["上下文打包顺序：<br/>Facts bullet → 摘要摘录 → 情景块 → 本轮邻近原文"]
+    LM["LLM 生成"]
+  end
+
+  T --> E --> VE
+  T --> S --> VS
+  T --> F --> TB
+  Q --> P --> VE & VS & TB
+  P --> RR --> PK --> LM
+</div>
+
+<h3>2.3 与现状的差异（对照表）</h3>
+<table>
+  <thead>
+    <tr>
+      <th>维度</th>
+      <th>现状（As-Is）</th>
+      <th>目标（To-Be）</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>存入内容</td>
+      <td>主要为 LLM 抽取的<strong>短事实</strong>向量文档</td>
+      <td>增加<strong>原始情景切块</strong>检索；摘要层；可选<strong>结构化事实表</strong></td>
+    </tr>
+    <tr>
+      <td>检索 Query</td>
+      <td>最近一条 user 文本</td>
+      <td>当前问题 +（可选）轻量意图；摘要通道可<strong>恒注入最新摘要片段</strong></td>
+    </tr>
+    <tr>
+      <td>scope / skill</td>
+      <td><code>global</code> vs <code>intent→agent</code> 两次检索</td>
+      <td>倾向<strong>统一索引</strong>；skill 为 metadata <strong>加权</strong></td>
+    </tr>
+    <tr>
+      <td>跨会话</td>
+      <td>依赖同一 <code>user_id</code> 下事实是否被正确写入</td>
+      <td>显式 <code>child_id</code> 等与<strong>时间衰减</strong>；摘要承接远期语境</td>
+    </tr>
+    <tr>
+      <td>整合感</td>
+      <td>依赖模型从若干事实串中自行整合</td>
+      <td>通过<strong>分层材料</strong>（事实/摘要/片段）提高可控性与命中率</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>2.4 分阶段落地（便于排期）</h3>
+<div class="card">
+  <ul class="tight">
+    <li><strong>P0：</strong>写入与检索统一<strong>主体维度</strong>（child/parent）；metadata 补齐 session、时间戳；评估 scope/skill 合并策略。</li>
+    <li><strong>P1：</strong>上线<strong>滚动摘要</strong>生成与注入；摘要可向量化参与召回。</li>
+    <li><strong>P2：</strong><strong>结构化 facts</strong> 表 + 少量 bullet 注入（类 ChatGPT「记忆」）。</li>
+    <li><strong>P3：</strong>Rerank、观测指标（空召回率、重复记忆率）、删除/合规策略。</li>
+  </ul>
+</div>
+
+<h2>三、图例与附录</h2>
+<div class="card">
+  <ul class="tight">
+    <li>实线箭头表示主要数据流方向。</li>
+    <li>「改造后」存储可为同一 Postgres 实例中的多表/多 collection，或分区策略，部署细节与体量相关。</li>
+    <li>若需打印或分享，可用浏览器打印为 PDF（建议勾选背景图形）。</li>
+  </ul>
+</div>
+
+<footer>
+  文档路径：<code>docs/memory-architecture-as-is-vs-to-be.html</code> · 已含「PGVector 写入语义」「原架构问题与改造动机」。Mermaid 依赖 CDN，离线请自备 <code>mermaid.min.js</code>。
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: "dark",
+    securityLevel: "loose",
+    flowchart: { curve: "basis", padding: 10 }
+  });
+</script>
+</body>
+</html>

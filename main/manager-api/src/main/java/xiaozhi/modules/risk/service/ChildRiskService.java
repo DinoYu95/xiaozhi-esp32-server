@@ -3,11 +3,14 @@ package xiaozhi.modules.risk.service;
 import java.util.List;
 
 import xiaozhi.modules.risk.dto.ChildRiskConfigSaveDTO;
+import xiaozhi.modules.risk.dto.ChildRiskEvaluatorSaveDTO;
 import xiaozhi.modules.risk.dto.ChildRiskRuleSaveDTO;
 import xiaozhi.modules.risk.dto.ChildRiskSignalDTO;
 import xiaozhi.common.page.PageData;
 import xiaozhi.modules.risk.vo.ChildRiskAgentRuntimeVO;
 import xiaozhi.modules.risk.vo.ChildRiskConfigVO;
+import xiaozhi.modules.risk.vo.ChildRiskDomainVO;
+import xiaozhi.modules.risk.vo.ChildRiskEvaluatorPublicVO;
 import xiaozhi.modules.risk.vo.ChildRiskEventAdminVO;
 import xiaozhi.modules.risk.vo.ChildRiskRulePublicVO;
 import xiaozhi.modules.risk.vo.ChildRiskSignalResultVO;
@@ -39,6 +42,16 @@ public interface ChildRiskService {
     void deleteRule(Long id);
 
     List<ChildRiskRulePublicVO> listAllRulesForAdmin();
+
+    List<ChildRiskEvaluatorPublicVO> listEnabledEvaluatorsForAgent();
+
+    List<ChildRiskEvaluatorPublicVO> listAllEvaluatorsForAdmin();
+
+    void saveOrUpdateEvaluator(ChildRiskEvaluatorSaveDTO dto);
+
+    void deleteEvaluator(Long id);
+
+    List<ChildRiskDomainVO> listRiskDomains();
 
     ParentRiskNotificationPageVO pageNotificationsForParent(Long parentUserId, Long childId, int page, int pageSize);
 

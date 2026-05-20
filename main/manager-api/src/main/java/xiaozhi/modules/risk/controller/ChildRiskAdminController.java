@@ -23,9 +23,12 @@ import xiaozhi.common.constant.Constant;
 import xiaozhi.common.page.PageData;
 import xiaozhi.common.utils.Result;
 import xiaozhi.modules.risk.dto.ChildRiskConfigSaveDTO;
+import xiaozhi.modules.risk.dto.ChildRiskEvaluatorSaveDTO;
 import xiaozhi.modules.risk.dto.ChildRiskRuleSaveDTO;
 import xiaozhi.modules.risk.service.ChildRiskService;
 import xiaozhi.modules.risk.vo.ChildRiskConfigVO;
+import xiaozhi.modules.risk.vo.ChildRiskDomainVO;
+import xiaozhi.modules.risk.vo.ChildRiskEvaluatorPublicVO;
 import xiaozhi.modules.risk.vo.ChildRiskEventAdminVO;
 import xiaozhi.modules.risk.vo.ChildRiskRulePublicVO;
 
@@ -98,6 +101,38 @@ public class ChildRiskAdminController {
     @LogOperation("删除儿童风险规则")
     public Result<Void> deleteRule(@RequestParam Long id) {
         childRiskService.deleteRule(id);
+        return new Result<Void>().ok(null);
+    }
+
+    @GetMapping("/evaluator/list")
+    @Operation(summary = "全部领域判别器")
+    @RequiresPermissions("sys:role:superAdmin")
+    public Result<List<ChildRiskEvaluatorPublicVO>> evaluatorList() {
+        return new Result<List<ChildRiskEvaluatorPublicVO>>().ok(childRiskService.listAllEvaluatorsForAdmin());
+    }
+
+    @GetMapping("/domain/list")
+    @Operation(summary = "风险领域目录")
+    @RequiresPermissions("sys:role:superAdmin")
+    public Result<List<ChildRiskDomainVO>> domainList() {
+        return new Result<List<ChildRiskDomainVO>>().ok(childRiskService.listRiskDomains());
+    }
+
+    @PostMapping("/evaluator")
+    @Operation(summary = "新增或保存领域判别器")
+    @RequiresPermissions("sys:role:superAdmin")
+    @LogOperation("保存儿童风险判别器")
+    public Result<Void> saveEvaluator(@RequestBody @Valid ChildRiskEvaluatorSaveDTO dto) {
+        childRiskService.saveOrUpdateEvaluator(dto);
+        return new Result<Void>().ok(null);
+    }
+
+    @DeleteMapping("/evaluator")
+    @Operation(summary = "删除领域判别器")
+    @RequiresPermissions("sys:role:superAdmin")
+    @LogOperation("删除儿童风险判别器")
+    public Result<Void> deleteEvaluator(@RequestParam Long id) {
+        childRiskService.deleteEvaluator(id);
         return new Result<Void>().ok(null);
     }
 }

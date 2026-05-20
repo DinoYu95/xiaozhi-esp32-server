@@ -25,4 +25,16 @@ public class ChildRiskConfigSaveDTO {
     @Min(1)
     @Max(99)
     private Integer evalEveryNRounds;
+
+    private String judgmentMode;
+
+    private Boolean routerEnabled;
+
+    @Min(1)
+    @Max(3)
+    private Integer maxDomainsPerRound;
+
+    @Min(0)
+    @Max(1)
+    private Double minConfidenceToAlert;
 }

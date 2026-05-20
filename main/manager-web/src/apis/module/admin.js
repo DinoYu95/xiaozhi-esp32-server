@@ -258,5 +258,62 @@ export default {
                 })
             }).send()
     },
+    listChildRiskEvaluators(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/child-risk/evaluator/list`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.listChildRiskEvaluators(callback)
+                })
+            }).send()
+    },
+    listChildRiskDomains(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/child-risk/domain/list`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.listChildRiskDomains(callback)
+                })
+            }).send()
+    },
+    saveChildRiskEvaluator(data, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/child-risk/evaluator`)
+            .method('POST')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.saveChildRiskEvaluator(data, callback)
+                })
+            }).send()
+    },
+    deleteChildRiskEvaluator(id, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/child-risk/evaluator?id=${encodeURIComponent(id)}`)
+            .method('DELETE')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.deleteChildRiskEvaluator(id, callback)
+                })
+            }).send()
+    },
 
 }

@@ -12,4 +12,9 @@ public class ChildRiskAgentRuntimeVO {
 
     @Schema(description = "每 N 轮对话做一次本地规则扫描，1~99")
     private int evalEveryNRounds;
+
+    private String judgmentMode;
+    private boolean routerEnabled;
+    private int maxDomainsPerRound;
+    private double minConfidenceToAlert;
 }

@@ -156,7 +156,7 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         }
         int level = dto.getRiskLevel() == null ? 3 : Math.max(1, Math.min(3, dto.getRiskLevel()));
         String category = StringUtils.defaultIfBlank(dto.getCategory(), "other");
-        String source = StringUtils.defaultIfBlank(dto.getSource(), "ZhibAN_JSON");
+        String source = normalizeSource(StringUtils.defaultIfBlank(dto.getSource(), "ZhibAN_JSON"));
 
         DeviceChildEntity child = deviceChildDao.selectById(dto.getChildId());
         if (child == null) {
@@ -308,6 +308,16 @@ public class ChildRiskServiceImpl implements ChildRiskService {
 
     private static String normalizeDev(String deviceId) {
         return deviceId.replace(":", "_").toLowerCase();
+    }
+
+    /** SKILL:{domain}:{code} 等来源可能超过旧表 VARCHAR(32)，入库前统一截断到 128 */
+    private String normalizeSource(String source) {
+        String s = StringUtils.trimToEmpty(source);
+        if (s.length() <= 128) {
+            return s;
+        }
+        log.warn("[child_risk signal] source truncated from {} to 128 chars: {}", s.length(), StringUtils.abbreviate(s, 80));
+        return s.substring(0, 128);
     }
 
     @Override

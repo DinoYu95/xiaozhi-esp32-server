@@ -14,6 +14,8 @@ public class ChildRiskEvaluatorPublicVO {
     private String name;
     private String riskDomain;
     private Integer version;
+    /** 0 禁用 1 启用（管理端列表展示；智伴拉取仅 status=1） */
+    private Integer status;
     private String modelName;
     private BigDecimal temperature;
     private Integer timeoutMs;

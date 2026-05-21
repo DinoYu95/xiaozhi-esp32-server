@@ -54,6 +54,7 @@ export default {
   'childRisk.config.maxDomainsPerRound': '每轮最多领域数',
   'childRisk.config.minConfidenceToAlert': '上报最低置信度',
   'childRisk.config.minConfidenceTip': '低于该值智伴不 POST（不推家长）',
+  'childRisk.evaluator.statusCol': '状态',
   'childRisk.evaluator.add': '新建判别器',
   'childRisk.evaluator.name': '名称',
   'childRisk.evaluator.domain': '风险领域',

@@ -478,9 +478,8 @@ public class ChildRiskServiceImpl implements ChildRiskService {
     public List<ChildRiskEvaluatorPublicVO> listAllEvaluatorsForAdmin() {
         return childRiskEvaluatorDao
                 .selectList(new LambdaQueryWrapper<ChildRiskEvaluatorEntity>()
-                        .orderByAsc(ChildRiskEvaluatorEntity::getRiskDomain)
-                        .orderByDesc(ChildRiskEvaluatorEntity::getVersion)
-                        .orderByAsc(ChildRiskEvaluatorEntity::getId))
+                        .orderByDesc(ChildRiskEvaluatorEntity::getCreateTime)
+                        .orderByDesc(ChildRiskEvaluatorEntity::getId))
                 .stream()
                 .map(this::toEvaluatorPub)
                 .collect(Collectors.toList());
@@ -549,6 +548,7 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         v.setName(e.getName());
         v.setRiskDomain(e.getRiskDomain());
         v.setVersion(e.getVersion());
+        v.setStatus(e.getStatus());
         v.setModelName(e.getModelName());
         v.setTemperature(e.getTemperature());
         v.setTimeoutMs(e.getTimeoutMs());

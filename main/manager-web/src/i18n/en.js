@@ -54,6 +54,7 @@ export default {
   'childRisk.config.maxDomainsPerRound': 'Max domains per round',
   'childRisk.config.minConfidenceToAlert': 'Min confidence to alert',
   'childRisk.config.minConfidenceTip': 'Below this zhiban will not POST (no parent push)',
+  'childRisk.evaluator.statusCol': 'Status',
   'childRisk.evaluator.add': 'New evaluator',
   'childRisk.evaluator.name': 'Name',
   'childRisk.evaluator.domain': 'Domain',

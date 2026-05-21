@@ -86,18 +86,18 @@
             <el-button type="primary" size="small" @click="openEvaluatorDialog(null)">{{ $t('childRisk.evaluator.add') }}</el-button>
           </div>
           <el-table :data="evaluatorList" border v-loading="evaluatorsLoading" style="width: 100%">
-            <el-table-column prop="code" label="code" width="160" />
-            <el-table-column prop="name" :label="$t('childRisk.evaluator.name')" width="140" />
-            <el-table-column prop="riskDomain" :label="$t('childRisk.evaluator.domain')" width="130" />
-            <el-table-column prop="version" label="ver" width="64" />
-            <el-table-column prop="status" :label="$t('childRisk.rule.status')" width="88">
+            <el-table-column prop="code" label="code" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="name" :label="$t('childRisk.evaluator.name')" min-width="120" show-overflow-tooltip />
+            <el-table-column prop="riskDomain" :label="$t('childRisk.evaluator.domain')" min-width="120" />
+            <el-table-column prop="version" label="ver" width="56" align="center" />
+            <el-table-column prop="status" :label="$t('childRisk.evaluator.statusCol')" width="72" align="center">
               <template slot-scope="scope">
-                <el-tag :type="scope.row.status === 1 ? 'success' : 'info'" size="small">
-                  {{ scope.row.status === 1 ? $t('childRisk.rule.enabled') : $t('childRisk.rule.disabled') }}
+                <el-tag :type="Number(scope.row.status) === 1 ? 'success' : 'info'" size="small">
+                  {{ Number(scope.row.status) === 1 ? $t('childRisk.rule.enabled') : $t('childRisk.rule.disabled') }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column :label="$t('childRisk.operation')" width="160" fixed="right">
+            <el-table-column :label="$t('childRisk.operation')" width="140" align="center" fixed="right">
               <template slot-scope="scope">
                 <el-button type="text" size="small" @click="openEvaluatorDialog(scope.row)">{{ $t('childRisk.edit') }}</el-button>
                 <el-button type="text" size="small" class="danger-text" @click="removeEvaluator(scope.row)">{{ $t('childRisk.delete') }}</el-button>
@@ -161,7 +161,7 @@
         <el-form-item label="model">
           <el-input v-model="evaluatorForm.modelName" placeholder="空=智伴默认 OPENAI_MODEL" />
         </el-form-item>
-        <el-form-item :label="$t('childRisk.rule.status')">
+        <el-form-item :label="$t('childRisk.evaluator.statusCol')">
           <el-radio-group v-model="evaluatorForm.status">
             <el-radio :label="1">{{ $t('childRisk.rule.enabled') }}</el-radio>
             <el-radio :label="0">{{ $t('childRisk.rule.disabled') }}</el-radio>
@@ -352,7 +352,7 @@ export default {
           riskLevel: row.riskLevel != null ? row.riskLevel : 2,
           category: row.category || 'other',
           sortOrder: row.sortOrder != null ? row.sortOrder : 0,
-          status: row.status != null ? row.status : 1,
+          status: row.status != null ? Number(row.status) : 1,
         };
       } else {
         this.resetRuleForm();
@@ -435,7 +435,7 @@ export default {
           name: row.name || '',
           riskDomain: row.riskDomain || 'psychological',
           version: row.version != null ? row.version : 1,
-          status: row.status != null ? row.status : 1,
+          status: row.status != null ? Number(row.status) : 1,
           modelName: row.modelName || '',
           instructions: row.instructions || '',
           allowedCategories: row.allowedCategories || '["other"]',
@@ -474,7 +474,7 @@ export default {
           name: f.name.trim(),
           riskDomain: f.riskDomain,
           version: f.version,
-          status: f.status,
+          status: Number(f.status) === 0 ? 0 : 1,
           modelName: f.modelName || null,
           instructions: f.instructions,
           allowedCategories: f.allowedCategories.trim(),

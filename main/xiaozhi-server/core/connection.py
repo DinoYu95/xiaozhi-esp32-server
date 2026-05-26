@@ -98,6 +98,9 @@ class ConnectionHandler:
         self.client_abort = False
         self.client_is_speaking = False
         self.client_listen_mode = "auto"
+        # 主孩子独占对话：主孩子开聊后置 True，LLM+TTS 结束后清除
+        self.owner_exclusive_active = False
+        self._chat_inflight = 0
         # TTS 播读中：VAD 累计人声时长(ms)，用于 barge_in_min_voice_ms 去抖
         self._barge_in_voice_accum_ms = 0
 
@@ -925,18 +928,30 @@ class ConnectionHandler:
                 "environment_context 无 parent_rules（config 中为空，设备可能未配置规则或需重新连接）"
             )
         cgp = (self.config.get("companion_growth_prompt") or "").strip()
-        if cgp:
-            ctx["companion_growth_prompt"] = cgp
+        from core.utils.owner_dialogue_guard import (
+            is_cautious_unknown_turn,
+            should_attach_owner_child_context,
+        )
+
+        if should_attach_owner_child_context(self):
+            if cgp:
+                ctx["companion_growth_prompt"] = cgp
+                self.logger.bind(tag=TAG).info(
+                    f"environment_context 含 companion_growth_prompt，长度={len(cgp)}"
+                )
+        elif is_cautious_unknown_turn(self):
+            ctx["cautious_unknown_speaker"] = True
             self.logger.bind(tag=TAG).info(
-                f"environment_context 含 companion_growth_prompt，长度={len(cgp)}"
+                "environment_context cautious_unknown_speaker=true（不注入主孩子档案）"
             )
         self._maybe_attach_shadow_mission(ctx)
         return ctx
 
     def _maybe_attach_shadow_mission(self, ctx: Dict[str, Any]) -> None:
-        """主孩子对话时附带当前家长影子任务（guest 等不注入）。"""
-        st = (getattr(self, "current_round_speaker_type", None) or "unknown").strip().lower()
-        if st not in ("owner_child", "unknown"):
+        """仅主孩子声纹且 speaker_type=owner_child 时注入影子任务与 child_id。"""
+        from core.utils.owner_dialogue_guard import should_attach_owner_child_context
+
+        if not should_attach_owner_child_context(self):
             return
         device_id = self.device_id
         owner_child_id = getattr(self, "owner_child_id", None)
@@ -977,6 +992,20 @@ class ConnectionHandler:
         return "ZhibanAgent" in mod
 
     def chat(self, query, depth=0):
+        entered_inflight = False
+        if depth == 0:
+            self._chat_inflight = int(getattr(self, "_chat_inflight", 0) or 0) + 1
+            entered_inflight = True
+        try:
+            return self._chat_impl(query, depth=depth)
+        finally:
+            if entered_inflight:
+                self._chat_inflight = max(0, int(getattr(self, "_chat_inflight", 0) or 0) - 1)
+                from core.utils.owner_dialogue_guard import maybe_clear_owner_exclusive
+
+                maybe_clear_owner_exclusive(self)
+
+    def _chat_impl(self, query, depth=0):
         if query is not None:
             self.logger.bind(tag=TAG).info(f"大模型收到用户消息: {query}")
 
@@ -1356,6 +1385,9 @@ class ConnectionHandler:
 
     def clearSpeakStatus(self):
         self.client_is_speaking = False
+        from core.utils.owner_dialogue_guard import maybe_clear_owner_exclusive
+
+        maybe_clear_owner_exclusive(self)
         self.logger.bind(tag=TAG).debug(f"清除服务端讲话状态")
 
     async def close(self, ws=None):

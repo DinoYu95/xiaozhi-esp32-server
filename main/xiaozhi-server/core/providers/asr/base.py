@@ -172,29 +172,31 @@ class ASRProviderBase(ABC):
             self.stop_ws_connection()
 
             if text_len > 0:
-                # 多角色打断策略：当前轮为主孩子且机器未播时，非主孩子声音需为「打断意图」才处理
-                # 例外：声纹识别失败（speaker_id 为 None，未知说话人）时，可能是同一孩子在嘈杂环境下的误判，不再忽略，以免对话断连
-                current_round = getattr(conn, "current_round_speaker_type", None)
-                owner_vp_id = getattr(conn, "owner_child_voice_print_id", None)
-                machine_speaking = getattr(conn, "client_is_speaking", True)
-                is_voiceprint_failed = speaker_id is None and getattr(conn, "current_speaker", None) in (None, "", "未知说话人")
+                from core.handle.receiveAudioHandle import _set_current_round_speaker_type
+                from core.utils.owner_dialogue_guard import (
+                    is_owner_dialogue_busy,
+                    is_owner_speaker,
+                    should_accept_speech,
+                )
+
+                _set_current_round_speaker_type(conn)
+                if not should_accept_speech(conn, speaker_id):
+                    logger.bind(tag=TAG).info(
+                        "owner_busy 丢弃 speech speaker_id=%s type=%s text=%s",
+                        speaker_id,
+                        getattr(conn, "current_round_speaker_type", None),
+                        (content_for_length_check[:50] if content_for_length_check else ""),
+                    )
+                    return
+                machine_speaking = bool(getattr(conn, "client_is_speaking", False))
                 if (
-                    not is_voiceprint_failed
-                    and current_round == "owner_child"
-                    and not machine_speaking
-                    and owner_vp_id is not None
-                    and speaker_id != owner_vp_id
+                    is_owner_dialogue_busy(conn)
+                    and is_owner_speaker(conn, speaker_id)
+                    and machine_speaking
                 ):
-                    from core.utils.interrupt_intent import is_interrupt_intent
-                    if not is_interrupt_intent(content_for_length_check):
-                        logger.bind(tag=TAG).info(
-                            "主孩子轮次内非主孩子声音，且非打断意图，忽略本段: %s",
-                            content_for_length_check[:50] if content_for_length_check else "",
-                        )
-                        return
                     from core.handle.abortHandle import handleAbortMessage
+
                     await handleAbortMessage(conn)
-                # 使用自定义模块进行上报
                 await startToChat(conn, enhanced_text)
                 audio_snapshot = asr_audio_task.copy()
                 enqueue_asr_report(conn, enhanced_text, audio_snapshot)

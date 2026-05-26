@@ -10,6 +10,11 @@ from core.handle.sendAudioHandle import (
     SentenceType,
     AUDIO_FRAME_DURATION,
 )
+from core.utils.owner_dialogue_guard import (
+    is_owner_dialogue_busy,
+    is_owner_speaker,
+    should_accept_speech,
+)
 
 TAG = __name__
 
@@ -43,19 +48,23 @@ async def handleAudioMessage(conn, audio):
     # 播读打断：可选「最短持续人声」去抖，减弱环境杂音、短促搭话导致的误打断（config: barge_in_min_voice_ms）
     if have_voice:
         if conn.client_is_speaking and conn.client_listen_mode != "manual":
-            min_ms = int(conn.config.get("barge_in_min_voice_ms", 400))
-            if min_ms <= 0:
-                await handleAbortMessage(conn)
+            if is_owner_dialogue_busy(conn):
+                # 主孩子独占窗口：VAD 层不打断，等 ASR+声纹后仅主孩子可插话
+                pass
             else:
-                conn._barge_in_voice_accum_ms += AUDIO_FRAME_DURATION
-                if conn._barge_in_voice_accum_ms >= min_ms:
-                    conn.logger.bind(tag=TAG).info(
-                        "播读中人声累计约 %dms（阈值 %dms），触发打断",
-                        conn._barge_in_voice_accum_ms,
-                        min_ms,
-                    )
-                    conn._barge_in_voice_accum_ms = 0
+                min_ms = int(conn.config.get("barge_in_min_voice_ms", 400))
+                if min_ms <= 0:
                     await handleAbortMessage(conn)
+                else:
+                    conn._barge_in_voice_accum_ms += AUDIO_FRAME_DURATION
+                    if conn._barge_in_voice_accum_ms >= min_ms:
+                        conn.logger.bind(tag=TAG).info(
+                            "播读中人声累计约 %dms（阈值 %dms），触发打断",
+                            conn._barge_in_voice_accum_ms,
+                            min_ms,
+                        )
+                        conn._barge_in_voice_accum_ms = 0
+                        await handleAbortMessage(conn)
     elif conn.client_is_speaking:
         conn._barge_in_voice_accum_ms = 0
     # 设备长时间空闲检测，用于say goodbye
@@ -100,6 +109,18 @@ async def startToChat(conn, text):
         conn.current_speaker = None
     # 多角色：当前轮说话人类型，供打断策略与 skill 路由
     _set_current_round_speaker_type(conn)
+    speaker_id = getattr(conn, "current_speaker_id", None)
+    if not should_accept_speech(conn, speaker_id):
+        conn.logger.bind(tag=TAG).info(
+            "owner_busy 丢弃 speech speaker_id=%s type=%s",
+            speaker_id,
+            getattr(conn, "current_round_speaker_type", None),
+        )
+        return
+    if is_owner_speaker(conn, speaker_id):
+        conn.owner_exclusive_active = True
+    elif not is_owner_dialogue_busy(conn):
+        conn.owner_exclusive_active = False
     # 保存语种信息到连接对象
     if language_tag:
         conn.current_language_tag = language_tag

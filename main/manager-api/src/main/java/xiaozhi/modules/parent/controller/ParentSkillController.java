@@ -28,7 +28,10 @@ import xiaozhi.modules.agent.vo.AgentSkillVO;
 import xiaozhi.modules.parent.context.ParentContext;
 import xiaozhi.modules.parent.service.ParentDeviceService;
 import xiaozhi.modules.parent.dto.ParentUserSkillSaveDTO;
+import xiaozhi.modules.parent.dto.ParentSkillFromIntentDTO;
+import xiaozhi.modules.parent.service.ParentSkillAssistService;
 import xiaozhi.modules.parent.service.ParentUserSkillService;
+import xiaozhi.modules.parent.vo.ParentSkillDraftVO;
 import xiaozhi.modules.parent.vo.ParentSkillSearchVO;
 import xiaozhi.modules.parent.vo.ParentUserSkillVO;
 
@@ -41,6 +44,7 @@ public class ParentSkillController {
     private final AgentSkillService agentSkillService;
     private final ParentUserSkillService parentUserSkillService;
     private final ParentDeviceService parentDeviceService;
+    private final ParentSkillAssistService parentSkillAssistService;
 
     @GetMapping("/list")
     @Operation(summary = "官方推荐的技能列表（管理员在后台添加且标记推荐的）")
@@ -103,6 +107,36 @@ public class ParentSkillController {
             throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
         }
         ParentUserSkillVO vo = parentUserSkillService.create(parentUserId, dto);
+        return new Result<ParentUserSkillVO>().ok(vo);
+    }
+
+    @PostMapping("/draft-from-intent")
+    @Operation(summary = "根据自然语言描述 AI 生成技能草稿（预览，不落库）")
+    public Result<ParentSkillDraftVO> draftFromIntent(@RequestBody @Valid ParentSkillFromIntentDTO dto) {
+        Long parentUserId = ParentContext.getParentUserId();
+        if (parentUserId == null) {
+            throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
+        }
+        ParentSkillDraftVO draft = parentSkillAssistService.generateDraft(
+                dto.getUserIntent(), dto.getRefinement(), dto.getPreviousDraft());
+        return new Result<ParentSkillDraftVO>().ok(draft);
+    }
+
+    @PostMapping("/from-intent")
+    @Operation(summary = "根据自然语言描述 AI 生成并直接创建技能（一步创建）")
+    public Result<ParentUserSkillVO> createFromIntent(@RequestBody @Valid ParentSkillFromIntentDTO dto) {
+        Long parentUserId = ParentContext.getParentUserId();
+        if (parentUserId == null) {
+            throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
+        }
+        ParentSkillDraftVO draft = parentSkillAssistService.generateDraft(
+                dto.getUserIntent(), dto.getRefinement(), dto.getPreviousDraft());
+        ParentUserSkillSaveDTO save = new ParentUserSkillSaveDTO();
+        save.setName(draft.getName());
+        save.setDescription(draft.getDescription());
+        save.setInstructions(draft.getInstructions());
+        save.setVersion("1.0");
+        ParentUserSkillVO vo = parentUserSkillService.create(parentUserId, save);
         return new Result<ParentUserSkillVO>().ok(vo);
     }
 

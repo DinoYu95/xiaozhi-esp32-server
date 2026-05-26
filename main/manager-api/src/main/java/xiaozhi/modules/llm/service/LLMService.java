@@ -1,5 +1,7 @@
 package xiaozhi.modules.llm.service;
 
+import xiaozhi.modules.llm.dto.LlmOpenAiCallConfig;
+
 /**
  * LLM服务接口
  * 支持多种大模型调用
@@ -67,4 +69,12 @@ public interface LLMService {
      * @return 是否可用
      */
     boolean isAvailable(String modelId);
+
+    /**
+     * 使用参数字典等提供的 OpenAI 兼容直连配置调用（prompt 作为 user 消息全文）
+     */
+    String chatWithOpenAiConfig(String prompt, LlmOpenAiCallConfig config);
+
+    /** 直连配置是否具备 baseUrl + apiKey */
+    boolean isInlineConfigAvailable(LlmOpenAiCallConfig config);
 }

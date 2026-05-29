@@ -68,6 +68,8 @@ public class ParentTokenFilter extends jakarta.servlet.http.HttpFilter {
         return uri.contains("/parent-api/auth/wechat")
                 || uri.contains("/parent-api/auth/phone/code")
                 || uri.contains("/parent-api/auth/phone/login")
+                || uri.contains("/parent-api/auth/avatar/file/")
+                || uri.contains("/parent-api/feedback/image/file/")
                 || uri.contains("/parent-api/device/child/voiceprint/play/")
                 || uri.contains("/parent-api/chat/play/");
     }

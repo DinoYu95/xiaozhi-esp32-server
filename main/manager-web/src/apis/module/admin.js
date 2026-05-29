@@ -315,5 +315,86 @@ export default {
                 })
             }).send()
     },
+    getBetaFeedbackPage(params, callback) {
+        const q = new URLSearchParams()
+        if (params.page) q.set('page', params.page)
+        if (params.limit) q.set('limit', params.limit)
+        if (params.status) q.set('status', params.status)
+        if (params.category) q.set('category', params.category)
+        if (params.blocking !== undefined && params.blocking !== '') q.set('blocking', params.blocking)
+        if (params.parentUserId) q.set('parentUserId', params.parentUserId)
+        if (params.feedbackNo) q.set('feedbackNo', params.feedbackNo)
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/feedback/page?${q.toString()}`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getBetaFeedbackPage(params, callback)
+                })
+            }).send()
+    },
+    getBetaFeedbackDetail(id, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/feedback/${id}`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getBetaFeedbackDetail(id, callback)
+                })
+            }).send()
+    },
+    updateBetaFeedbackStatus(id, data, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/feedback/${id}/status`)
+            .method('PUT')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.updateBetaFeedbackStatus(id, data, callback)
+                })
+            }).send()
+    },
+    updateBetaFeedbackNote(id, data, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/feedback/${id}/note`)
+            .method('PUT')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.updateBetaFeedbackNote(id, data, callback)
+                })
+            }).send()
+    },
+    setBetaTester(data, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/feedback/beta-tester`)
+            .method('PUT')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.setBetaTester(data, callback)
+                })
+            }).send()
+    },
 
 }

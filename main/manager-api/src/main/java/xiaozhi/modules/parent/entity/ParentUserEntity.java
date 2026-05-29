@@ -21,6 +21,8 @@ public class ParentUserEntity {
     private String nickname;
     /** 头像 URL */
     private String avatarUrl;
+    /** 是否内测用户（可提交反馈） */
+    private Integer isBetaTester;
     /** 创建时间 */
     private Date createTime;
     /** 更新时间 */

@@ -14,4 +14,8 @@ public class ParentUserVO {
     private String avatarUrl;
     @Schema(description = "手机号（脱敏）")
     private String phone;
+    @Schema(description = "是否内测用户（可显示反馈入口）")
+    private Boolean betaTester;
+    @Schema(description = "内测反馈功能是否全局开启（参数字典 server.beta_feedback_enabled）")
+    private Boolean betaFeedbackEnabled;
 }

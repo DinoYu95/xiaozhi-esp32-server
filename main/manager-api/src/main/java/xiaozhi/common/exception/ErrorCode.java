@@ -253,5 +253,7 @@ public interface ErrorCode {
     int PARENT_DEVICE_ALREADY_BOUND = 20005; // 设备已被其他账号绑定
     int PARENT_DEVICE_NOT_BOUND = 20006; // 设备未绑定或不属于当前家长
     int PARENT_SKILL_NOT_FOUND = 20007; // 技能不存在或无权操作
+    int PARENT_BETA_FEEDBACK_DISABLED = 20008; // 内测反馈未开放或非内测用户
+    int PARENT_FEEDBACK_NOT_FOUND = 20009; // 反馈不存在或无权查看
 
 }

@@ -121,6 +121,17 @@ const routes = [
     }
   },
   {
+    path: '/beta-feedback-management',
+    name: 'BetaFeedbackManagement',
+    component: function () {
+      return import('../views/BetaFeedbackManagement.vue')
+    },
+    meta: {
+      requiresAuth: true,
+      title: '内测反馈'
+    }
+  },
+  {
     path: '/knowledge-file-upload',
     name: 'KnowledgeFileUpload',
     component: function () {

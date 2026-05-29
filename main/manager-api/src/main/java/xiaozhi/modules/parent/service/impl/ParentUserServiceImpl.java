@@ -150,6 +150,9 @@ public class ParentUserServiceImpl implements ParentUserService {
         vo.setNickname(user.getNickname());
         vo.setAvatarUrl(user.getAvatarUrl());
         vo.setPhone(getMaskedPhoneForUser(parentUserId));
+        vo.setBetaTester(user.getIsBetaTester() != null && user.getIsBetaTester() == 1);
+        String enabled = sysParamsService.getValue("server.beta_feedback_enabled", true);
+        vo.setBetaFeedbackEnabled("true".equalsIgnoreCase(StringUtils.trimToEmpty(enabled)));
         return vo;
     }
 

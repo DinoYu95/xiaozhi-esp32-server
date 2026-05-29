@@ -92,7 +92,8 @@
             $route.path === '/user-management' ||
             $route.path === '/feature-management' ||
             $route.path === '/skill-management' ||
-            $route.path === '/child-risk-management',
+            $route.path === '/child-risk-management' ||
+            $route.path === '/beta-feedback-management',
         }" @visible-change="handleParamDropdownVisibleChange">
           <span class="el-dropdown-link">
             <img loading="lazy" alt="" src="@/assets/header/param_management.png" :style="{
@@ -106,7 +107,8 @@
                   $route.path === '/user-management' ||
                   $route.path === '/feature-management' ||
                   $route.path === '/skill-management' ||
-                  $route.path === '/child-risk-management'
+                  $route.path === '/child-risk-management' ||
+                    $route.path === '/beta-feedback-management'
                   ? 'brightness(0) invert(1)'
                   : 'None',
             }" />
@@ -143,6 +145,9 @@
             </el-dropdown-item>
             <el-dropdown-item @click.native="goChildRiskManagement">
               {{ $t("header.childRiskManagement") }}
+            </el-dropdown-item>
+            <el-dropdown-item @click.native="goBetaFeedbackManagement">
+              {{ $t("header.betaFeedbackManagement") }}
             </el-dropdown-item>
           </el-dropdown-menu>
         </el-dropdown>
@@ -388,6 +393,9 @@ export default {
     },
     goChildRiskManagement() {
       this.$router.push("/child-risk-management");
+    },
+    goBetaFeedbackManagement() {
+      this.$router.push("/beta-feedback-management");
     },
     // 加载功能状态
     async loadFeatureStatus() {

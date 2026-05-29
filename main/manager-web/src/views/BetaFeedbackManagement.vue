@@ -93,15 +93,49 @@
             <pre class="desc-pre">{{ detail.description }}</pre>
           </el-descriptions-item>
         </el-descriptions>
-        <div v-if="detail.imageUrls && detail.imageUrls.length" class="img-row">
-          <div class="img-label">{{ $t('betaFeedback.images') }}</div>
-          <a v-for="(u, i) in detail.imageUrls" :key="i" :href="u" target="_blank" rel="noopener">
-            <img :src="u" class="thumb" />
-          </a>
+        <div v-if="detail.imageUrls && detail.imageUrls.length" class="section-block">
+          <div class="section-title">{{ $t('betaFeedback.images') }}</div>
+          <div class="img-gallery">
+            <el-image
+              v-for="(u, i) in detail.imageUrls"
+              :key="i"
+              class="thumb-el"
+              :src="u"
+              :preview-src-list="detail.imageUrls"
+              fit="cover"
+            />
+          </div>
         </div>
-        <div v-if="detail.contextSnapshot" class="ctx-block">
-          <div class="img-label">{{ $t('betaFeedback.context') }}</div>
-          <pre class="ctx-pre">{{ formatJson(detail.contextSnapshot) }}</pre>
+        <div v-if="contextRows.length" class="section-block">
+          <div class="section-title">{{ $t('betaFeedback.context') }}</div>
+          <el-descriptions :column="2" border size="small" class="ctx-desc">
+            <el-descriptions-item
+              v-for="row in contextRows"
+              :key="row.key"
+              :label="row.label"
+              :span="row.span || 1"
+            >
+              <span class="ctx-value">{{ row.value }}</span>
+            </el-descriptions-item>
+          </el-descriptions>
+          <el-collapse v-if="contextExtraKeys.length" class="ctx-collapse">
+            <el-collapse-item :title="$t('betaFeedback.contextMore', { n: contextExtraKeys.length })" name="more">
+              <el-descriptions :column="1" border size="small">
+                <el-descriptions-item
+                  v-for="row in contextExtraRows"
+                  :key="row.key"
+                  :label="row.key"
+                >
+                  <span class="ctx-value">{{ row.value }}</span>
+                </el-descriptions-item>
+              </el-descriptions>
+            </el-collapse-item>
+          </el-collapse>
+          <el-collapse class="ctx-collapse">
+            <el-collapse-item :title="$t('betaFeedback.contextRaw')" name="raw">
+              <pre class="ctx-pre">{{ formatJson(detail.contextSnapshot) }}</pre>
+            </el-collapse-item>
+          </el-collapse>
         </div>
         <el-divider />
         <el-form label-width="100px" size="small">
@@ -187,7 +221,52 @@ export default {
         { value: 'resolved', labelKey: 'betaFeedback.st.resolved' },
         { value: 'wont_fix', labelKey: 'betaFeedback.st.wont_fix' },
       ],
+      contextFieldMeta: [
+        { key: 'parent_user_id', labelKey: 'betaFeedback.ctx.parent_user_id' },
+        { key: 'child_id', labelKey: 'betaFeedback.ctx.child_id' },
+        { key: 'device_id', labelKey: 'betaFeedback.ctx.device_id' },
+        { key: 'mini_program_version', labelKey: 'betaFeedback.ctx.mini_program_version' },
+        { key: 'page_path', labelKey: 'betaFeedback.ctx.page_path', span: 2 },
+        { key: 'page_query', labelKey: 'betaFeedback.ctx.page_query', span: 2 },
+        { key: 'client_time', labelKey: 'betaFeedback.ctx.client_time', span: 2 },
+        { key: 'network_type', labelKey: 'betaFeedback.ctx.network_type' },
+        { key: 'system', labelKey: 'betaFeedback.ctx.system' },
+        { key: 'model', labelKey: 'betaFeedback.ctx.model' },
+      ],
     };
+  },
+  computed: {
+    contextRows() {
+      const snap = this.detail && this.detail.contextSnapshot;
+      if (!snap || typeof snap !== 'object') return [];
+      const known = new Set(this.contextFieldMeta.map((m) => m.key));
+      const rows = [];
+      for (const meta of this.contextFieldMeta) {
+        const v = snap[meta.key];
+        if (v === undefined || v === null || v === '') continue;
+        rows.push({
+          key: meta.key,
+          label: this.$t(meta.labelKey),
+          value: this.formatContextValue(meta.key, v),
+          span: meta.span,
+        });
+      }
+      return rows;
+    },
+    contextExtraKeys() {
+      const snap = this.detail && this.detail.contextSnapshot;
+      if (!snap || typeof snap !== 'object') return [];
+      const known = new Set(this.contextFieldMeta.map((m) => m.key));
+      return Object.keys(snap).filter((k) => !known.has(k));
+    },
+    contextExtraRows() {
+      const snap = this.detail && this.detail.contextSnapshot;
+      if (!snap) return [];
+      return this.contextExtraKeys.map((k) => ({
+        key: k,
+        value: this.formatContextValue(k, snap[k]),
+      }));
+    },
   },
   mounted() {
     this.loadList(1);
@@ -212,6 +291,23 @@ export default {
       } catch (e) {
         return String(obj);
       }
+    },
+    formatContextValue(key, val) {
+      if (val === null || val === undefined) return '-';
+      if (typeof val === 'object') {
+        try {
+          return JSON.stringify(val);
+        } catch (e) {
+          return String(val);
+        }
+      }
+      if (key === 'client_time' && typeof val === 'string') {
+        const d = new Date(val);
+        if (!Number.isNaN(d.getTime())) {
+          return `${val}（${d.toLocaleString('zh-CN')}）`;
+        }
+      }
+      return String(val);
     },
     resetFilters() {
       this.filters = {
@@ -312,23 +408,57 @@ export default {
   font-family: inherit;
   font-size: 13px;
 }
-.ctx-block {
-  margin-top: 12px;
+.section-block {
+  margin-top: 16px;
 }
-.img-row {
-  margin-top: 12px;
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 10px;
+  padding-left: 8px;
+  border-left: 3px solid #409eff;
 }
-.img-label {
-  font-size: 13px;
-  color: #606266;
+.ctx-desc {
   margin-bottom: 8px;
 }
-.thumb {
-  max-width: 120px;
-  max-height: 120px;
-  margin-right: 8px;
-  border: 1px solid #eee;
-  vertical-align: top;
+.ctx-value {
+  word-break: break-all;
+  line-height: 1.5;
+}
+.ctx-collapse {
+  margin-top: 8px;
+  border: none;
+}
+.ctx-collapse >>> .el-collapse-item__header {
+  height: 36px;
+  line-height: 36px;
+  font-size: 12px;
+  color: #909399;
+  background: #f5f7fa;
+  padding-left: 12px;
+  border-radius: 4px;
+}
+.ctx-pre {
+  background: #f5f7fa;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 200px;
+  overflow: auto;
+  font-family: Menlo, Monaco, Consolas, monospace;
+}
+.img-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.thumb-el {
+  width: 100px;
+  height: 100px;
+  border-radius: 6px;
+  border: 1px solid #ebeef5;
 }
 .form-tip {
   margin-left: 8px;

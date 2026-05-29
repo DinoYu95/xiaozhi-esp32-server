@@ -1,6 +1,6 @@
 -- 家长端内测反馈
 ALTER TABLE `parent_user`
-    ADD COLUMN `is_beta_tester` TINYINT NOT NULL DEFAULT 0 COMMENT '是否内测用户：1=可提交反馈' AFTER `channel`;
+    ADD COLUMN `is_beta_tester` TINYINT NOT NULL DEFAULT 0 COMMENT '是否内测用户：1=可提交反馈' AFTER `avatar_url`;
 
 CREATE TABLE IF NOT EXISTS `parent_feedback` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',

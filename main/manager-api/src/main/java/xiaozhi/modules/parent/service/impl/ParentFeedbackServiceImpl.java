@@ -121,6 +121,8 @@ public class ParentFeedbackServiceImpl implements ParentFeedbackService {
                 throw new RenException("imageUrls 格式无效");
             }
         }
+        // feedback_no 为 NOT NULL + 唯一索引，须先占位再 insert 后按 id 生成正式编号
+        row.setFeedbackNo("FB-TMP-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12));
         row.setCreateTime(new Date());
         row.setUpdateTime(new Date());
         parentFeedbackDao.insert(row);

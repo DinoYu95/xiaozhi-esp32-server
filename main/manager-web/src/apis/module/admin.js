@@ -315,6 +315,53 @@ export default {
                 })
             }).send()
     },
+    getParentRiskWatchPage(params, callback) {
+        const q = new URLSearchParams()
+        if (params.page) q.set('page', params.page)
+        if (params.limit) q.set('limit', params.limit)
+        if (params.status) q.set('status', params.status)
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-risk-watch/page?${q.toString()}`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getParentRiskWatchPage(params, callback)
+                })
+            }).send()
+    },
+    getParentRiskWatchDetail(id, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-risk-watch/${id}`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getParentRiskWatchDetail(id, callback)
+                })
+            }).send()
+    },
+    auditParentRiskWatch(id, data, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-risk-watch/${id}/audit`)
+            .method('PUT')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.auditParentRiskWatch(id, data, callback)
+                })
+            }).send()
+    },
     getBetaFeedbackPage(params, callback) {
         const q = new URLSearchParams()
         if (params.page) q.set('page', params.page)

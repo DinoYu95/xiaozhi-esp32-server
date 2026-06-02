@@ -23,8 +23,12 @@ import xiaozhi.common.page.PageData;
 import xiaozhi.common.utils.JsonUtils;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
+import xiaozhi.modules.parent.dao.ParentRiskPreferenceDao;
+import xiaozhi.modules.parent.dao.ParentRiskWatchDao;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
+import xiaozhi.modules.parent.entity.ParentRiskPreferenceEntity;
+import xiaozhi.modules.parent.entity.ParentRiskWatchEntity;
 import xiaozhi.modules.risk.dao.ChildRiskEvaluatorDao;
 import xiaozhi.modules.risk.dao.ChildRiskEventDao;
 import xiaozhi.modules.risk.dao.ChildRiskOutboxDao;
@@ -50,6 +54,7 @@ import xiaozhi.modules.risk.vo.ChildRiskSignalResultVO;
 import xiaozhi.modules.risk.vo.ParentRiskNotificationDetailVO;
 import xiaozhi.modules.risk.vo.ParentRiskNotificationPageVO;
 import xiaozhi.modules.risk.vo.ParentRiskNotificationVO;
+import xiaozhi.modules.risk.vo.ParentRiskPreferenceAgentVO;
 import xiaozhi.modules.sys.service.SysParamsService;
 
 @Service
@@ -67,6 +72,8 @@ public class ChildRiskServiceImpl implements ChildRiskService {
     private final ChildRiskEventDao childRiskEventDao;
     private final ChildRiskOutboxDao childRiskOutboxDao;
     private final ParentRiskNotificationDao parentRiskNotificationDao;
+    private final ParentRiskWatchDao parentRiskWatchDao;
+    private final ParentRiskPreferenceDao parentRiskPreferenceDao;
 
     @Data
     private static final class RiskCfg {
@@ -325,9 +332,89 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         List<ChildRiskRuleEntity> rows = childRiskRuleDao.selectList(
                 new LambdaQueryWrapper<ChildRiskRuleEntity>()
                         .eq(ChildRiskRuleEntity::getStatus, 1)
+                        .and(w -> w.eq(ChildRiskRuleEntity::getRuleScope, "PLATFORM")
+                                .or()
+                                .isNull(ChildRiskRuleEntity::getRuleScope))
                         .orderByAsc(ChildRiskRuleEntity::getSortOrder)
                         .orderByAsc(ChildRiskRuleEntity::getId));
         return rows.stream().map(this::toRulePub).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ChildRiskRulePublicVO> listEnabledRulesForAgentByChild(Long childId) {
+        List<ChildRiskRulePublicVO> out = new ArrayList<>(listEnabledRulesForAgent());
+        if (childId == null) {
+            return out;
+        }
+        List<ChildRiskRuleEntity> parentRows = childRiskRuleDao.selectList(
+                new LambdaQueryWrapper<ChildRiskRuleEntity>()
+                        .eq(ChildRiskRuleEntity::getStatus, 1)
+                        .eq(ChildRiskRuleEntity::getRuleScope, "PARENT")
+                        .eq(ChildRiskRuleEntity::getChildId, childId)
+                        .orderByAsc(ChildRiskRuleEntity::getSortOrder));
+        for (ChildRiskRuleEntity e : parentRows) {
+            out.add(toRulePub(e));
+        }
+        return out;
+    }
+
+    @Override
+    public List<ChildRiskEvaluatorPublicVO> listEnabledEvaluatorsForAgentByChild(Long childId) {
+        List<ChildRiskEvaluatorPublicVO> out = new ArrayList<>(listEnabledEvaluatorsForAgent());
+        if (childId == null) {
+            return out;
+        }
+        List<ParentRiskWatchEntity> watches = parentRiskWatchDao.selectList(
+                new LambdaQueryWrapper<ParentRiskWatchEntity>()
+                        .eq(ParentRiskWatchEntity::getChildId, childId)
+                        .eq(ParentRiskWatchEntity::getWatchType, ParentRiskWatchEntity.TYPE_EVALUATOR)
+                        .eq(ParentRiskWatchEntity::getStatus, ParentRiskWatchEntity.STATUS_ENABLED)
+                        .orderByAsc(ParentRiskWatchEntity::getSortOrder));
+        for (ParentRiskWatchEntity w : watches) {
+            out.add(watchToEvaluatorPub(w));
+        }
+        return out;
+    }
+
+    @Override
+    public ParentRiskPreferenceAgentVO getPreferenceForAgent(Long childId) {
+        ParentRiskPreferenceAgentVO vo = new ParentRiskPreferenceAgentVO();
+        vo.setChildId(childId);
+        if (childId == null) {
+            vo.setFocusDomains(List.of());
+            return vo;
+        }
+        ParentRiskPreferenceEntity row = parentRiskPreferenceDao.selectOne(
+                new LambdaQueryWrapper<ParentRiskPreferenceEntity>()
+                        .eq(ParentRiskPreferenceEntity::getChildId, childId)
+                        .last("LIMIT 1"));
+        if (row == null || StringUtils.isBlank(row.getFocusDomains())) {
+            vo.setFocusDomains(List.of());
+            return vo;
+        }
+        try {
+            List<String> list = JsonUtils.parseArray(row.getFocusDomains(), String.class);
+            vo.setFocusDomains(list == null ? List.of() : list);
+        } catch (Exception e) {
+            vo.setFocusDomains(List.of());
+        }
+        return vo;
+    }
+
+    private ChildRiskEvaluatorPublicVO watchToEvaluatorPub(ParentRiskWatchEntity w) {
+        ChildRiskEvaluatorPublicVO v = new ChildRiskEvaluatorPublicVO();
+        v.setId(w.getId());
+        v.setCode("parent_" + w.getParentUserId() + "_" + w.getId());
+        v.setName(w.getName());
+        v.setRiskDomain(w.getRiskDomain());
+        v.setVersion(w.getVersion() != null ? w.getVersion() : 1);
+        v.setStatus(1);
+        v.setTimeoutMs(45000);
+        v.setTemperature(BigDecimal.ZERO);
+        v.setInstructions(w.getInstructions());
+        v.setAllowedCategories(w.getAllowedCategories());
+        v.setSortOrder(2000 + (w.getSortOrder() != null ? w.getSortOrder() : 0));
+        return v;
     }
 
     @Override

@@ -106,6 +106,56 @@
           </el-table>
         </el-tab-pane>
 
+        <el-tab-pane :label="$t('childRisk.tab.parentWatch')" name="parentWatch">
+          <el-alert type="info" :closable="false" show-icon style="margin-bottom: 16px">
+            <span slot="title">{{ $t('childRisk.parentWatch.hintTitle') }}</span>
+            <div>{{ $t('childRisk.parentWatch.hintBody') }}</div>
+          </el-alert>
+          <el-form :inline="true" size="small" class="filter-form">
+            <el-form-item :label="$t('childRisk.parentWatch.filter.status')">
+              <el-select v-model="parentWatchFilters.status" clearable style="width: 120px">
+                <el-option
+                  v-for="s in parentWatchStatusOptions"
+                  :key="s.value"
+                  :label="$t(s.labelKey)"
+                  :value="s.value"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="loadParentWatchList(1)">{{ $t('childRisk.parentWatch.search') }}</el-button>
+            </el-form-item>
+          </el-form>
+          <el-table :data="parentWatchList" border v-loading="parentWatchLoading" style="width: 100%">
+            <el-table-column prop="id" label="ID" width="72" />
+            <el-table-column prop="parentUserId" :label="$t('childRisk.parentWatch.col.parentId')" width="88" />
+            <el-table-column prop="childId" :label="$t('childRisk.event.childId')" width="88" />
+            <el-table-column prop="watchType" :label="$t('childRisk.parentWatch.col.type')" width="110" />
+            <el-table-column prop="name" :label="$t('childRisk.parentWatch.col.name')" min-width="120" show-overflow-tooltip />
+            <el-table-column prop="riskDomainName" :label="$t('childRisk.evaluator.domain')" width="120" />
+            <el-table-column prop="statusLabel" :label="$t('childRisk.parentWatch.col.status')" width="96" />
+            <el-table-column prop="createTime" :label="$t('childRisk.event.time')" width="172">
+              <template slot-scope="scope">{{ formatTime(scope.row.createTime) }}</template>
+            </el-table-column>
+            <el-table-column :label="$t('childRisk.operation')" width="100" fixed="right">
+              <template slot-scope="scope">
+                <el-button type="text" size="small" @click="openParentWatchDetail(scope.row.id)">
+                  {{ $t('childRisk.parentWatch.detail') }}
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-pagination
+            v-if="parentWatchTotal > 0"
+            style="margin-top: 16px; text-align: right"
+            layout="total, prev, pager, next"
+            :total="parentWatchTotal"
+            :page-size="parentWatchPageSize"
+            :current-page.sync="parentWatchPage"
+            @current-change="loadParentWatchList"
+          />
+        </el-tab-pane>
+
         <el-tab-pane :label="$t('childRisk.tab.events')" name="events">
           <el-table :data="eventList" border v-loading="eventsLoading" style="width: 100%">
             <el-table-column prop="id" label="ID" width="72" />
@@ -171,6 +221,56 @@
       <span slot="footer">
         <el-button @click="evaluatorDialogVisible = false">{{ $t('button.cancel') }}</el-button>
         <el-button type="primary" :loading="evaluatorSaving" @click="submitEvaluator">{{ $t('button.ok') }}</el-button>
+      </span>
+    </el-dialog>
+
+    <el-dialog
+      :title="$t('childRisk.parentWatch.detailTitle')"
+      :visible.sync="parentWatchDetailVisible"
+      width="760px"
+      @open="onParentWatchDetailOpen"
+    >
+      <div v-loading="parentWatchDetailLoading" v-if="parentWatchDetail">
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item label="ID">{{ parentWatchDetail.id }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('childRisk.parentWatch.col.status')">{{ parentWatchDetail.statusLabel }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('childRisk.parentWatch.col.parentId')">{{ parentWatchDetail.parentUserId }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('childRisk.event.childId')">{{ parentWatchDetail.childId }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('childRisk.parentWatch.col.type')">{{ parentWatchDetail.watchType }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('childRisk.evaluator.domain')">{{ parentWatchDetail.riskDomainName }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('childRisk.parentWatch.col.name')" :span="2">{{ parentWatchDetail.name }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('childRisk.parentWatch.col.desc')" :span="2">
+            <pre class="desc-pre">{{ parentWatchDetail.description || '-' }}</pre>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="parentWatchDetail.pattern" :label="$t('childRisk.rule.pattern')" :span="2">
+            <pre class="desc-pre">{{ parentWatchDetail.pattern }}</pre>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="parentWatchDetail.instructions" :label="$t('childRisk.evaluator.instructions')" :span="2">
+            <pre class="desc-pre">{{ parentWatchDetail.instructions }}</pre>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="parentWatchDetail.rejectReason" :label="$t('childRisk.parentWatch.rejectReason')" :span="2">
+            {{ parentWatchDetail.rejectReason }}
+          </el-descriptions-item>
+        </el-descriptions>
+        <div v-if="parentWatchDetail.status === 'pending'" style="margin-top: 16px">
+          <el-form label-width="100px" size="small">
+            <el-form-item :label="$t('childRisk.parentWatch.auditNote')">
+              <el-input v-model="parentWatchAuditNote" type="textarea" :rows="2" />
+            </el-form-item>
+            <el-form-item :label="$t('childRisk.parentWatch.rejectReason')">
+              <el-input v-model="parentWatchRejectReason" type="textarea" :rows="2" placeholder="拒绝时填写" />
+            </el-form-item>
+          </el-form>
+        </div>
+      </div>
+      <span slot="footer" v-if="parentWatchDetail && parentWatchDetail.status === 'pending'">
+        <el-button @click="parentWatchDetailVisible = false">{{ $t('button.cancel') }}</el-button>
+        <el-button type="danger" :loading="parentWatchAuditing" @click="auditParentWatch('reject')">
+          {{ $t('childRisk.parentWatch.reject') }}
+        </el-button>
+        <el-button type="primary" :loading="parentWatchAuditing" @click="auditParentWatch('approve')">
+          {{ $t('childRisk.parentWatch.approve') }}
+        </el-button>
       </span>
     </el-dialog>
 
@@ -277,6 +377,25 @@ export default {
       eventPage: 1,
       eventPageSize: 20,
       eventTotal: 0,
+      parentWatchList: [],
+      parentWatchLoading: false,
+      parentWatchPage: 1,
+      parentWatchPageSize: 20,
+      parentWatchTotal: 0,
+      parentWatchFilters: { status: 'pending' },
+      parentWatchStatusOptions: [
+        { value: 'pending', labelKey: 'childRisk.parentWatch.status.pending' },
+        { value: 'enabled', labelKey: 'childRisk.parentWatch.status.enabled' },
+        { value: 'rejected', labelKey: 'childRisk.parentWatch.status.rejected' },
+        { value: 'disabled', labelKey: 'childRisk.parentWatch.status.disabled' },
+      ],
+      parentWatchDetailVisible: false,
+      parentWatchDetailId: null,
+      parentWatchDetail: null,
+      parentWatchDetailLoading: false,
+      parentWatchAuditNote: '',
+      parentWatchRejectReason: '',
+      parentWatchAuditing: false,
     };
   },
   mounted() {
@@ -293,7 +412,64 @@ export default {
     onTabChange(tab) {
       if (tab.name === 'rules') this.fetchRules();
       if (tab.name === 'evaluators') this.fetchEvaluators();
+      if (tab.name === 'parentWatch') this.loadParentWatchList(1);
       if (tab.name === 'events') this.loadEvents(1);
+    },
+    loadParentWatchList(page) {
+      this.parentWatchLoading = true;
+      if (page) this.parentWatchPage = page;
+      const params = {
+        page: this.parentWatchPage,
+        limit: this.parentWatchPageSize,
+        status: this.parentWatchFilters.status || 'pending',
+      };
+      Api.admin.getParentRiskWatchPage(params, ({ data }) => {
+        this.parentWatchLoading = false;
+        if (data.code === 0 && data.data) {
+          this.parentWatchList = data.data.list || [];
+          this.parentWatchTotal = data.data.total || 0;
+        }
+      });
+    },
+    openParentWatchDetail(id) {
+      this.parentWatchDetailId = id;
+      this.parentWatchAuditNote = '';
+      this.parentWatchRejectReason = '';
+      this.parentWatchDetailVisible = true;
+    },
+    onParentWatchDetailOpen() {
+      if (!this.parentWatchDetailId) return;
+      this.parentWatchDetailLoading = true;
+      Api.admin.getParentRiskWatchDetail(this.parentWatchDetailId, ({ data }) => {
+        this.parentWatchDetailLoading = false;
+        if (data.code === 0) {
+          this.parentWatchDetail = data.data;
+        }
+      });
+    },
+    auditParentWatch(action) {
+      if (!this.parentWatchDetailId) return;
+      if (action === 'reject' && !this.parentWatchRejectReason.trim()) {
+        this.$message.warning(this.$t('childRisk.parentWatch.rejectNeedReason'));
+        return;
+      }
+      this.parentWatchAuditing = true;
+      Api.admin.auditParentRiskWatch(
+        this.parentWatchDetailId,
+        {
+          action,
+          auditNote: this.parentWatchAuditNote || undefined,
+          rejectReason: action === 'reject' ? this.parentWatchRejectReason : undefined,
+        },
+        ({ data }) => {
+          this.parentWatchAuditing = false;
+          if (data.code === 0) {
+            this.$message.success(this.$t('childRisk.saveOk'));
+            this.parentWatchDetailVisible = false;
+            this.loadParentWatchList(this.parentWatchPage);
+          }
+        },
+      );
     },
     loadConfig() {
       this.configLoading = true;
@@ -519,6 +695,13 @@ export default {
 </script>
 
 <style scoped>
+.desc-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 13px;
+}
 .cr-card {
   margin-top: 8px;
 }

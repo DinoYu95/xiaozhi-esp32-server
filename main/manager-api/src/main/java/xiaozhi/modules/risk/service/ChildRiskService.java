@@ -16,6 +16,7 @@ import xiaozhi.modules.risk.vo.ChildRiskRulePublicVO;
 import xiaozhi.modules.risk.vo.ChildRiskSignalResultVO;
 import xiaozhi.modules.risk.vo.ParentRiskNotificationDetailVO;
 import xiaozhi.modules.risk.vo.ParentRiskNotificationPageVO;
+import xiaozhi.modules.risk.vo.ParentRiskPreferenceAgentVO;
 
 public interface ChildRiskService {
 
@@ -28,6 +29,13 @@ public interface ChildRiskService {
     void verifyParentOwnsChild(Long parentUserId, Long childId);
 
     List<ChildRiskRulePublicVO> listEnabledRulesForAgent();
+
+    /** 平台规则 + 该孩子的家长观察词（childId 必填） */
+    List<ChildRiskRulePublicVO> listEnabledRulesForAgentByChild(Long childId);
+
+    List<ChildRiskEvaluatorPublicVO> listEnabledEvaluatorsForAgentByChild(Long childId);
+
+    ParentRiskPreferenceAgentVO getPreferenceForAgent(Long childId);
 
     ChildRiskAgentRuntimeVO getAgentRiskRuntime();
 

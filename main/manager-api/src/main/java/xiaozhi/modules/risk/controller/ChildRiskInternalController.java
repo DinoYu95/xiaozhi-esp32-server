@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import xiaozhi.modules.risk.vo.ChildRiskDomainVO;
 import xiaozhi.modules.risk.vo.ChildRiskEvaluatorPublicVO;
 import xiaozhi.modules.risk.vo.ChildRiskRulePublicVO;
 import xiaozhi.modules.risk.vo.ChildRiskSignalResultVO;
+import xiaozhi.modules.risk.vo.ParentRiskPreferenceAgentVO;
 
 /** zhiban-agent 等调用：Bearer server.secret */
 @RestController
@@ -51,13 +53,28 @@ public class ChildRiskInternalController {
 
     /** 下发启用的文本规则供 zhiban 本地扫描 */
     @GetMapping("/rules")
-    public Result<List<ChildRiskRulePublicVO>> rules() {
+    public Result<List<ChildRiskRulePublicVO>> rules(
+            @RequestParam(value = "childId", required = false) Long childId) {
+        if (childId != null) {
+            return new Result<List<ChildRiskRulePublicVO>>()
+                    .ok(childRiskService.listEnabledRulesForAgentByChild(childId));
+        }
         return new Result<List<ChildRiskRulePublicVO>>().ok(childRiskService.listEnabledRulesForAgent());
     }
 
     @GetMapping("/evaluators")
-    public Result<List<ChildRiskEvaluatorPublicVO>> evaluators() {
+    public Result<List<ChildRiskEvaluatorPublicVO>> evaluators(
+            @RequestParam(value = "childId", required = false) Long childId) {
+        if (childId != null) {
+            return new Result<List<ChildRiskEvaluatorPublicVO>>()
+                    .ok(childRiskService.listEnabledEvaluatorsForAgentByChild(childId));
+        }
         return new Result<List<ChildRiskEvaluatorPublicVO>>().ok(childRiskService.listEnabledEvaluatorsForAgent());
+    }
+
+    @GetMapping("/preference")
+    public Result<ParentRiskPreferenceAgentVO> preference(@RequestParam Long childId) {
+        return new Result<ParentRiskPreferenceAgentVO>().ok(childRiskService.getPreferenceForAgent(childId));
     }
 
     @GetMapping("/domains")

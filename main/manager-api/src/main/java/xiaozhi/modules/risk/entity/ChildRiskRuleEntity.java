@@ -23,6 +23,10 @@ public class ChildRiskRuleEntity {
     /** 1 最严重 */
     private Integer riskLevel;
     private String category;
+    /** PLATFORM 平台红线；PARENT 家长家庭观察词 */
+    private String ruleScope;
+    private Long parentUserId;
+    private Long childId;
     private Integer sortOrder;
     /** 0 禁用 1 启用 */
     private Integer status;

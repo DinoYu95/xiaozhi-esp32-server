@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import xiaozhi.common.exception.RenException;
@@ -72,7 +73,7 @@ public class ParentRiskWatchAssistServiceImpl implements ParentRiskWatchAssistSe
     public ParentRiskWatchDraftVO generateDraft(
             String watchType, String userIntent, String refinement, ParentRiskWatchDraftFields previousDraft) {
         AssistCfg cfg = loadCfg();
-        if (!cfg.enabled) {
+        if (!cfg.isEnabled()) {
             throw new RenException("AI 生成风险观察已关闭，请在参数字典配置 server.parent_risk_watch_assist_config");
         }
         String wt = StringUtils.trimToEmpty(watchType).toUpperCase();
@@ -89,24 +90,39 @@ public class ParentRiskWatchAssistServiceImpl implements ParentRiskWatchAssistSe
 
     private String callLlm(AssistCfg cfg, String prompt) {
         String raw;
-        if (StringUtils.isNotBlank(cfg.llmModelId)) {
-            String modelId = resolveLlmModelId(cfg.llmModelId);
+        String logSource;
+        if (StringUtils.isNotBlank(StringUtils.trimToEmpty(cfg.getLlmModelId()))) {
+            String modelId = resolveLlmModelId(cfg);
+            if (!llmService.isAvailable(modelId)) {
+                throw new RenException(
+                        "AI 服务不可用：参数字典 "
+                                + PARAM_KEY
+                                + " 的 llmModelId="
+                                + modelId
+                                + " 未启用或缺少 base_url/api_key");
+            }
+            logSource = "llmModelId=" + modelId;
             raw = llmService.generateSummary("", prompt, modelId);
-        } else if (StringUtils.isNotBlank(cfg.baseUrl) && StringUtils.isNotBlank(cfg.apiKey)) {
-            LlmOpenAiCallConfig inline = new LlmOpenAiCallConfig();
-            inline.setBaseUrl(cfg.baseUrl.trim());
-            inline.setApiKey(cfg.apiKey.trim());
-            inline.setModelName(StringUtils.trimToEmpty(cfg.modelName));
-            inline.setTemperature(cfg.temperature);
-            inline.setMaxTokens(cfg.maxTokens);
+        } else if (hasInlineLlm(cfg)) {
+            LlmOpenAiCallConfig inline = toInlineConfig(cfg);
+            if (!llmService.isInlineConfigAvailable(inline)) {
+                throw new RenException("参数字典 " + PARAM_KEY + " 缺少有效的 baseUrl 与 apiKey");
+            }
+            logSource = "inline baseUrl=" + StringUtils.abbreviate(inline.getBaseUrl(), 48);
             raw = llmService.chatWithOpenAiConfig(prompt, inline);
         } else {
             if (!llmService.isAvailable()) {
-                throw new RenException("AI 服务不可用，请配置 parent_risk_watch_assist_config");
+                throw new RenException(
+                        "AI 服务不可用：请在参数字典配置 "
+                                + PARAM_KEY
+                                + " 的 llmModelId，或填写 baseUrl+apiKey（与 server.parent_skill_assist_config 是两项独立配置）");
             }
+            logSource = "defaultLlm";
             raw = llmService.generateSummary("", prompt, null);
         }
-        if (StringUtils.isBlank(raw) || raw.contains("生成总结失败")) {
+        log.info("parent risk watch draft LLM source={}", logSource);
+        if (StringUtils.isBlank(raw) || raw.contains("生成总结失败") || raw.contains("LLM服务不可用")) {
+            log.warn("parent risk watch draft LLM failed, raw={}", StringUtils.abbreviate(raw, 120));
             throw new RenException("AI 生成失败，请稍后重试");
         }
         return raw;
@@ -139,46 +155,79 @@ public class ParentRiskWatchAssistServiceImpl implements ParentRiskWatchAssistSe
     }
 
     private AssistCfg loadCfg() {
-        AssistCfg c = new AssistCfg();
         String json = sysParamsService.getValue(PARAM_KEY, true);
+        AssistCfg c = new AssistCfg();
         if (StringUtils.isBlank(json)) {
+            log.warn("{} 未配置或 param_value 为空", PARAM_KEY);
             return c;
         }
         try {
-            AssistCfg p = JsonUtils.parseObject(json, AssistCfg.class);
-            if (p != null) {
-                c = p;
+            AssistCfg parsed = JsonUtils.parseObject(json, AssistCfg.class);
+            if (parsed != null) {
+                c = parsed;
             }
             JSONObject o = JSONUtil.parseObj(json);
-            if (StringUtils.isBlank(c.baseUrl)) {
-                c.baseUrl = o.getStr("base_url", "");
+            if (StringUtils.isBlank(c.getLlmModelId())) {
+                c.setLlmModelId(StringUtils.trimToEmpty(o.getStr("llm_model_id")));
             }
-            if (StringUtils.isBlank(c.apiKey)) {
-                c.apiKey = o.getStr("api_key", "");
+            if (StringUtils.isBlank(c.getBaseUrl())) {
+                c.setBaseUrl(StringUtils.trimToEmpty(o.getStr("base_url")));
             }
-            if (StringUtils.isBlank(c.modelName)) {
-                c.modelName = o.getStr("model_name", "");
+            if (StringUtils.isBlank(c.getApiKey())) {
+                c.setApiKey(StringUtils.trimToEmpty(o.getStr("api_key")));
             }
-        } catch (Exception ignored) {
+            if (StringUtils.isBlank(c.getModelName())) {
+                c.setModelName(StringUtils.trimToEmpty(o.getStr("model_name")));
+            }
+            if (c.getMaxTokens() == null && o.getInt("max_tokens") != null) {
+                c.setMaxTokens(o.getInt("max_tokens"));
+            }
+        } catch (Exception e) {
+            log.warn("解析 {} 失败: {}", PARAM_KEY, e.getMessage());
         }
         return c;
     }
 
-    private String resolveLlmModelId(String id) {
+    private static boolean hasInlineLlm(AssistCfg cfg) {
+        return StringUtils.isNotBlank(cfg.getBaseUrl()) && StringUtils.isNotBlank(cfg.getApiKey());
+    }
+
+    private static LlmOpenAiCallConfig toInlineConfig(AssistCfg cfg) {
+        LlmOpenAiCallConfig c = new LlmOpenAiCallConfig();
+        c.setBaseUrl(cfg.getBaseUrl().trim());
+        c.setApiKey(cfg.getApiKey().trim());
+        c.setModelName(StringUtils.trimToEmpty(cfg.getModelName()));
+        c.setTemperature(cfg.getTemperature());
+        c.setMaxTokens(cfg.getMaxTokens());
+        return c;
+    }
+
+    private String resolveLlmModelId(AssistCfg cfg) {
+        String id = StringUtils.trimToEmpty(cfg.getLlmModelId());
+        if (StringUtils.isBlank(id)) {
+            return null;
+        }
         ModelConfigEntity model = modelConfigService.getModelByIdFromCache(id);
-        if (model == null || model.getIsEnabled() == null || model.getIsEnabled() != 1) {
-            throw new RenException("llmModelId 无效或未启用: " + id);
+        if (model == null) {
+            throw new RenException("参数字典 " + PARAM_KEY + " 的 llmModelId 不存在: " + id);
+        }
+        if (!"LLM".equalsIgnoreCase(StringUtils.trimToEmpty(model.getModelType()))) {
+            throw new RenException("参数字典 " + PARAM_KEY + " 的 llmModelId 须为 LLM 类型模型，当前为: " + model.getModelType());
+        }
+        if (model.getIsEnabled() == null || model.getIsEnabled() != 1) {
+            throw new RenException("参数字典指定的 LLM 未启用: " + id);
         }
         return id;
     }
 
-    private static class AssistCfg {
-        boolean enabled = true;
-        String llmModelId = "";
-        String baseUrl = "";
-        String apiKey = "";
-        String modelName = "";
-        Double temperature;
-        Integer maxTokens;
+    @Data
+    private static final class AssistCfg {
+        private boolean enabled = true;
+        private String llmModelId = "";
+        private String baseUrl = "";
+        private String apiKey = "";
+        private String modelName = "";
+        private Double temperature;
+        private Integer maxTokens;
     }
 }

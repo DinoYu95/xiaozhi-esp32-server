@@ -29,13 +29,17 @@ public class ParentRiskWatchAssistServiceImpl implements ParentRiskWatchAssistSe
 
     private static final String PARAM_KEY = "server.parent_risk_watch_assist_config";
     private static final Pattern JSON_OBJECT = Pattern.compile("\\{.*\\}", Pattern.DOTALL);
+    private static final int NAME_MAX = 128;
+    private static final int DESC_MAX = 512;
+    private static final int PATTERN_MAX = 512;
+    private static final int INSTRUCTIONS_MAX = 4000;
 
     private static final String PROMPT_KEYWORD =
             """
             你是儿童对话「安全观察」设计助手。家长用口语描述担忧，需生成**家庭观察词**（关键词规则），不是聊天技能。
 
-            watchType 固定为 KEYWORD。输出 JSON（不要 markdown）：
-            {"name":"2~12字","description":"给家长看 20~60字","triggerHint":"当孩子说…时","riskDomain":"peer_relation等","pattern":"关键词或短语，可用|分隔多说法","riskLevel":2,"category":"须从该领域白名单选一项"}
+            watchType 固定为 KEYWORD。只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释：
+            {"name":"2~12字","description":"给家长看 20~60字","triggerHint":"当孩子说…时","riskDomain":"peer_relation","pattern":"关键词或短语，可用|分隔多说法","riskLevel":2,"category":"other"}
 
             riskDomain 仅限：psychological, peer_relation, family, school, online_safety, physical_health, other
             riskLevel：1最严重 3最轻，建议 2
@@ -52,8 +56,8 @@ public class ParentRiskWatchAssistServiceImpl implements ParentRiskWatchAssistSe
             """
             你是儿童对话「安全观察」设计助手。家长用口语描述担忧，需生成**领域判别说明**（供后台 LLM 异步扫描，不直接与孩子对话）。
 
-            watchType 固定为 EVALUATOR。输出 JSON（不要 markdown）：
-            {"name":"2~12字","description":"给家长看","triggerHint":"当孩子聊天涉及…","riskDomain":"一个领域code","instructions":"200~600字中文：触发场景、观察要点、输出约束（只判风险不写安慰）","allowedCategories":"JSON数组字符串如 [\"bullying\",\"other\"]"}
+            watchType 固定为 EVALUATOR。只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释：
+            {"name":"2~12字","description":"给家长看","triggerHint":"当孩子聊天涉及…","riskDomain":"psychological","instructions":"200~600字中文：触发场景、观察要点、输出约束（只判风险不写安慰）","allowedCategories":"[\"emotion_distress\",\"hopelessness\",\"other\"]"}
 
             riskDomain 仅限：psychological, peer_relation, family, school, online_safety, physical_health, other
             allowedCategories 必须属于该领域建议类目。
@@ -80,9 +84,10 @@ public class ParentRiskWatchAssistServiceImpl implements ParentRiskWatchAssistSe
         String template = "EVALUATOR".equals(wt) ? PROMPT_EVALUATOR : PROMPT_KEYWORD;
         String prompt = buildPrompt(template, userIntent, refinement, previousDraft);
         String raw = callLlm(cfg, prompt);
-        ParentRiskWatchDraftVO vo = parseDraft(raw);
+        ParentRiskWatchDraftVO vo = parseDraft(raw, wt);
         if (vo == null) {
-            throw new RenException("AI 返回格式异常，请重试");
+            log.warn("parent risk watch draft parse failed watchType={} raw={}", wt, StringUtils.abbreviate(raw, 300));
+            throw new RenException("AI 返回格式异常，请重试或稍后在预览页手动填写");
         }
         vo.setWatchType("EVALUATOR".equals(wt) ? "EVALUATOR" : "KEYWORD");
         return vo;
@@ -128,16 +133,119 @@ public class ParentRiskWatchAssistServiceImpl implements ParentRiskWatchAssistSe
         return raw;
     }
 
-    private ParentRiskWatchDraftVO parseDraft(String raw) {
-        Matcher m = JSON_OBJECT.matcher(raw);
-        if (!m.find()) {
+    private ParentRiskWatchDraftVO parseDraft(String raw, String watchType) {
+        String json = extractJson(raw);
+        if (json == null) {
             return null;
         }
         try {
-            return JsonUtils.parseObject(m.group(), ParentRiskWatchDraftVO.class);
+            JSONObject obj = JSONUtil.parseObj(json);
+            String name = fieldStr(obj, "name");
+            if (StringUtils.isBlank(name)) {
+                return null;
+            }
+            ParentRiskWatchDraftVO vo = new ParentRiskWatchDraftVO();
+            vo.setName(truncate(name, NAME_MAX));
+            vo.setDescription(truncate(fieldStr(obj, "description"), DESC_MAX));
+            vo.setTriggerHint(truncate(fieldStr(obj, "triggerHint", "trigger_hint"), 256));
+            vo.setRiskDomain(normalizeDomain(fieldStr(obj, "riskDomain", "risk_domain")));
+            if ("EVALUATOR".equalsIgnoreCase(watchType)) {
+                String instructions = fieldStr(obj, "instructions");
+                if (StringUtils.isBlank(instructions)) {
+                    return null;
+                }
+                vo.setInstructions(truncate(instructions, INSTRUCTIONS_MAX));
+                vo.setAllowedCategories(normalizeAllowedCategories(obj));
+            } else {
+                String pattern = fieldStr(obj, "pattern");
+                if (StringUtils.isBlank(pattern)) {
+                    return null;
+                }
+                vo.setPattern(truncate(pattern, PATTERN_MAX));
+                Integer lvl = obj.getInt("riskLevel");
+                if (lvl == null) {
+                    lvl = obj.getInt("risk_level");
+                }
+                vo.setRiskLevel(clampLevel(lvl));
+                vo.setCategory(StringUtils.defaultIfBlank(fieldStr(obj, "category"), "other"));
+            }
+            return vo;
         } catch (Exception e) {
+            log.debug("parse risk watch draft error: {}", e.getMessage());
             return null;
         }
+    }
+
+    private static String fieldStr(JSONObject obj, String... keys) {
+        for (String key : keys) {
+            String v = StringUtils.trimToEmpty(obj.getStr(key));
+            if (StringUtils.isNotBlank(v)) {
+                return v;
+            }
+        }
+        return "";
+    }
+
+    private static String normalizeDomain(String d) {
+        String code = StringUtils.trimToEmpty(d).toLowerCase();
+        if (StringUtils.isBlank(code)) {
+            return "other";
+        }
+        return switch (code) {
+            case "psychological", "peer_relation", "family", "school", "online_safety", "physical_health", "other" ->
+                    code;
+            default -> "other";
+        };
+    }
+
+    private static String normalizeAllowedCategories(JSONObject obj) {
+        Object raw = obj.get("allowedCategories");
+        if (raw == null) {
+            raw = obj.get("allowed_categories");
+        }
+        if (raw == null) {
+            return "[\"other\"]";
+        }
+        if (raw instanceof cn.hutool.json.JSONArray arr) {
+            return arr.toString();
+        }
+        String s = StringUtils.trimToEmpty(String.valueOf(raw));
+        if (s.startsWith("[")) {
+            return s;
+        }
+        return "[\"" + s.replace("\"", "") + "\"]";
+    }
+
+    private static int clampLevel(Integer lvl) {
+        if (lvl == null) {
+            return 2;
+        }
+        return Math.max(1, Math.min(3, lvl));
+    }
+
+    private static String extractJson(String raw) {
+        if (StringUtils.isBlank(raw)) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.startsWith("```")) {
+            trimmed = trimmed.replaceAll("^```(?:json)?\\s*", "").replaceAll("\\s*```$", "").trim();
+        }
+        if (JSONUtil.isTypeJSONObject(trimmed)) {
+            return trimmed;
+        }
+        Matcher m = JSON_OBJECT.matcher(trimmed);
+        if (m.find()) {
+            return m.group();
+        }
+        return null;
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null || s.length() <= max) {
+            return s;
+        }
+        return s.substring(0, max);
     }
 
     private String buildPrompt(String template, String userIntent, String refinement, ParentRiskWatchDraftFields prev) {

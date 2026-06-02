@@ -309,6 +309,8 @@ public class ParentFeedbackServiceImpl implements ParentFeedbackService {
         vo.setBlocking(e.getBlocking() != null && e.getBlocking() == 1);
         vo.setAllowContact(e.getAllowContact() != null && e.getAllowContact() == 1);
         vo.setStatus(e.getStatus());
+        vo.setAdminNote(StringUtils.trimToNull(e.getAdminNote()));
+        vo.setWontFixReason(StringUtils.trimToNull(e.getWontFixReason()));
         vo.setImageUrls(parseImageUrls(e.getImageUrls()));
         vo.setCreateTime(e.getCreateTime());
         vo.setUpdateTime(e.getUpdateTime());
@@ -325,6 +327,8 @@ public class ParentFeedbackServiceImpl implements ParentFeedbackService {
         vo.setBlocking(base.getBlocking());
         vo.setAllowContact(base.getAllowContact());
         vo.setStatus(base.getStatus());
+        vo.setAdminNote(base.getAdminNote());
+        vo.setWontFixReason(base.getWontFixReason());
         vo.setImageUrls(base.getImageUrls());
         vo.setCreateTime(base.getCreateTime());
         vo.setUpdateTime(base.getUpdateTime());

@@ -443,5 +443,82 @@ export default {
                 })
             }).send()
     },
+    getBetaMissionConfig(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/beta-mission/config`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getBetaMissionConfig(callback)
+                })
+            }).send()
+    },
+    saveBetaMissionConfig(data, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/beta-mission/config`)
+            .method('PUT')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.saveBetaMissionConfig(data, callback)
+                })
+            }).send()
+    },
+    getBetaMissionFunnel(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/beta-mission/funnel`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getBetaMissionFunnel(callback)
+                })
+            }).send()
+    },
+    getBetaMissionUsers(params, callback) {
+        const q = new URLSearchParams()
+        if (params.page) q.set('page', params.page)
+        if (params.limit) q.set('limit', params.limit)
+        if (params.packCompleted !== undefined && params.packCompleted !== '') {
+            q.set('packCompleted', params.packCompleted)
+        }
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/beta-mission/users?${q.toString()}`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getBetaMissionUsers(params, callback)
+                })
+            }).send()
+    },
+    getBetaMissionUserDetail(parentUserId, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/beta-mission/users/${parentUserId}`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getBetaMissionUserDetail(parentUserId, callback)
+                })
+            }).send()
+    },
 
 }

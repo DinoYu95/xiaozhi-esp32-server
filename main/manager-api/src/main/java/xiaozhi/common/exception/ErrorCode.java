@@ -256,5 +256,10 @@ public interface ErrorCode {
     int PARENT_BETA_FEEDBACK_DISABLED = 20008; // 内测反馈未开放或非内测用户
     int PARENT_FEEDBACK_NOT_FOUND = 20009; // 反馈不存在或无权查看
     int PARENT_RISK_WATCH_NOT_FOUND = 20010; // 风险观察不存在或无权操作
+    int PARENT_BETA_MISSION_DISABLED = 20011; // 内测任务未开启或非内测用户
+    int PARENT_BETA_MISSION_STEP_INVALID = 20012; // 无效 stepKey
+    int PARENT_BETA_MISSION_STEP_NOT_SKIPPABLE = 20013; // 必做步不可 skip
+    int PARENT_BETA_MISSION_CONTEXT_INVALID = 20014; // 体验孩子无效或无权
+    int PARENT_BETA_MISSION_CONTEXT_LOCKED = 20015; // 体验孩子已锁定不可更换
 
 }

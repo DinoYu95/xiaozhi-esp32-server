@@ -132,6 +132,17 @@ const routes = [
     }
   },
   {
+    path: '/beta-mission-management',
+    name: 'BetaMissionManagement',
+    component: function () {
+      return import('../views/BetaMissionManagement.vue')
+    },
+    meta: {
+      requiresAuth: true,
+      title: '内测任务'
+    }
+  },
+  {
     path: '/knowledge-file-upload',
     name: 'KnowledgeFileUpload',
     component: function () {

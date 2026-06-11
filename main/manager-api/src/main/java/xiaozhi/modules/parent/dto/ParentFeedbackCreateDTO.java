@@ -30,6 +30,6 @@ public class ParentFeedbackCreateDTO {
     @Schema(description = "小程序自动采集的上下文（JSON 对象）")
     private Map<String, Object> contextSnapshot;
 
-    @Schema(description = "截图 URL 列表（先调上传接口，最多 3 条）")
+    @Schema(description = "截图列表：上传接口返回的 objectKey 或 accessUrl，最多 3 条")
     private List<String> imageUrls;
 }

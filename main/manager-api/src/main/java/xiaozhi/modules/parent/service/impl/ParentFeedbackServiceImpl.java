@@ -1,9 +1,5 @@
 package xiaozhi.modules.parent.service.impl;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -36,6 +32,8 @@ import xiaozhi.modules.parent.dto.ParentFeedbackCreateDTO;
 import xiaozhi.modules.parent.entity.ParentFeedbackEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.service.ParentFeedbackService;
+import xiaozhi.modules.parent.storage.ParentStorageCategory;
+import xiaozhi.modules.parent.storage.ParentStorageService;
 import xiaozhi.modules.parent.vo.ParentFeedbackAdminVO;
 import xiaozhi.modules.parent.vo.ParentFeedbackDetailVO;
 import xiaozhi.modules.parent.vo.ParentFeedbackEnabledVO;
@@ -56,13 +54,12 @@ public class ParentFeedbackServiceImpl implements ParentFeedbackService {
             ParentFeedbackEntity.STATUS_WONT_FIX);
     private static final int DESCRIPTION_MAX = 2000;
     private static final int MAX_IMAGES = 3;
-    private static final long FEEDBACK_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-    private static final Set<String> IMAGE_EXT = Set.of("jpg", "jpeg", "png", "gif", "webp");
 
     private final ParentFeedbackDao parentFeedbackDao;
     private final ParentUserDao parentUserDao;
     private final SysParamsService sysParamsService;
     private final ObjectMapper objectMapper;
+    private final ParentStorageService parentStorageService;
 
     @Override
     public ParentFeedbackEnabledVO getEntryStatus(Long parentUserId) {
@@ -100,6 +97,12 @@ public class ParentFeedbackServiceImpl implements ParentFeedbackService {
         if (images.size() > MAX_IMAGES) {
             throw new RenException("截图最多 " + MAX_IMAGES + " 张");
         }
+        List<String> storedImages = new ArrayList<>();
+        for (String ref : images) {
+            storedImages.add(parentStorageService.normalizeAndValidate(
+                    parentUserId, ParentStorageCategory.FEEDBACK, ref));
+        }
+        images = storedImages;
         ParentFeedbackEntity row = new ParentFeedbackEntity();
         row.setParentUserId(parentUserId);
         row.setCategory(category);
@@ -133,32 +136,7 @@ public class ParentFeedbackServiceImpl implements ParentFeedbackService {
 
     @Override
     public String storeFeedbackImage(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new RenException(ErrorCode.UPLOAD_FILE_EMPTY);
-        }
-        if (file.getSize() > FEEDBACK_IMAGE_MAX_BYTES) {
-            throw new RenException("截图不能超过 5MB");
-        }
-        String ext = resolveImageExtension(file.getOriginalFilename());
-        if (ext == null) {
-            ext = resolveImageExtensionFromContentType(file.getContentType());
-        }
-        if (ext == null) {
-            throw new RenException("仅支持 jpg、jpeg、png、gif、webp 图片");
-        }
-        String storedName = UUID.randomUUID().toString().toLowerCase(Locale.ROOT) + "." + ext;
-        Path dirAbs = Paths.get("uploadfile", "parent-feedback").toAbsolutePath().normalize();
-        try {
-            Files.createDirectories(dirAbs);
-            Path target = dirAbs.resolve(storedName).normalize();
-            if (!target.startsWith(dirAbs)) {
-                throw new RenException(ErrorCode.UPLOAD_FILE_ERROR);
-            }
-            file.transferTo(target.toFile());
-        } catch (IOException e) {
-            throw new RenException(ErrorCode.UPLOAD_FILE_ERROR, e);
-        }
-        return storedName;
+        throw new RenException("请使用 POST /parent-api/storage/upload?category=feedback 或 POST /parent-api/feedback/image");
     }
 
     @Override
@@ -311,7 +289,7 @@ public class ParentFeedbackServiceImpl implements ParentFeedbackService {
         vo.setStatus(e.getStatus());
         vo.setAdminNote(StringUtils.trimToNull(e.getAdminNote()));
         vo.setWontFixReason(StringUtils.trimToNull(e.getWontFixReason()));
-        vo.setImageUrls(parseImageUrls(e.getImageUrls()));
+        vo.setImageUrls(resolveImageUrlsForRead(e.getImageUrls()));
         vo.setCreateTime(e.getCreateTime());
         vo.setUpdateTime(e.getUpdateTime());
         return vo;
@@ -348,7 +326,7 @@ public class ParentFeedbackServiceImpl implements ParentFeedbackService {
         vo.setBlocking(e.getBlocking() != null && e.getBlocking() == 1);
         vo.setAllowContact(e.getAllowContact() != null && e.getAllowContact() == 1);
         vo.setStatus(e.getStatus());
-        vo.setImageUrls(parseImageUrls(e.getImageUrls()));
+        vo.setImageUrls(resolveImageUrlsForRead(e.getImageUrls()));
         vo.setAdminNote(e.getAdminNote());
         vo.setWontFixReason(e.getWontFixReason());
         vo.setCreateTime(e.getCreateTime());
@@ -380,6 +358,19 @@ public class ParentFeedbackServiceImpl implements ParentFeedbackService {
         } catch (Exception ex) {
             return List.of();
         }
+    }
+
+    private List<String> resolveImageUrlsForRead(String json) {
+        List<String> raw = parseImageUrls(json);
+        if (raw.isEmpty()) {
+            return raw;
+        }
+        List<String> out = new ArrayList<>();
+        for (String ref : raw) {
+            String url = parentStorageService.resolveAccessUrl(ParentStorageCategory.FEEDBACK, ref);
+            out.add(StringUtils.isNotBlank(url) ? url : ref);
+        }
+        return out;
     }
 
     private List<String> normalizeImageUrls(List<String> raw) {
@@ -424,31 +415,4 @@ public class ParentFeedbackServiceImpl implements ParentFeedbackService {
         return params.get(key).toString();
     }
 
-    private static String resolveImageExtension(String originalFilename) {
-        if (StringUtils.isBlank(originalFilename) || !originalFilename.contains(".")) {
-            return null;
-        }
-        String ext = originalFilename.substring(originalFilename.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
-        return IMAGE_EXT.contains(ext) ? ext : null;
-    }
-
-    private static String resolveImageExtensionFromContentType(String contentType) {
-        if (StringUtils.isBlank(contentType)) {
-            return null;
-        }
-        String ct = contentType.toLowerCase(Locale.ROOT);
-        if (ct.contains("png")) {
-            return "png";
-        }
-        if (ct.contains("gif")) {
-            return "gif";
-        }
-        if (ct.contains("webp")) {
-            return "webp";
-        }
-        if (ct.contains("jpeg") || ct.contains("jpg")) {
-            return "jpg";
-        }
-        return null;
-    }
 }

@@ -7,6 +7,9 @@ import lombok.Data;
 @Schema(description = "反馈截图上传结果")
 public class ParentFeedbackImageUploadVO {
 
-    @Schema(description = "完整可访问 URL，提交反馈时放入 imageUrls")
+    @Schema(description = "对象键（推荐提交反馈时放入 imageUrls）")
+    private String objectKey;
+
+    @Schema(description = "完整可访问 URL，可直接展示或放入 imageUrls")
     private String imageUrl;
 }

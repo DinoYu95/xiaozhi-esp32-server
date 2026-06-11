@@ -261,5 +261,7 @@ public interface ErrorCode {
     int PARENT_BETA_MISSION_STEP_NOT_SKIPPABLE = 20013; // 必做步不可 skip
     int PARENT_BETA_MISSION_CONTEXT_INVALID = 20014; // 体验孩子无效或无权
     int PARENT_BETA_MISSION_CONTEXT_LOCKED = 20015; // 体验孩子已锁定不可更换
+    int PARENT_STORAGE_CATEGORY_INVALID = 20016; // 无效的文件存储类别
+    int PARENT_STORAGE_OBJECT_INVALID = 20017; // 文件引用无效或无权使用
 
 }

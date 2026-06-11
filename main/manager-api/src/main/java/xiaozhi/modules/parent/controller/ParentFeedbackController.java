@@ -1,9 +1,5 @@
 package xiaozhi.modules.parent.controller;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
@@ -34,6 +30,9 @@ import xiaozhi.common.utils.Result;
 import xiaozhi.modules.parent.context.ParentContext;
 import xiaozhi.modules.parent.dto.ParentFeedbackCreateDTO;
 import xiaozhi.modules.parent.service.ParentFeedbackService;
+import xiaozhi.modules.parent.storage.ParentStorageCategory;
+import xiaozhi.modules.parent.storage.ParentStorageService;
+import xiaozhi.modules.parent.storage.vo.ParentStorageUploadVO;
 import xiaozhi.modules.parent.vo.ParentFeedbackDetailVO;
 import xiaozhi.modules.parent.vo.ParentFeedbackEnabledVO;
 import xiaozhi.modules.parent.vo.ParentFeedbackImageUploadVO;
@@ -53,6 +52,7 @@ public class ParentFeedbackController {
     private String parentPublicBaseUrl;
 
     private final ParentFeedbackService parentFeedbackService;
+    private final ParentStorageService parentStorageService;
 
     @GetMapping("/entry-status")
     @Operation(summary = "反馈入口是否展示（内测开关 + 是否内测用户）")
@@ -69,30 +69,30 @@ public class ParentFeedbackController {
     }
 
     @PostMapping(value = "/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "上传反馈截图（字段名 file，最多 3 张需在提交时校验）")
+    @Operation(summary = "上传反馈截图（等价于 POST /parent-api/storage/upload?category=feedback）")
     public Result<ParentFeedbackImageUploadVO> uploadImage(
             @RequestParam("file") MultipartFile file,
             HttpServletRequest request) {
         Long parentUserId = requireParentUserId();
         parentFeedbackService.assertBetaFeedbackAllowed(parentUserId);
-        String stored = parentFeedbackService.storeFeedbackImage(file);
+        ParentStorageUploadVO uploaded = parentStorageService.upload(
+                ParentStorageCategory.FEEDBACK, parentUserId, file, resolvePublicBaseUrl(request));
         ParentFeedbackImageUploadVO vo = new ParentFeedbackImageUploadVO();
-        vo.setImageUrl(resolvePublicBaseUrl(request) + "/parent-api/feedback/image/file/" + stored);
+        vo.setObjectKey(uploaded.getObjectKey());
+        vo.setImageUrl(uploaded.getAccessUrl());
         return new Result<ParentFeedbackImageUploadVO>().ok(vo);
     }
 
     @GetMapping("/image/file/{filename:.+}")
     @Operation(summary = "获取反馈截图（匿名，供 image 组件展示）")
-    public ResponseEntity<byte[]> getImageFile(@PathVariable("filename") String filename) throws IOException {
+    public ResponseEntity<byte[]> getImageFile(@PathVariable("filename") String filename) {
         if (filename == null || !FEEDBACK_IMAGE_FILE_PATTERN.matcher(filename).matches()) {
             return ResponseEntity.notFound().build();
         }
-        Path dirAbs = Paths.get("uploadfile", "parent-feedback").toAbsolutePath().normalize();
-        Path file = dirAbs.resolve(filename).normalize();
-        if (!file.startsWith(dirAbs) || !Files.isRegularFile(file)) {
+        byte[] bytes = parentStorageService.readLocalFile(ParentStorageCategory.FEEDBACK, filename);
+        if (bytes == null) {
             return ResponseEntity.notFound().build();
         }
-        byte[] bytes = Files.readAllBytes(file);
         String ext = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
         MediaType mt = switch (ext) {
             case "png" -> MediaType.IMAGE_PNG;

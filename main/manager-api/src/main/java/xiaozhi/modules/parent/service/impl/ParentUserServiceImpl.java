@@ -1,13 +1,6 @@
 package xiaozhi.modules.parent.service.impl;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Date;
-import java.util.Locale;
-import java.util.Set;
-import java.util.UUID;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,6 +25,8 @@ import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.service.ParentAuthService;
 import xiaozhi.modules.parent.service.ParentUserService;
 import xiaozhi.modules.parent.service.ParentUserTokenService;
+import xiaozhi.modules.parent.storage.ParentStorageCategory;
+import xiaozhi.modules.parent.storage.ParentStorageService;
 import xiaozhi.modules.parent.vo.ParentLoginVO;
 import xiaozhi.modules.parent.vo.ParentUserVO;
 import xiaozhi.modules.security.service.CaptchaService;
@@ -41,8 +36,6 @@ import xiaozhi.modules.sys.service.SysParamsService;
 @RequiredArgsConstructor
 public class ParentUserServiceImpl implements ParentUserService {
 
-    private static final long PARENT_AVATAR_MAX_BYTES = 2 * 1024 * 1024;
-    private static final Set<String> PARENT_AVATAR_EXT = Set.of("jpg", "jpeg", "png", "gif", "webp");
     private static final String WECHAT_URL = "https://api.weixin.qq.com/sns/jscode2session?appid={appid}&secret={secret}&js_code={code}&grant_type=authorization_code";
     private static final String PARAM_PHONE_ENCRYPT_KEY = "parent.phone_encrypt_key";
     private static final String PARAM_WECHAT_APP_ID = "parent.wechat.app_id";
@@ -55,6 +48,7 @@ public class ParentUserServiceImpl implements ParentUserService {
     private final CaptchaService captchaService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final ParentStorageService parentStorageService;
 
     @Value("${parent.phone_encrypt_key:}")
     private String phoneEncryptKeyFromConfig;
@@ -148,7 +142,7 @@ public class ParentUserServiceImpl implements ParentUserService {
         ParentUserVO vo = new ParentUserVO();
         vo.setId(user.getId());
         vo.setNickname(user.getNickname());
-        vo.setAvatarUrl(user.getAvatarUrl());
+        vo.setAvatarUrl(parentStorageService.resolveAccessUrl(ParentStorageCategory.AVATAR, user.getAvatarUrl()));
         vo.setPhone(getMaskedPhoneForUser(parentUserId));
         vo.setBetaTester(user.getIsBetaTester() != null && user.getIsBetaTester() == 1);
         String enabled = sysParamsService.getValue("server.beta_feedback_enabled", true);
@@ -166,7 +160,12 @@ public class ParentUserServiceImpl implements ParentUserService {
             user.setNickname(dto.getNickname());
         }
         if (dto.getAvatarUrl() != null) {
-            user.setAvatarUrl(dto.getAvatarUrl());
+            if (StringUtils.isBlank(dto.getAvatarUrl())) {
+                user.setAvatarUrl(null);
+            } else {
+                user.setAvatarUrl(parentStorageService.normalizeAndValidate(
+                        parentUserId, ParentStorageCategory.AVATAR, dto.getAvatarUrl()));
+            }
         }
         if (StringUtils.isNotBlank(dto.getPhone())) {
             parentAuthService.setPhoneAuth(parentUserId, encryptPhone(dto.getPhone()), "app");
@@ -177,59 +176,7 @@ public class ParentUserServiceImpl implements ParentUserService {
 
     @Override
     public String storeParentAvatar(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new RenException(ErrorCode.UPLOAD_FILE_EMPTY);
-        }
-        if (file.getSize() > PARENT_AVATAR_MAX_BYTES) {
-            throw new RenException("头像文件不能超过 2MB");
-        }
-        String ext = resolveAvatarExtension(file.getOriginalFilename());
-        if (ext == null) {
-            ext = resolveAvatarExtensionFromContentType(file.getContentType());
-        }
-        if (ext == null) {
-            throw new RenException("仅支持 jpg、jpeg、png、gif、webp 图片");
-        }
-        String storedName = UUID.randomUUID().toString().toLowerCase(Locale.ROOT) + "." + ext;
-        Path dirAbs = Paths.get("uploadfile", "parent-avatar").toAbsolutePath().normalize();
-        try {
-            Files.createDirectories(dirAbs);
-            Path target = dirAbs.resolve(storedName).normalize();
-            if (!target.startsWith(dirAbs)) {
-                throw new RenException(ErrorCode.UPLOAD_FILE_ERROR);
-            }
-            file.transferTo(target.toFile());
-        } catch (IOException e) {
-            throw new RenException(ErrorCode.UPLOAD_FILE_ERROR, e);
-        }
-        return storedName;
-    }
-
-    private static String resolveAvatarExtension(String originalFilename) {
-        if (StringUtils.isBlank(originalFilename) || !originalFilename.contains(".")) {
-            return null;
-        }
-        String ext = originalFilename.substring(originalFilename.lastIndexOf('.') + 1)
-                .toLowerCase(Locale.ROOT);
-        if (!PARENT_AVATAR_EXT.contains(ext)) {
-            return null;
-        }
-        return ext;
-    }
-
-    /** 微信等客户端可能无原始扩展名，用 Content-Type 兜底 */
-    private static String resolveAvatarExtensionFromContentType(String contentType) {
-        if (StringUtils.isBlank(contentType)) {
-            return null;
-        }
-        String ct = contentType.toLowerCase(Locale.ROOT).split(";")[0].trim();
-        return switch (ct) {
-            case "image/jpeg", "image/jpg" -> "jpg";
-            case "image/png" -> "png";
-            case "image/gif" -> "gif";
-            case "image/webp" -> "webp";
-            default -> null;
-        };
+        throw new RenException("请使用 POST /parent-api/storage/upload?category=avatar 或 POST /parent-api/auth/avatar");
     }
 
     @Override

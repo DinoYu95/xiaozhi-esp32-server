@@ -1,9 +1,5 @@
 package xiaozhi.modules.parent.controller;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
@@ -36,6 +32,9 @@ import xiaozhi.modules.parent.dto.ParentPhoneLoginDTO;
 import xiaozhi.modules.parent.dto.ParentProfileDTO;
 import xiaozhi.modules.parent.dto.ParentWechatLoginDTO;
 import xiaozhi.modules.parent.service.ParentUserService;
+import xiaozhi.modules.parent.storage.ParentStorageCategory;
+import xiaozhi.modules.parent.storage.ParentStorageService;
+import xiaozhi.modules.parent.storage.vo.ParentStorageUploadVO;
 import xiaozhi.modules.parent.vo.ParentAvatarUploadVO;
 import xiaozhi.modules.parent.vo.ParentLoginVO;
 import xiaozhi.modules.parent.vo.ParentUserVO;
@@ -55,6 +54,7 @@ public class ParentAuthController {
             Pattern.CASE_INSENSITIVE);
 
     private final ParentUserService parentUserService;
+    private final ParentStorageService parentStorageService;
 
     @PostMapping("/wechat")
     @Operation(summary = "微信 code 登录")
@@ -89,31 +89,31 @@ public class ParentAuthController {
     }
 
     @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "上传家长头像（小程序 multipart 字段名 file）")
+    @Operation(summary = "上传家长头像（等价于 POST /parent-api/storage/upload?category=avatar）")
     public Result<ParentAvatarUploadVO> uploadAvatar(
             @RequestParam("file") MultipartFile file, HttpServletRequest request) {
         Long parentUserId = ParentContext.getParentUserId();
         if (parentUserId == null) {
             throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
         }
-        String stored = parentUserService.storeParentAvatar(file);
+        ParentStorageUploadVO uploaded = parentStorageService.upload(
+                ParentStorageCategory.AVATAR, parentUserId, file, resolvePublicBaseUrl(request));
         ParentAvatarUploadVO vo = new ParentAvatarUploadVO();
-        vo.setAvatarUrl(resolvePublicBaseUrl(request) + "/parent-api/auth/avatar/file/" + stored);
+        vo.setObjectKey(uploaded.getObjectKey());
+        vo.setAvatarUrl(uploaded.getAccessUrl());
         return new Result<ParentAvatarUploadVO>().ok(vo);
     }
 
     @GetMapping("/avatar/file/{filename:.+}")
     @Operation(summary = "获取已上传的家长头像（匿名，供小程序 image 等展示）")
-    public ResponseEntity<byte[]> getAvatarFile(@PathVariable("filename") String filename) throws IOException {
+    public ResponseEntity<byte[]> getAvatarFile(@PathVariable("filename") String filename) {
         if (filename == null || !PARENT_AVATAR_FILE_PATTERN.matcher(filename).matches()) {
             return ResponseEntity.notFound().build();
         }
-        Path dirAbs = Paths.get("uploadfile", "parent-avatar").toAbsolutePath().normalize();
-        Path file = dirAbs.resolve(filename).normalize();
-        if (!file.startsWith(dirAbs) || !Files.isRegularFile(file)) {
+        byte[] bytes = parentStorageService.readLocalFile(ParentStorageCategory.AVATAR, filename);
+        if (bytes == null) {
             return ResponseEntity.notFound().build();
         }
-        byte[] bytes = Files.readAllBytes(file);
         String ext = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
         MediaType mt = switch (ext) {
             case "png" -> MediaType.IMAGE_PNG;

@@ -31,6 +31,7 @@
         <guava.version>33.0.0-jre</guava.version>
         <liquibase-core.version>4.20.0</liquibase-core.version>
         <aliyun-sms-version>4.1.0</aliyun-sms-version>
+        <aliyun-oss-version>3.18.1</aliyun-oss-version>
         <okio-version>3.4.0</okio-version>
     </properties>
 
@@ -237,6 +238,12 @@
             <groupId>com.aliyun</groupId>
             <artifactId>dypnsapi20170525</artifactId>
             <version>2.0.0</version>
+        </dependency>
+        <!-- 阿里云 OSS（家长端图片存储） -->
+        <dependency>
+            <groupId>com.aliyun.oss</groupId>
+            <artifactId>aliyun-sdk-oss</artifactId>
+            <version>${aliyun-oss-version}</version>
         </dependency>
         <!-- 阿里云短信sdk使用的okio:1.15.0版本有安全漏洞：GHSA-w33c-445m-f8w7 现在升级成3.4.0安全版本-->
         <dependency>

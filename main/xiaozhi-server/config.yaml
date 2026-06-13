@@ -776,6 +776,16 @@ TTS:
     output_dir: tmp/
     access_token: 你的coze web key
     response_format: wav
+  BosonHiggsTTS:
+    type: boson_stream
+    # Boson Higgs Audio v3 流式 TTS
+    # 文档: https://docs.boson.ai/models/higgs-audio-tts/overview
+    api_key: 你的BOSON_API_KEY
+    api_url: https://api.boson.ai/v1/audio/speech
+    model: higgs-audio-v3-tts
+    voice: default
+    output_dir: tmp/
+    request_timeout: 30
   VolcesAiGatewayTTS:
     type: openai
     # 火山引擎 - 边缘大模型网关

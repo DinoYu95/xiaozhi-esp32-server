@@ -23,9 +23,8 @@ VALUES
  20, 1, NOW(), 1, NOW());
 
 DELETE FROM `ai_tts_voice` WHERE tts_model_id = 'TTS_BosonHiggsTTS';
-INSERT INTO `ai_tts_voice` VALUES
-('TTS_BosonHiggsTTS_0001', 'TTS_BosonHiggsTTS', 'Default', 'default', '多语言', NULL, NULL, 1, NULL, NULL, NULL, NULL),
-('TTS_BosonHiggsTTS_0002', 'TTS_BosonHiggsTTS', 'Jake', 'jake', '英文', NULL, NULL, 2, NULL, NULL, NULL, NULL),
-('TTS_BosonHiggsTTS_0003', 'TTS_BosonHiggsTTS', 'Chloe', 'chloe', '英文', NULL, NULL, 3, NULL, NULL, NULL, NULL),
-('TTS_BosonHiggsTTS_0004', 'TTS_BosonHiggsTTS', 'Nora', 'nora', '英文', NULL, NULL, 4, NULL, NULL, NULL, NULL),
-('TTS_BosonHiggsTTS_0005', 'TTS_BosonHiggsTTS', 'Oliver', 'oliver', '英文', NULL, NULL, 5, NULL, NULL, NULL, NULL);
+INSERT INTO `ai_tts_voice` VALUES ('TTS_BosonHiggsTTS_0001', 'TTS_BosonHiggsTTS', 'Default', 'default', '多语言', NULL, NULL, NULL, NULL, 1, NULL, NULL, NULL, NULL);
+INSERT INTO `ai_tts_voice` VALUES ('TTS_BosonHiggsTTS_0002', 'TTS_BosonHiggsTTS', 'Jake', 'jake', '英文', NULL, NULL, NULL, NULL, 2, NULL, NULL, NULL, NULL);
+INSERT INTO `ai_tts_voice` VALUES ('TTS_BosonHiggsTTS_0003', 'TTS_BosonHiggsTTS', 'Chloe', 'chloe', '英文', NULL, NULL, NULL, NULL, 3, NULL, NULL, NULL, NULL);
+INSERT INTO `ai_tts_voice` VALUES ('TTS_BosonHiggsTTS_0004', 'TTS_BosonHiggsTTS', 'Nora', 'nora', '英文', NULL, NULL, NULL, NULL, 4, NULL, NULL, NULL, NULL);
+INSERT INTO `ai_tts_voice` VALUES ('TTS_BosonHiggsTTS_0005', 'TTS_BosonHiggsTTS', 'Oliver', 'oliver', '英文', NULL, NULL, NULL, NULL, 5, NULL, NULL, NULL, NULL);

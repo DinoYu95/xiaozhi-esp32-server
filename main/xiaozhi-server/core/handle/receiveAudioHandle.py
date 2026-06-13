@@ -138,9 +138,11 @@ async def startToChat(conn, text):
         ):
             await max_out_size(conn)
             return
-    # manual 模式下不打断正在播放的内容
-    if conn.client_is_speaking and conn.client_listen_mode != "manual":
-        await handleAbortMessage(conn)
+    # manual 模式下不打断正在播放的内容；LLM 在途（尚未播读）时也应打断上一轮
+    if conn.client_listen_mode != "manual":
+        chat_inflight = int(getattr(conn, "_chat_inflight", 0) or 0) > 0
+        if conn.client_is_speaking or chat_inflight:
+            await handleAbortMessage(conn)
 
     # 首先进行意图分析，使用实际文本内容
     intent_handled = await handle_user_intent(conn, actual_text)

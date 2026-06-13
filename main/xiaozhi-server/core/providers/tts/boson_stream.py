@@ -67,6 +67,15 @@ class TTSProvider(TTSProviderBase):
         while not self.conn.stop_event.is_set():
             try:
                 message = self.tts_text_queue.get(timeout=1)
+
+                if message.sentence_type == SentenceType.FIRST:
+                    self.conn.client_abort = False
+
+                if self.conn.client_abort:
+                    logger.bind(tag=TAG).info("收到打断信息，终止TTS文本处理线程")
+                    self.pcm_buffer.clear()
+                    continue
+
                 if message.sentence_type == SentenceType.FIRST:
                     self.tts_stop_request = False
                     self.processed_chars = 0
@@ -116,6 +125,11 @@ class TTSProvider(TTSProviderBase):
             self._process_before_stop_play_files()
 
     def to_tts_single_stream(self, text, is_last=False):
+        if getattr(self.conn, "client_abort", False):
+            if is_last:
+                self._process_before_stop_play_files()
+            return None
+
         text = MarkdownCleaner.clean_markdown(text)
         if not text or not text.strip():
             if is_last:
@@ -124,6 +138,8 @@ class TTSProvider(TTSProviderBase):
 
         max_repeat_time = 5
         for attempt in range(max_repeat_time):
+            if getattr(self.conn, "client_abort", False):
+                return None
             try:
                 asyncio.run(self.text_to_speak(text, is_last))
                 if attempt > 0:
@@ -143,6 +159,9 @@ class TTSProvider(TTSProviderBase):
 
     async def text_to_speak(self, text, is_last):
         """调用 Boson 流式 TTS，接收 PCM 并编码为 Opus"""
+        if getattr(self.conn, "client_abort", False):
+            return
+
         payload = self._build_payload(text)
         headers = self._build_headers()
         timeout = aiohttp.ClientTimeout(total=self.request_timeout)
@@ -167,10 +186,17 @@ class TTSProvider(TTSProviderBase):
                     self.tts_audio_queue.put((SentenceType.LAST, [], None))
                     raise RuntimeError(f"Boson TTS HTTP {resp.status}: {body}")
 
+                if getattr(self.conn, "client_abort", False):
+                    return
+
                 self.pcm_buffer.clear()
                 self.tts_audio_queue.put((SentenceType.FIRST, [], text))
 
                 async for chunk in resp.content.iter_any():
+                    if getattr(self.conn, "client_abort", False):
+                        logger.bind(tag=TAG).info("Boson TTS 流式合成被打断")
+                        break
+
                     data = chunk[0] if isinstance(chunk, (list, tuple)) else chunk
                     if not data:
                         continue
@@ -186,15 +212,17 @@ class TTSProvider(TTSProviderBase):
                             callback=self.handle_opus,
                         )
 
-                if self.pcm_buffer:
+                if self.pcm_buffer and not getattr(self.conn, "client_abort", False):
                     self.opus_encoder.encode_pcm_to_opus_stream(
                         bytes(self.pcm_buffer),
                         end_of_stream=True,
                         callback=self.handle_opus,
                     )
                     self.pcm_buffer.clear()
+                elif self.pcm_buffer:
+                    self.pcm_buffer.clear()
 
-                if is_last:
+                if is_last and not getattr(self.conn, "client_abort", False):
                     self._process_before_stop_play_files()
 
     def audio_to_pcm_data_stream(self, audio_file_path, callback=None):

@@ -189,10 +189,11 @@ class ASRProviderBase(ABC):
                     )
                     return
                 machine_speaking = bool(getattr(conn, "client_is_speaking", False))
+                chat_inflight = int(getattr(conn, "_chat_inflight", 0) or 0) > 0
                 if (
                     is_owner_dialogue_busy(conn)
                     and is_owner_speaker(conn, speaker_id)
-                    and machine_speaking
+                    and (machine_speaking or chat_inflight)
                 ):
                     from core.handle.abortHandle import handleAbortMessage
 

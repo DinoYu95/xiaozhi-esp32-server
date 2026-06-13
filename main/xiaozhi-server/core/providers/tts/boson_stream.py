@@ -27,10 +27,11 @@ class TTSProvider(TTSProviderBase):
             "api_url", "https://api.boson.ai/v1/audio/speech"
         )
         self.model = config.get("model", "higgs-audio-v3-tts")
-        if config.get("private_voice"):
-            self.voice = config.get("private_voice")
+        private_voice = config.get("private_voice")
+        if private_voice is not None and str(private_voice).strip():
+            self.voice = str(private_voice).strip()
         else:
-            self.voice = config.get("voice", "default")
+            self.voice = str(config.get("voice") or "default").strip()
         timeout = config.get("request_timeout", 30)
         self.request_timeout = float(timeout) if timeout else 30.0
         self.output_file = config.get("output_dir", "tmp/")
@@ -46,6 +47,38 @@ class TTSProvider(TTSProviderBase):
             sample_rate=BOSON_PCM_SAMPLE_RATE, channels=1, frame_size_ms=60
         )
         self.pcm_buffer = bytearray()
+        self._turn_sentence_id = None
+        self._segment_index = 0
+        # Boson 按句切分即可；不在逗号处切开，避免多次独立合成导致音色漂移
+        self.first_sentence_punctuations = (
+            "。",
+            "？",
+            "?",
+            "！",
+            "!",
+            "；",
+            ";",
+            "：",
+        )
+        self.punctuations = self.first_sentence_punctuations
+
+    def _sync_voice_from_conn(self):
+        """每轮对话从连接配置同步音色（支持智控台改音色后下一轮生效）。"""
+        selected = (self.conn.config.get("selected_module") or {}).get("TTS")
+        cfg = (self.conn.config.get("TTS") or {}).get(selected, {}) if selected else {}
+        private_voice = cfg.get("private_voice")
+        if private_voice is not None and str(private_voice).strip():
+            self.voice = str(private_voice).strip()
+        else:
+            self.voice = str(cfg.get("voice") or "default").strip()
+        logger.bind(tag=TAG).info(f"Boson TTS 当前音色: {self.voice}")
+
+    def _is_turn_stale(self, turn_id):
+        if getattr(self.conn, "client_abort", False):
+            return True
+        if turn_id and self.conn.sentence_id != turn_id:
+            return True
+        return False
 
     def _build_headers(self):
         return {
@@ -69,6 +102,12 @@ class TTSProvider(TTSProviderBase):
                 message = self.tts_text_queue.get(timeout=1)
 
                 if message.sentence_type == SentenceType.FIRST:
+                    self._turn_sentence_id = (
+                        message.sentence_id or self.conn.sentence_id
+                    )
+                    self._segment_index = 0
+                    if self.conn:
+                        self._sync_voice_from_conn()
                     self.conn.client_abort = False
 
                 if self.conn.client_abort:
@@ -125,7 +164,8 @@ class TTSProvider(TTSProviderBase):
             self._process_before_stop_play_files()
 
     def to_tts_single_stream(self, text, is_last=False):
-        if getattr(self.conn, "client_abort", False):
+        turn_id = self._turn_sentence_id or self.conn.sentence_id
+        if self._is_turn_stale(turn_id):
             if is_last:
                 self._process_before_stop_play_files()
             return None
@@ -138,10 +178,10 @@ class TTSProvider(TTSProviderBase):
 
         max_repeat_time = 5
         for attempt in range(max_repeat_time):
-            if getattr(self.conn, "client_abort", False):
+            if self._is_turn_stale(turn_id):
                 return None
             try:
-                asyncio.run(self.text_to_speak(text, is_last))
+                asyncio.run(self.text_to_speak(text, is_last, turn_id))
                 if attempt > 0:
                     logger.bind(tag=TAG).info(
                         f"语音生成成功: {text}，重试{attempt}次"
@@ -157,9 +197,10 @@ class TTSProvider(TTSProviderBase):
         )
         return None
 
-    async def text_to_speak(self, text, is_last):
+    async def text_to_speak(self, text, is_last, turn_id=None):
         """调用 Boson 流式 TTS，接收 PCM 并编码为 Opus"""
-        if getattr(self.conn, "client_abort", False):
+        turn_id = turn_id or self._turn_sentence_id or self.conn.sentence_id
+        if self._is_turn_stale(turn_id):
             return
 
         payload = self._build_payload(text)
@@ -174,6 +215,10 @@ class TTSProvider(TTSProviderBase):
             * 2
         )
 
+        logger.bind(tag=TAG).debug(
+            f"Boson TTS 合成: voice={self.voice}, turn={turn_id}, text={text[:40]}"
+        )
+
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(
                 self.api_url, json=payload, headers=headers
@@ -186,15 +231,19 @@ class TTSProvider(TTSProviderBase):
                     self.tts_audio_queue.put((SentenceType.LAST, [], None))
                     raise RuntimeError(f"Boson TTS HTTP {resp.status}: {body}")
 
-                if getattr(self.conn, "client_abort", False):
+                if self._is_turn_stale(turn_id):
                     return
 
                 self.pcm_buffer.clear()
-                self.tts_audio_queue.put((SentenceType.FIRST, [], text))
+                if self._segment_index == 0:
+                    self.tts_audio_queue.put((SentenceType.FIRST, [], text))
+                else:
+                    self.tts_audio_queue.put((SentenceType.MIDDLE, [], text))
+                self._segment_index += 1
 
                 async for chunk in resp.content.iter_any():
-                    if getattr(self.conn, "client_abort", False):
-                        logger.bind(tag=TAG).info("Boson TTS 流式合成被打断")
+                    if self._is_turn_stale(turn_id):
+                        logger.bind(tag=TAG).info("Boson TTS 流式合成被打断或轮次已过期")
                         break
 
                     data = chunk[0] if isinstance(chunk, (list, tuple)) else chunk
@@ -212,7 +261,7 @@ class TTSProvider(TTSProviderBase):
                             callback=self.handle_opus,
                         )
 
-                if self.pcm_buffer and not getattr(self.conn, "client_abort", False):
+                if self.pcm_buffer and not self._is_turn_stale(turn_id):
                     self.opus_encoder.encode_pcm_to_opus_stream(
                         bytes(self.pcm_buffer),
                         end_of_stream=True,
@@ -222,7 +271,7 @@ class TTSProvider(TTSProviderBase):
                 elif self.pcm_buffer:
                     self.pcm_buffer.clear()
 
-                if is_last and not getattr(self.conn, "client_abort", False):
+                if is_last and not self._is_turn_stale(turn_id):
                     self._process_before_stop_play_files()
 
     def audio_to_pcm_data_stream(self, audio_file_path, callback=None):

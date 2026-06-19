@@ -1,0 +1,71 @@
+# 国内生产：仅 web + server，MySQL / Redis 使用阿里云托管（见 .env.prod）
+# 测试环境仍用 ../docker-compose.yml（含 db、redis）
+#
+# 使用前：cp .env.example .env.prod，填齐【必填】项
+# 启动：docker compose --env-file .env.prod up -d [--build]
+#
+# 同机还需启动 zhiban-agent、voiceprint-api 的 deploy/prod（共用网络 zhiban-prod）
+
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile-web
+    image: ${WEB_IMAGE:-xiaozhi-esp32-server:web_latest}
+    container_name: xiaozhi-web
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+      XIAOZHI_PARENT_PUBLIC_BASE_URL: ${XIAOZHI_PARENT_PUBLIC_BASE_URL:-}
+      SPRING_DATASOURCE_DRUID_URL: >-
+        jdbc:mysql://${MYSQL_RDS_HOST}:${MYSQL_RDS_PORT:-3306}/${MYSQL_DATABASE:-xiaozhi_esp32_server}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&connectTimeout=30000&socketTimeout=30000&autoReconnect=true&failOverReadOnly=false&maxReconnects=10
+      SPRING_DATASOURCE_DRUID_USERNAME: ${MYSQL_RDS_USER}
+      SPRING_DATASOURCE_DRUID_PASSWORD: ${MYSQL_RDS_PASSWORD}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST}
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
+    ports:
+      - "${WEB_PORT:-8002}:8002"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../uploadfile:/uploadfile
+    networks:
+      prod:
+        aliases:
+          - manager-api
+
+  server:
+    build:
+      context: ../..
+      dockerfile: Dockerfile-server-standalone
+    image: ${SERVER_IMAGE:-xiaozhi-esp32-server:server_latest}
+    container_name: xiaozhi-server
+    restart: always
+    depends_on:
+      - web
+    environment:
+      TZ: Asia/Shanghai
+    dns:
+      - 127.0.0.11
+      - 223.5.5.5
+      - 100.100.2.136
+    ports:
+      - "${SERVER_WS_PORT:-8000}:8000"
+      - "${SERVER_HTTP_PORT:-8003}:8003"
+    security_opt:
+      - seccomp:unconfined
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../data:/opt/xiaozhi-esp32-server/data
+      - ../models/SenseVoiceSmall/model.pt:/opt/xiaozhi-esp32-server/models/SenseVoiceSmall/model.pt
+    networks:
+      - prod
+
+networks:
+  prod:
+    name: zhiban-prod
+    driver: bridge

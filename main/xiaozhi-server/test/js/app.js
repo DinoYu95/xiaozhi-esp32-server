@@ -1,10 +1,10 @@
 // 主应用入口
-import { checkOpusLoaded, initOpusEncoder } from './core/audio/opus-codec.js?v=0127';
-import { getAudioPlayer } from './core/audio/player.js?v=0127';
-import { checkMicrophoneAvailability, isHttpNonLocalhost } from './core/audio/recorder.js?v=0127';
-import { initMcpTools } from './core/mcp/tools.js?v=0127';
-import { uiController } from './ui/controller.js?v=0127';
-import { log } from './utils/logger.js?v=0127';
+import { checkOpusLoaded, initOpusEncoder } from './core/audio/opus-codec.js?v=0143';
+import { getAudioPlayer } from './core/audio/player.js?v=0143';
+import { checkMicrophoneAvailability, isHttpNonLocalhost } from './core/audio/recorder.js?v=0143';
+import { initMcpTools } from './core/mcp/tools.js?v=0143';
+import { uiController } from './ui/controller.js?v=0143';
+import { log } from './utils/logger.js?v=0143';
 
 // 应用类
 class App {

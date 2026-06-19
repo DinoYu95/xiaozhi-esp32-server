@@ -1,0 +1,25 @@
+# 生产环境 server 运行时配置示例
+# 复制到 ../data/.config.yaml 后修改【必填】项（与测试 deploy/data 同级）
+#
+# cp deploy/prod/server-config.example.yaml deploy/data/.config.yaml
+
+server:
+  ip: 0.0.0.0
+  port: 8000
+  http_port: 8003
+  # 【必填】设备/公网访问视觉分析时用；填 ECS 公网 IP 或域名
+  vision_explain: http://【必填:公网IP或域名】:8003/mcp/vision/explain
+
+manager-api:
+  # 同 compose 网络内固定写法，一般不用改
+  url: http://web:8002/xiaozhi
+  # 【必填】首次部署 web 后，智控台 → 参数管理 → server.secret
+  secret: 【必填:从智控台复制server.secret】
+
+prompt_template: agent-base-prompt.txt
+
+# 若走本地 config.yaml 而非智控台下发的配置，可在此填写（智控台配置优先时以控制台为准）
+# zhiban_agent:
+#   base_url: http://zhiban-agent:8008
+# voiceprint:
+#   url: http://voiceprint-api:8005

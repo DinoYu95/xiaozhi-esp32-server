@@ -1,0 +1,26 @@
+# 生产环境 server 运行时配置示例
+# 复制到 ../data/.config.yaml 后修改【必填】项（与测试 deploy/data 同级）
+#
+# cp deploy/prod/server-config.example.yaml deploy/data/.config.yaml
+
+server:
+  ip: 0.0.0.0
+  port: 8000
+  http_port: 8003
+  # 【必填】设备/公网访问视觉分析时用；填 ECS 公网 IP 或域名
+  vision_explain: http://【必填:公网IP或域名】:8003/mcp/vision/explain
+
+manager-api:
+  # 你的manager-api的地址，最好使用局域网ip
+  # 如果使用docker部署，请使用填写成 http://xiaozhi-esp32-server-web:8002/xiaozhi
+  url: http://127.0.0.1:8002/xiaozhi
+  # 你的manager-api的token，就是刚才复制出来的server.secret
+  secret: a9e8a78c-9ad6-4407-b3e8-79cfb869fc3d
+
+prompt_template: agent-base-prompt.txt
+
+# 若走本地 config.yaml 而非智控台下发的配置，可在此填写（智控台配置优先时以控制台为准）
+# zhiban_agent:
+#   base_url: http://zhiban-agent:8008
+# voiceprint:
+#   url: http://voiceprint-api:8005

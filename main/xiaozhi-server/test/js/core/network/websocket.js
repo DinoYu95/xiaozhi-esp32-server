@@ -1,11 +1,11 @@
 // WebSocket消息处理模块
-import { getConfig, saveConnectionUrls } from '../../config/manager.js?v=0127';
-import { uiController } from '../../ui/controller.js?v=0127';
-import { log } from '../../utils/logger.js?v=0127';
-import { getAudioPlayer } from '../audio/player.js?v=0127';
-import { getAudioRecorder } from '../audio/recorder.js?v=0127';
-import { executeMcpTool, getMcpTools, setWebSocket as setMcpWebSocket } from '../mcp/tools.js?v=0127';
-import { webSocketConnect } from './ota-connector.js?v=0127';
+import { getConfig, saveConnectionUrls } from '../../config/manager.js?v=0143';
+import { uiController } from '../../ui/controller.js?v=0143';
+import { log } from '../../utils/logger.js?v=0143';
+import { getAudioPlayer } from '../audio/player.js?v=0143';
+import { getAudioRecorder } from '../audio/recorder.js?v=0143';
+import { executeMcpTool, getMcpTools, setWebSocket as setMcpWebSocket } from '../mcp/tools.js?v=0143';
+import { webSocketConnect } from './ota-connector.js?v=0143';
 
 // WebSocket处理器类
 export class WebSocketHandler {
@@ -387,6 +387,7 @@ export class WebSocketHandler {
 
             const audioRecorder = getAudioRecorder();
             audioRecorder.stop();
+            audioRecorder.releaseMediaStream();
         };
 
         this.websocket.onerror = (error) => {
@@ -420,6 +421,7 @@ export class WebSocketHandler {
         this.websocket.close();
         const audioRecorder = getAudioRecorder();
         audioRecorder.stop();
+        audioRecorder.releaseMediaStream();
     }
 
     // 发送文本消息

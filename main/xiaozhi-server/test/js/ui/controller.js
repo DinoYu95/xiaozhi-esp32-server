@@ -1,8 +1,8 @@
 // UI controller module
-import { loadConfig, saveConfig } from '../config/manager.js?v=0127';
-import { getAudioPlayer } from '../core/audio/player.js?v=0127';
-import { getAudioRecorder } from '../core/audio/recorder.js?v=0127';
-import { getWebSocketHandler } from '../core/network/websocket.js?v=0127';
+import { loadConfig, saveConfig } from '../config/manager.js?v=0143';
+import { getAudioPlayer } from '../core/audio/player.js?v=0143';
+import { getAudioRecorder } from '../core/audio/recorder.js?v=0143';
+import { getWebSocketHandler } from '../core/network/websocket.js?v=0143';
 
 // UI controller class
 class UIController {
@@ -453,7 +453,7 @@ class UIController {
 
             if (isConnected) {
                 // Check microphone availability (check again after connection)
-                const { checkMicrophoneAvailability } = await import('../core/audio/recorder.js?v=0127');
+                const { checkMicrophoneAvailability } = await import('../core/audio/recorder.js?v=0143');
                 const micAvailable = await checkMicrophoneAvailability();
 
                 if (!micAvailable) {

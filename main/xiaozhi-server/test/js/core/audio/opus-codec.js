@@ -1,4 +1,4 @@
-import { log } from '../../utils/logger.js?v=0127';
+import { log } from '../../utils/logger.js?v=0143';
 
 
 // 检查Opus库是否已加载
@@ -97,8 +97,8 @@ export function initOpusEncoder() {
                     // 设置复杂度 (0-10, 越高质量越好但CPU使用越多)
                     mod._opus_encoder_ctl(this.encoderPtr, 4010, 5);     // OPUS_SET_COMPLEXITY
 
-                    // 设置使用DTX (不传输静音帧)
-                    mod._opus_encoder_ctl(this.encoderPtr, 4016, 1);     // OPUS_SET_DTX
+                    // 关闭 DTX，确保静音段也发包，避免 VAD 长时间无数据
+                    mod._opus_encoder_ctl(this.encoderPtr, 4016, 0);     // OPUS_SET_DTX
 
                     log("Opus编码器初始化成功", 'success');
                     return true;

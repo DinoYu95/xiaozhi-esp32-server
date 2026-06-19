@@ -335,6 +335,12 @@ class ConnectionHandler:
             if self.vad is None or self.asr is None:
                 return
 
+            if not getattr(self, "_first_audio_logged", False):
+                self.logger.bind(tag=TAG).info(
+                    f"收到首包音频，大小: {len(message)} bytes"
+                )
+                self._first_audio_logged = True
+
             # 处理来自MQTT网关的音频包
             if self.conn_from_mqtt_gateway and len(message) >= 16:
                 handled = await self._process_mqtt_audio_message(message)

@@ -1,4 +1,4 @@
-import { log } from '../../utils/logger.js?v=0127';
+import { log } from '../../utils/logger.js?v=0143';
 
 // ==========================================
 // MCP 工具管理逻辑

@@ -2,7 +2,8 @@
 # 测试环境仍用 ../docker-compose.yml（含 db、redis）
 #
 # 使用前：cp .env.example .env.prod，填齐【必填】项
-# 启动：docker compose --env-file .env.prod up -d [--build]
+# 启动：docker compose --env-file .env.prod up -d
+# 生产镜像：先在 deploy/prod/images 构建 push ACR，再在此填 SERVER_IMAGE / WEB_IMAGE，勿 --build
 #
 # 同机还需启动 zhiban-agent、voiceprint-api 的 deploy/prod（共用网络 zhiban-prod）
 

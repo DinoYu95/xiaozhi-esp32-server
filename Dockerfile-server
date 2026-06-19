@@ -1,7 +1,6 @@
-# 生产镜像，仅包含应用代码
+# 生产镜像，仅包含应用代码（上游/预构建 base 用法；国内 prod 请用 deploy/prod/images 脚本 + ACR）
 FROM ghcr.io/xinnan-tech/xiaozhi-esp32-server:server-base
 
 COPY main/xiaozhi-server .
 
-# 启动应用
 CMD ["python", "app.py"]

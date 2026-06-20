@@ -1,0 +1,21 @@
+# 【仅生产 ACR】xiaozhi-web 运行时 base：nginx + JRE + ffmpeg + 字体（不含前端 dist / Java jar）
+FROM eclipse-temurin:21-jre-alpine
+
+RUN apk update && \
+    apk add --no-cache \
+        nginx \
+        bash \
+        fontconfig \
+        ttf-dejavu \
+        ffmpeg \
+    && rm -rf /var/cache/apk/* \
+    && mkdir -p /run/nginx /var/log/nginx /var/tmp/nginx /etc/nginx/conf.d
+
+COPY main/manager-web/public/generator/static/fonts/*.ttf /usr/share/fonts/
+RUN fc-cache -f -v
+
+COPY docs/docker/nginx.conf /etc/nginx/nginx.conf
+COPY docs/docker/start.sh /start.sh
+RUN chmod +x /start.sh
+
+EXPOSE 8002

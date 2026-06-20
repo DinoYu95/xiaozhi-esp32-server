@@ -11,10 +11,7 @@ version: '3.8'
 
 services:
   web:
-    build:
-      context: ../..
-      dockerfile: Dockerfile-web
-    image: ${WEB_IMAGE:-xiaozhi-esp32-server:web_latest}
+    image: ${WEB_IMAGE:?set WEB_IMAGE in .env.prod — build via deploy/prod/images/xiaozhi-web/build-app.sh}
     container_name: xiaozhi-web
     restart: always
     environment:
@@ -39,10 +36,7 @@ services:
           - manager-api
 
   server:
-    build:
-      context: ../..
-      dockerfile: Dockerfile-server-standalone
-    image: ${SERVER_IMAGE:-xiaozhi-esp32-server:server_latest}
+    image: ${SERVER_IMAGE:?set SERVER_IMAGE in .env.prod — build via deploy/prod/images/xiaozhi-server/build-app.sh}
     container_name: xiaozhi-server
     restart: always
     depends_on:

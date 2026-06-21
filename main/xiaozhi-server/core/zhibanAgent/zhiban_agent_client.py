@@ -3,7 +3,9 @@
 智伴 Agent 客户端：向 zhiban-agent 发起 /api/chat（非流）或 /api/chat/stream（流式），用于儿童对话、知识问答、故事、游戏等。
 设备不直连 zhiban-agent，由 xiaozhi-server 在需要时调用本客户端，再将回复经 TTS 返回设备。
 """
-from typing import Optional, Iterator, Dict, Any, List
+import json
+from dataclasses import dataclass
+from typing import Optional, Iterator, Dict, Any, List, Tuple, Union
 
 import httpx
 
@@ -12,9 +14,24 @@ from config.logger import setup_logging
 TAG = __name__
 logger = setup_logging()
 
+# connection.chat 识别 zhiban 会话控制 meta 的标记键（不送 TTS）
+ZHIBAN_META_KEY = "__zhiban_meta__"
+
 DEFAULT_TIMEOUT = 30.0
 # HTTP 连接复用：keep-alive 减少首包延迟
 HTTPX_LIMITS = httpx.Limits(max_keepalive_connections=4, max_connections=10)
+
+
+@dataclass(frozen=True)
+class ZhibanStreamFrame:
+    """流式帧：text=回复文本块，meta=会话控制（如退出断连）。"""
+
+    kind: str  # "text" | "meta"
+    payload: Union[str, Dict[str, Any]]
+
+
+def make_zhiban_meta_marker(meta: Dict[str, Any]) -> Dict[str, Any]:
+    return {ZHIBAN_META_KEY: meta}
 
 
 def _log_zhiban_payload_diagnostics(payload: dict, mode: str) -> None:
@@ -41,6 +58,20 @@ def _log_zhiban_payload_diagnostics(payload: dict, mode: str) -> None:
             "zhiban-agent environment_context.companion_growth_prompt 前120字: {}",
             cg[:120],
         )
+
+
+def _parse_meta_payload(raw: str) -> Optional[Dict[str, Any]]:
+    if not raw or not raw.strip().startswith("{"):
+        return None
+    try:
+        obj = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(obj, dict) and (
+        obj.get("session_action") or obj.get("intent") == "exit"
+    ):
+        return obj
+    return None
 
 
 class ZhibanAgentClient:
@@ -79,16 +110,16 @@ class ZhibanAgentClient:
         skill_ids: Optional[list] = None,
         environment_context: Optional[Dict[str, Any]] = None,
         messages: Optional[List[Dict[str, str]]] = None,
-    ) -> Optional[str]:
+    ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         """
-        非流式：发送用户文本到 zhiban-agent /api/chat，返回完整助手回复。
-        一说话人多技能：传 skill_ids 列表，由 zhiban 按意图选 skill。
+        非流式：发送用户文本到 zhiban-agent /api/chat，返回 (reply, meta)。
+        meta 含 session_action=close_after_reply 时表示告别播完后应断连。
         """
         if not self.base_url:
             logger.bind(tag=TAG).warning("zhiban_agent base_url 未配置，跳过智伴调用")
-            return None
+            return None, None
         if not (text or "").strip():
-            return None
+            return None, None
 
         payload = {
             "text": text.strip(),
@@ -110,24 +141,29 @@ class ZhibanAgentClient:
         try:
             client = self._get_client()
             if not client:
-                return None
+                return None, None
             r = client.post(
                 "%s/api/chat" % self.base_url,
                 json=payload,
             )
             r.raise_for_status()
             data = r.json()
-            reply = data.get("reply") if isinstance(data, dict) else None
+            if not isinstance(data, dict):
+                logger.bind(tag=TAG).warning("zhiban_agent 返回非 dict: {}", data)
+                return None, None
+            reply = data.get("reply")
+            meta = data.get("meta") if isinstance(data.get("meta"), dict) else None
             if reply is not None:
-                return reply if isinstance(reply, str) else str(reply)
-            logger.bind(tag=TAG).warning("zhiban_agent 返回无 reply 字段: {}", data)
-            return None
+                reply = reply if isinstance(reply, str) else str(reply)
+            else:
+                logger.bind(tag=TAG).warning("zhiban_agent 返回无 reply 字段: {}", data)
+            return reply, meta
         except httpx.HTTPError as e:
             logger.bind(tag=TAG).error("zhiban_agent 请求失败: {}", e)
-            return None
+            return None, None
         except Exception as e:
             logger.bind(tag=TAG).exception("zhiban_agent 调用异常: {}", e)
-            return None
+            return None, None
 
     def stream(
         self,
@@ -139,10 +175,11 @@ class ZhibanAgentClient:
         environment_context: Optional[Dict[str, Any]] = None,
         messages: Optional[List[Dict[str, str]]] = None,
         persist_memory: bool = True,
-    ) -> Iterator[str]:
+    ) -> Iterator[ZhibanStreamFrame]:
         """
-        流式：POST /api/chat/stream，按 SSE 解析，逐块 yield 文本。
-        一说话人多技能：传 skill_ids 列表，由 zhiban 按意图选 skill。
+        流式：POST /api/chat/stream，解析 SSE。
+        - event: meta / data 内 session_action JSON → ZhibanStreamFrame(kind=meta)
+        - 其余 data 行 → kind=text（兼容旧版纯文本 SSE）
         """
         if not self.base_url:
             logger.bind(tag=TAG).warning("zhiban_agent base_url 未配置，跳过智伴调用")
@@ -173,6 +210,7 @@ class ZhibanAgentClient:
             client = self._get_client()
             if not client:
                 return
+            current_event: Optional[str] = None
             with client.stream(
                 "POST",
                 "%s/api/chat/stream" % self.base_url,
@@ -182,21 +220,42 @@ class ZhibanAgentClient:
                 for line in r.iter_lines():
                     if not line:
                         continue
+                    if line.startswith("event: "):
+                        current_event = line[7:].strip().lower()
+                        continue
                     if line.startswith("data: "):
                         part = line[6:].strip()
-                        if part:
-                            yield part
+                        if not part:
+                            current_event = None
+                            continue
+                        if current_event == "meta":
+                            meta = _parse_meta_payload(part)
+                            if meta:
+                                yield ZhibanStreamFrame(kind="meta", payload=meta)
+                            else:
+                                logger.bind(tag=TAG).warning(
+                                    "zhiban SSE meta 解析失败: {}", part[:200]
+                                )
+                            current_event = None
+                            continue
+                        inline_meta = _parse_meta_payload(part)
+                        if inline_meta:
+                            yield ZhibanStreamFrame(kind="meta", payload=inline_meta)
+                            current_event = None
+                            continue
+                        yield ZhibanStreamFrame(kind="text", payload=part)
+                        current_event = None
                         continue
                     s = line.strip()
                     if not s:
                         continue
                     low = s.lower()
-                    if low.startswith(("event:", "id:", "retry:")) or s.startswith(
-                        ":"
-                    ):
+                    if low.startswith(("event:", "id:", "retry:")) or s.startswith(":"):
+                        if low.startswith("event:"):
+                            current_event = s.split(":", 1)[1].strip().lower()
                         continue
                     # 兼容旧版/错误 SSE：chunk 内换行导致续行无 data: 前缀时被丢行
-                    yield s
+                    yield ZhibanStreamFrame(kind="text", payload=s)
         except httpx.HTTPError as e:
             logger.bind(tag=TAG).error("zhiban_agent 流式请求失败: {}", e)
         except Exception as e:

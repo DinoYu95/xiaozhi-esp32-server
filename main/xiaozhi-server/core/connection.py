@@ -43,6 +43,7 @@ from config.manage_api_client import (
     DeviceBindException,
     fetch_active_shadow_missions_sync,
 )
+from core.zhibanAgent.zhiban_agent_client import ZHIBAN_META_KEY
 from core.utils.prompt_manager import PromptManager
 from core.utils.voiceprint_provider import VoiceprintProvider
 from core.utils.util import get_system_error_response
@@ -174,6 +175,8 @@ class ConnectionHandler:
 
         # 是否在聊天结束后关闭连接
         self.close_after_chat = False
+        # zhiban 退出意图：跳过 xiaozhi 侧 memory.save_memory（长期记忆由 zhiban 侧 skip）
+        self.skip_memory_persist = False
         self.load_function_plugin = False
         self.intent_type = "nointent"
 
@@ -266,7 +269,7 @@ class ConnectionHandler:
     async def _save_and_close(self, ws):
         """保存记忆并关闭连接"""
         try:
-            if self.memory:
+            if self.memory and not getattr(self, "skip_memory_persist", False):
                 # 使用线程池异步保存记忆
                 def save_memory_task():
                     try:
@@ -1009,6 +1012,24 @@ class ConnectionHandler:
         mod = getattr(type(self.llm), "__module__", "") or ""
         return "ZhibanAgent" in mod
 
+    def _apply_zhiban_session_meta(self, meta: Dict[str, Any]) -> None:
+        """处理 zhiban-agent 下发的会话控制 meta（如退出断连）。"""
+        if not isinstance(meta, dict):
+            return
+        action = (meta.get("session_action") or "").strip()
+        if action == "close_after_reply":
+            self.close_after_chat = True
+            self.logger.bind(tag=TAG).info(
+                "zhiban session_action=close_after_reply，告别播完后断连 intent=%s skill=%s",
+                meta.get("intent"),
+                meta.get("skill_id"),
+            )
+        if meta.get("skip_memory") or meta.get("intent") == "exit":
+            self.skip_memory_persist = True
+            self.logger.bind(tag=TAG).info(
+                "zhiban 退出意图：跳过 xiaozhi 侧 memory 持久化"
+            )
+
     def chat(self, query, depth=0):
         entered_inflight = False
         if depth == 0:
@@ -1029,6 +1050,7 @@ class ConnectionHandler:
 
         # 为最顶层时新建会话ID和发送FIRST请求
         if depth == 0:
+            self.skip_memory_persist = False
             self.sentence_id = str(uuid.uuid4().hex)
             self.dialogue.put(Message(role="user", content=query))
             self.tts.tts_text_queue.put(
@@ -1171,6 +1193,9 @@ class ConnectionHandler:
                         self._merge_tool_calls(tool_calls_list, tools_call)
                 else:
                     content = response
+                    if isinstance(content, dict) and ZHIBAN_META_KEY in content:
+                        self._apply_zhiban_session_meta(content[ZHIBAN_META_KEY])
+                        continue
 
                 # 在llm回复中获取情绪表情，一轮对话只在开头获取一次
                 if emotion_flag and content is not None and content.strip():

@@ -7,7 +7,7 @@ import json
 
 from config.logger import setup_logging
 from core.providers.llm.base import LLMProviderBase
-from core.zhibanAgent import ZhibanAgentClient
+from core.zhibanAgent import ZhibanAgentClient, make_zhiban_meta_marker
 
 TAG = __name__
 logger = setup_logging()
@@ -173,7 +173,7 @@ class LLMProvider(LLMProviderBase):
 
         # 优先流式：调用 /api/chat/stream，逐块 yield，便于 TTS 边收边播
         yielded_any = False
-        for chunk in self._client.stream(
+        for frame in self._client.stream(
             text=text_to_send,
             session_id=session_id or "",
             user_id=kwargs.get("user_id"),
@@ -182,11 +182,15 @@ class LLMProvider(LLMProviderBase):
             environment_context=kwargs.get("environment_context"),
             messages=messages,
         ):
-            yielded_any = True
-            yield chunk
+            if frame.kind == "meta" and isinstance(frame.payload, dict):
+                yielded_any = True
+                yield make_zhiban_meta_marker(frame.payload)
+            elif frame.kind == "text" and frame.payload:
+                yielded_any = True
+                yield frame.payload
         # 若流式无任何输出（如服务未开 stream 或报错），回退为非流式
         if not yielded_any:
-            reply = self._client.chat(
+            reply, meta = self._client.chat(
                 text=text_to_send,
                 session_id=session_id or "",
                 user_id=kwargs.get("user_id"),
@@ -195,6 +199,8 @@ class LLMProvider(LLMProviderBase):
                 environment_context=kwargs.get("environment_context"),
                 messages=messages,
             )
+            if meta:
+                yield make_zhiban_meta_marker(meta)
             if reply:
                 yield reply
             else:

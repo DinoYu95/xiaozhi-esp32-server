@@ -135,6 +135,7 @@ class ConnectionHandler:
         self.client_voice_window = deque(maxlen=5)
         self.first_activity_time = 0.0  # 记录首次活动的时间（毫秒）
         self.last_activity_time = 0.0  # 统一的活动时间戳（毫秒）
+        self.last_user_voice_time = 0.0  # 仅用户侧 VAD 人声，用于断句（不受 TTS 发包干扰）
         self.client_voice_stop = False
         self.last_is_voice = False
 
@@ -735,6 +736,14 @@ class ConnectionHandler:
             self.logger.bind(tag=TAG).info(
                 "配置拉取: 无 companion_growth_prompt（接口未返回或模板为空/null；请检查 manager-api 与 sys_params）",
             )
+        an = private_config.get("assistant_name")
+        if an is not None and str(an).strip():
+            self.config["assistant_name"] = str(an).strip()
+            self.logger.bind(tag=TAG).info(
+                "配置拉取: assistant_name=%s（智控台智能体名称）", self.config["assistant_name"]
+            )
+        else:
+            self.config["assistant_name"] = None
 
         # 使用 run_in_executor 在线程池中执行 initialize_modules，避免阻塞主循环
         try:
@@ -921,6 +930,9 @@ class ConnectionHandler:
         dev = getattr(self, "device_id", None)
         if dev:
             ctx["device_id"] = dev
+        assistant_name = (self.config.get("assistant_name") or "").strip()
+        if assistant_name:
+            ctx["assistant_name"] = assistant_name
         # 家长规则供 ZhibanAgent 注入到 prompt（ZhibanAgent 不接收 xiaozhi 的 system prompt）
         parent_rules = self.config.get("parent_rules") or []
         if parent_rules:
@@ -1526,6 +1538,7 @@ class ConnectionHandler:
         self.client_voice_stop = False
         self.client_voice_window.clear()
         self.last_is_voice = False
+        self.last_user_voice_time = 0.0
 
         # Clear ASR buffers
         self.asr_audio.clear()

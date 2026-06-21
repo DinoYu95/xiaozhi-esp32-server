@@ -298,6 +298,11 @@ public class ConfigServiceImpl implements ConfigService {
             result.put("companion_growth_prompt", companionPrompt);
         }
 
+        // 智伴 Agent：下发智能体正式名称（设备绑定 agent.agent_name），供 zhiban 固定助手身份
+        if (StringUtils.isNotBlank(agent.getAgentName())) {
+            result.put("assistant_name", agent.getAgentName());
+        }
+
         return result;
     }
 

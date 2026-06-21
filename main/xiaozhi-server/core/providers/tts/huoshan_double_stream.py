@@ -234,6 +234,28 @@ class TTSProvider(TTSProviderBase):
             self.ws = None
             raise
     
+    def abort_playback(self):
+        """打断播读：取消火山 TTS 会话并阻止监听线程继续入队。"""
+        conn = self.conn
+        if not conn:
+            return
+        sid = getattr(conn, "sentence_id", None)
+        if not sid:
+            return
+        try:
+            if self.enable_ws_reuse and self.ws and self.activate_session:
+                asyncio.run_coroutine_threadsafe(
+                    self.cancel_session(sid),
+                    loop=conn.loop,
+                )
+            elif self.ws:
+                asyncio.run_coroutine_threadsafe(
+                    self.finish_connection(),
+                    loop=conn.loop,
+                )
+        except Exception as e:
+            logger.bind(tag=TAG).warning("abort_playback 取消火山会话失败: %s", e)
+
     async def finish_connection(self):
         """发送 FinishConnection 事件，等待服务端返回 EVENT_ConnectionFinished"""
         try:
@@ -475,8 +497,10 @@ class TTSProvider(TTSProviderBase):
         try:
             while not self.conn.stop_event.is_set():
                 try:
-                    # 确保 `recv()` 运行在同一个 event loop
+                    # 确保 `recv()` 运行在同一个 event loop（即使打断也要读走 ws 缓冲，避免阻塞）
                     msg = await self.ws.recv()
+                    if getattr(self.conn, "client_abort", False):
+                        continue
                     res = self.parser_response(msg)
                     self.print_response(res, "send_text res:")
 

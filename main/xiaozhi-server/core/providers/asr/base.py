@@ -174,29 +174,26 @@ class ASRProviderBase(ABC):
             if text_len > 0:
                 from core.handle.receiveAudioHandle import _set_current_round_speaker_type
                 from core.utils.owner_dialogue_guard import (
-                    is_owner_dialogue_busy,
-                    is_owner_speaker,
                     should_accept_speech,
+                    should_interrupt_on_voiceprint,
                 )
 
                 _set_current_round_speaker_type(conn)
                 if not should_accept_speech(conn, speaker_id):
                     logger.bind(tag=TAG).info(
-                        "owner_busy 丢弃 speech speaker_id=%s type=%s text=%s",
+                        "机器忙且非已录声纹说话人，丢弃 speech speaker_id=%s type=%s text=%s",
                         speaker_id,
                         getattr(conn, "current_round_speaker_type", None),
                         (content_for_length_check[:50] if content_for_length_check else ""),
                     )
                     return
-                machine_speaking = bool(getattr(conn, "client_is_speaking", False))
-                chat_inflight = int(getattr(conn, "_chat_inflight", 0) or 0) > 0
-                if (
-                    is_owner_dialogue_busy(conn)
-                    and is_owner_speaker(conn, speaker_id)
-                    and (machine_speaking or chat_inflight)
-                ):
+                if should_interrupt_on_voiceprint(conn, speaker_id):
                     from core.handle.abortHandle import handleAbortMessage
 
+                    logger.bind(tag=TAG).info(
+                        "已录声纹说话人插话，触发打断 speaker_id=%s",
+                        speaker_id,
+                    )
                     await handleAbortMessage(conn)
                 await startToChat(conn, enhanced_text)
                 audio_snapshot = asr_audio_task.copy()

@@ -11,8 +11,10 @@ from core.handle.sendAudioHandle import (
     AUDIO_FRAME_DURATION,
 )
 from core.utils.owner_dialogue_guard import (
+    allow_vad_barge_in,
     is_owner_dialogue_busy,
     is_owner_speaker,
+    is_machine_busy,
     should_accept_speech,
 )
 
@@ -41,31 +43,34 @@ async def handleAudioMessage(conn, audio):
         if not hasattr(conn, "vad_resume_task") or conn.vad_resume_task.done():
             conn.vad_resume_task = asyncio.create_task(resume_vad_detection(conn))
         return
-    # 非播读状态清零去抖累计，避免下一轮误用
-    if not conn.client_is_speaking:
+    # 非 busy 状态清零去抖累计
+    chat_inflight = int(getattr(conn, "_chat_inflight", 0) or 0) > 0
+    machine_busy = is_machine_busy(conn)
+    if not machine_busy:
         conn._barge_in_voice_accum_ms = 0
-    # manual 模式下不打断正在播放的内容
-    # 播读打断：可选「最短持续人声」去抖，减弱环境杂音、短促搭话导致的误打断（config: barge_in_min_voice_ms）
-    if have_voice:
-        if conn.client_is_speaking and conn.client_listen_mode != "manual":
-            if is_owner_dialogue_busy(conn):
-                # 主孩子独占窗口：VAD 层不打断，等 ASR+声纹后仅主孩子可插话
-                pass
+    # 播读/LLM 在途：默认不在 VAD 层打断，等 ASR+声纹确认已录声纹后再插话
+    if have_voice and machine_busy and conn.client_listen_mode != "manual":
+        if allow_vad_barge_in(conn):
+            min_ms = int(conn.config.get("barge_in_min_voice_ms", 400))
+            if min_ms <= 0:
+                conn.logger.bind(tag=TAG).info(
+                    "播读/在途中人声触发打断（VAD 即时） speaking=%s inflight=%s",
+                    conn.client_is_speaking,
+                    chat_inflight,
+                )
+                await handleAbortMessage(conn)
             else:
-                min_ms = int(conn.config.get("barge_in_min_voice_ms", 400))
-                if min_ms <= 0:
+                conn._barge_in_voice_accum_ms += AUDIO_FRAME_DURATION
+                if conn._barge_in_voice_accum_ms >= min_ms:
+                    conn.logger.bind(tag=TAG).info(
+                        "播读/在途中人声累计约 %dms（阈值 %dms），VAD 即时打断",
+                        conn._barge_in_voice_accum_ms,
+                        min_ms,
+                    )
+                    conn._barge_in_voice_accum_ms = 0
                     await handleAbortMessage(conn)
-                else:
-                    conn._barge_in_voice_accum_ms += AUDIO_FRAME_DURATION
-                    if conn._barge_in_voice_accum_ms >= min_ms:
-                        conn.logger.bind(tag=TAG).info(
-                            "播读中人声累计约 %dms（阈值 %dms），触发打断",
-                            conn._barge_in_voice_accum_ms,
-                            min_ms,
-                        )
-                        conn._barge_in_voice_accum_ms = 0
-                        await handleAbortMessage(conn)
-    elif conn.client_is_speaking:
+        # else: 等待 ASR+声纹，未识别声纹的说话不会触发 abort
+    elif machine_busy:
         conn._barge_in_voice_accum_ms = 0
     # 设备长时间空闲检测，用于say goodbye
     await no_voice_close_connect(conn, have_voice)
@@ -112,7 +117,7 @@ async def startToChat(conn, text):
     speaker_id = getattr(conn, "current_speaker_id", None)
     if not should_accept_speech(conn, speaker_id):
         conn.logger.bind(tag=TAG).info(
-            "owner_busy 丢弃 speech speaker_id=%s type=%s",
+            "机器忙且非已录声纹说话人，丢弃 speech speaker_id=%s type=%s",
             speaker_id,
             getattr(conn, "current_round_speaker_type", None),
         )

@@ -59,8 +59,10 @@ log:
 delete_audio: true
 # 没有语音输入多久后断开连接(秒)，默认2分钟，即120秒
 close_connection_no_voice_time: 120
-# TTS 播放期间：VAD 判定有人声累计至少多少毫秒后才打断（去抖，减轻杂音/短促人声误停播）。0 表示沿用旧逻辑「一帧有人声即打断」
+# TTS 播放期间：VAD 判定有人声累计至少多少毫秒后才打断（去抖）。仅当 barge_in_requires_voiceprint=false 时 VAD 即时打断生效
 barge_in_min_voice_ms: 400
+# 为 true（默认）：播读/LLM 在途时仅「已录入且识别命中」的声纹可插话；未录声纹/未识别一律不能打断
+barge_in_requires_voiceprint: true
 # TTS请求超时时间(秒)
 tts_timeout: 10
 # 开启唤醒词加速

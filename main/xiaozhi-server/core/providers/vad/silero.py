@@ -87,12 +87,16 @@ class VADProvider(VADProviderBase):
 
                 # 如果之前有声音，但本次没有声音，且与上次有声音的时间差已经超过了静默阈值，则认为已经说完一句话
                 if conn.client_have_voice and not client_have_voice:
-                    stop_duration = time.time() * 1000 - conn.last_activity_time
+                    # 用「用户侧人声」时间戳断句，避免 TTS 发包刷新 last_activity_time 导致无法判停
+                    voice_anchor = getattr(conn, "last_user_voice_time", 0.0) or conn.last_activity_time
+                    stop_duration = time.time() * 1000 - voice_anchor
                     if stop_duration >= self.silence_threshold_ms:
                         conn.client_voice_stop = True
                 if client_have_voice:
                     conn.client_have_voice = True
-                    conn.last_activity_time = time.time() * 1000
+                    now_ms = time.time() * 1000
+                    conn.last_user_voice_time = now_ms
+                    conn.last_activity_time = now_ms
 
             return client_have_voice
         except opuslib_next.OpusError as e:

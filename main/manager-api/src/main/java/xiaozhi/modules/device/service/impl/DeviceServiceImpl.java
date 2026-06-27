@@ -419,12 +419,14 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
             String frontedUrl = sysParamsService.getValue(Constant.SERVER_FRONTED_URL, true);
             code.setMessage(frontedUrl + "\n" + cachedCode);
             code.setChallenge(deviceId);
+            code.setQrcodeContent(buildDeviceBindQrcodeContent(cachedCode));
         } else {
             String newCode = RandomUtil.randomNumbers(6);
             code.setCode(newCode);
             String frontedUrl = sysParamsService.getValue(Constant.SERVER_FRONTED_URL, true);
             code.setMessage(frontedUrl + "\n" + newCode);
             code.setChallenge(deviceId);
+            code.setQrcodeContent(buildDeviceBindQrcodeContent(newCode));
 
             Map<String, Object> dataMap = new HashMap<>();
             dataMap.put("id", deviceId);
@@ -449,6 +451,12 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
             redisUtils.set(codeKey, deviceId);
         }
         return code;
+    }
+
+    private String buildDeviceBindQrcodeContent(String activationCode) {
+        return JSONUtil.toJsonStr(Map.of(
+                "t", "device_bind",
+                "code", activationCode));
     }
 
     private DeviceReportRespDTO.Firmware buildFirmwareInfo(String type, String currentVersion) {

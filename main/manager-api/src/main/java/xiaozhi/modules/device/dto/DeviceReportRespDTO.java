@@ -1,5 +1,7 @@
 package xiaozhi.modules.device.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.Getter;
@@ -52,6 +54,10 @@ public class DeviceReportRespDTO {
 
         @Schema(description = "挑战码")
         private String challenge;
+
+        @Schema(description = "二维码内容（JSON 字符串，供设备编码为 QR 或小程序扫码解析）")
+        @JsonProperty("qrcode_content")
+        private String qrcodeContent;
     }
 
     @Getter

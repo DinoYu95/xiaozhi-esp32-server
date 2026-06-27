@@ -2,6 +2,7 @@ import time
 import json
 import asyncio
 from core.utils.util import audio_to_data
+from core.providers.tts.dto.dto import ContentType
 from core.handle.abortHandle import handleAbortMessage
 from core.handle.intentHandler import handle_user_intent
 from core.utils.output_counter import check_device_output_limit
@@ -19,6 +20,18 @@ from core.utils.owner_dialogue_guard import (
 )
 
 TAG = __name__
+
+DEFAULT_DEVICE_BIND_PROMPT = "请打开智伴未来微信小程序扫码绑定设备"
+
+
+def get_device_bind_prompt(conn) -> str:
+    """未绑定设备 TTS 文案：优先读智控台参数 device_bind_prompt.prompt"""
+    bind_prompt_cfg = conn.config.get("device_bind_prompt") or {}
+    if isinstance(bind_prompt_cfg, dict):
+        prompt = bind_prompt_cfg.get("prompt")
+        if prompt is not None and str(prompt).strip():
+            return str(prompt).strip()
+    return DEFAULT_DEVICE_BIND_PROMPT
 
 
 def _set_current_round_speaker_type(conn):
@@ -206,32 +219,18 @@ async def max_out_size(conn):
 
 async def check_bind_device(conn):
     if conn.bind_code:
-        # 确保bind_code是6位数字
+        # 确保bind_code是6位数字（仍用于设备屏显/二维码，语音不再逐位播报）
         if len(conn.bind_code) != 6:
             conn.logger.bind(tag=TAG).error(f"无效的绑定码格式: {conn.bind_code}")
             text = "绑定码格式错误，请检查配置。"
             await send_stt_message(conn, text)
+            conn.tts.tts_one_sentence(conn, ContentType.TEXT, content_detail=text)
             return
 
-        text = f"请登录控制面板，输入{conn.bind_code}，绑定设备。"
+        text = get_device_bind_prompt(conn)
+        conn.client_abort = False
         await send_stt_message(conn, text)
-
-        # 播放提示音
-        music_path = "config/assets/bind_code.wav"
-        opus_packets = await audio_to_data(music_path)
-        conn.tts.tts_audio_queue.put((SentenceType.FIRST, opus_packets, text))
-
-        # 逐个播放数字
-        for i in range(6):  # 确保只播放6位数字
-            try:
-                digit = conn.bind_code[i]
-                num_path = f"config/assets/bind_code/{digit}.wav"
-                num_packets = await audio_to_data(num_path)
-                conn.tts.tts_audio_queue.put((SentenceType.MIDDLE, num_packets, None))
-            except Exception as e:
-                conn.logger.bind(tag=TAG).error(f"播放数字音频失败: {e}")
-                continue
-        conn.tts.tts_audio_queue.put((SentenceType.LAST, [], None))
+        conn.tts.tts_one_sentence(conn, ContentType.TEXT, content_detail=text)
     else:
         # 播放未绑定提示
         conn.client_abort = False

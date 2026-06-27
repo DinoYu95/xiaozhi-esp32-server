@@ -131,7 +131,7 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         binding.setParentUserId(parentUserId);
         binding.setDeviceId(deviceId);
         binding.setBindTime(new Date());
-        binding.setBindSource("code");
+        binding.setBindSource(StringUtils.isNotBlank(dto.getBindSource()) ? dto.getBindSource() : "code");
         binding.setCreateTime(new Date());
         parentDeviceBindingDao.insert(binding);
 

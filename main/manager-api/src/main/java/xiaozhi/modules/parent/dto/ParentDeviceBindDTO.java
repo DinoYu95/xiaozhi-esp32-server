@@ -8,4 +8,7 @@ import lombok.Data;
 public class ParentDeviceBindDTO {
     @Schema(description = "6位绑定码")
     private String code;
+
+    @Schema(description = "绑定来源：code（手动输入）/ qrcode（扫码），默认 code")
+    private String bindSource;
 }

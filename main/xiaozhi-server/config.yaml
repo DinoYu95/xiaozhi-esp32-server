@@ -223,6 +223,10 @@ end_prompt:
   prompt: |
     请你以"时间过得真快"未来头，用富有感情、依依不舍的话来结束这场对话吧！
 
+# 设备未绑定时 TTS 引导文案（接 manager-api 时以智控台参数 device_bind_prompt.prompt 为准）
+device_bind_prompt:
+  prompt: 请打开智伴未来微信小程序扫码绑定设备
+
 # 具体处理时选择的模块(The module selected for specific processing)
 selected_module:
   # 语音活动检测模块，默认使用SileroVAD模型

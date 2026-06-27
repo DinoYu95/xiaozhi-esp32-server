@@ -2,6 +2,7 @@ package xiaozhi.modules.sys.service;
 
 import xiaozhi.common.page.PageData;
 import xiaozhi.common.service.BaseService;
+import xiaozhi.modules.sys.dto.AdminCreateSuperUserDTO;
 import xiaozhi.modules.sys.dto.AdminPageUserDTO;
 import xiaozhi.modules.sys.dto.PasswordDTO;
 import xiaozhi.modules.sys.dto.SysUserDTO;
@@ -72,4 +73,9 @@ public interface SysUserService extends BaseService<SysUserEntity> {
      * @return 是否允许用户注册
      */
     boolean getAllowUserRegister();
+
+    /**
+     * 由超级管理员创建新的超级管理员账号
+     */
+    void createSuperAdmin(AdminCreateSuperUserDTO dto);
 }

@@ -126,6 +126,11 @@ public interface Constant {
     String SERVER_ALLOW_USER_REGISTER = "server.allow_user_register";
 
     /**
+     * 智控台平台 owner 用户 ID（家长端绑定的 ai_device/agent 归属；超级管理员数据范围）
+     */
+    String SERVER_PLATFORM_OWNER_USER_ID = "server.platform_owner_user_id";
+
+    /**
      * 下发六位验证码时显示的控制面板地址
      */
     String SERVER_FRONTED_URL = "server.fronted_url";

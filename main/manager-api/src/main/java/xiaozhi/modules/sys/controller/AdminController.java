@@ -6,6 +6,7 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,6 +17,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import xiaozhi.common.constant.Constant;
 import xiaozhi.common.page.PageData;
@@ -24,6 +26,7 @@ import xiaozhi.common.validator.ValidatorUtils;
 import xiaozhi.modules.device.dto.DevicePageUserDTO;
 import xiaozhi.modules.device.service.DeviceService;
 import xiaozhi.modules.device.vo.UserShowDeviceListVO;
+import xiaozhi.modules.sys.dto.AdminCreateSuperUserDTO;
 import xiaozhi.modules.sys.dto.AdminPageUserDTO;
 import xiaozhi.modules.sys.service.SysUserService;
 import xiaozhi.modules.sys.vo.AdminPageUserVO;
@@ -60,6 +63,14 @@ public class AdminController {
         ValidatorUtils.validateEntity(dto);
         PageData<AdminPageUserVO> page = sysUserService.page(dto);
         return new Result<PageData<AdminPageUserVO>>().ok(page);
+    }
+
+    @PostMapping("/users/super-admin")
+    @Operation(summary = "创建超级管理员（可管理同一平台 owner 数据范围内的设备与智能体）")
+    @RequiresPermissions("sys:role:superAdmin")
+    public Result<Void> createSuperAdmin(@RequestBody @Valid AdminCreateSuperUserDTO dto) {
+        sysUserService.createSuperAdmin(dto);
+        return new Result<>();
     }
 
     @PutMapping("/users/{id}")

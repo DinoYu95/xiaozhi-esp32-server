@@ -66,6 +66,7 @@ import xiaozhi.modules.device.vo.UserShowDeviceListVO;
 import xiaozhi.modules.security.user.SecurityUser;
 import xiaozhi.modules.sys.service.SysParamsService;
 import xiaozhi.modules.sys.service.SysUserUtilService;
+import xiaozhi.modules.sys.service.SysUserScopeService;
 
 @Slf4j
 @Service
@@ -77,6 +78,7 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
     private final SysParamsService sysParamsService;
     private final RedisUtils redisUtils;
     private final OtaService otaService;
+    private final SysUserScopeService sysUserScopeService;
 
     @Async
     public void updateDeviceConnectionInfo(String agentId, String deviceId, String appVersion) {
@@ -129,6 +131,7 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
         if (user.getId() == null) {
             throw new RenException(ErrorCode.USER_NOT_LOGIN);
         }
+        Long ownerUserId = sysUserScopeService.getDataScopeUserId();
 
         Date currentTime = new Date();
         DeviceEntity deviceEntity = new DeviceEntity();
@@ -137,7 +140,7 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
         deviceEntity.setAgentId(agentId);
         deviceEntity.setAppVersion(appVersion);
         deviceEntity.setMacAddress(macAddress);
-        deviceEntity.setUserId(user.getId());
+        deviceEntity.setUserId(ownerUserId);
         deviceEntity.setCreator(user.getId());
         deviceEntity.setAutoUpdate(1);
         deviceEntity.setCreateDate(currentTime);
@@ -165,8 +168,7 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
         String url = StrUtil.format("http://{}/api/devices/status", mqttGatewayUrl);
 
         // 获取当前用户的设备列表
-        UserDetail user = SecurityUser.getUser();
-        List<DeviceEntity> devices = getUserDevices(user.getId(), agentId);
+        List<DeviceEntity> devices = getUserDevices(sysUserScopeService.getDataScopeUserId(), agentId);
 
         // 构建deviceIds数组
         Set<String> deviceIds = devices.stream().map(o -> {
@@ -694,9 +696,8 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
             return null;
         }
 
-        // 检查设备是否属于当前用户
-        UserDetail user = SecurityUser.getUser();
-        if (!device.getUserId().equals(user.getId())) {
+        // 检查设备是否属于当前数据范围
+        if (!sysUserScopeService.isInDataScope(device.getUserId())) {
             return null;
         }
 
@@ -758,9 +759,8 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
             return null;
         }
 
-        // 检查设备是否属于当前用户
-        UserDetail user = SecurityUser.getUser();
-        if (!device.getUserId().equals(user.getId())) {
+        // 检查设备是否属于当前数据范围
+        if (!sysUserScopeService.isInDataScope(device.getUserId())) {
             return null;
         }
 

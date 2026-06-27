@@ -25,6 +25,31 @@ export default {
                 })
             }).send()
     },
+    // 创建超级管理员
+    createSuperAdmin(data, callback, failCallback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/users/super-admin`)
+            .method('POST')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .fail((err) => {
+                if (failCallback) {
+                    failCallback(err)
+                }
+            })
+            .networkFail((err) => {
+                console.error('创建超级管理员失败:', err)
+                if (failCallback) {
+                    failCallback(err)
+                }
+                RequestService.reAjaxFun(() => {
+                    this.createSuperAdmin(data, callback, failCallback)
+                })
+            }).send()
+    },
     // 删除用户
     deleteUser(id, callback) {
         RequestService.sendRequest()

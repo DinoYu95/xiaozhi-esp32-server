@@ -26,6 +26,9 @@ public class AdminPageUserVO {
     @Schema(description = "用户id")
     private String userid;
 
+    @Schema(description = "是否超级管理员 0否 1是")
+    private Integer superAdmin;
+
     @Schema(description = "注册时间")
     private Date createDate;
 }

@@ -41,13 +41,11 @@ import xiaozhi.modules.parent.vo.ParentDeviceItemVO;
 import xiaozhi.modules.parent.vo.ParentDeviceSkillVO;
 import xiaozhi.modules.parent.vo.ParentUserSkillVO;
 import xiaozhi.modules.sys.service.SysParamsService;
+import xiaozhi.modules.sys.service.SysUserScopeService;
 
 @Service
 @RequiredArgsConstructor
 public class ParentDeviceServiceImpl implements ParentDeviceService {
-
-    // 后台固定 owner 用户ID（临时方案）
-    private static final Long DEFAULT_OWNER_USER_ID = 2019681905515061249L;
 
     private final ParentDeviceBindingDao parentDeviceBindingDao;
     private final DeviceDao deviceDao;
@@ -59,6 +57,7 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
     private final AgentSkillMappingService agentSkillMappingService;
     private final ParentUserDao parentUserDao;
     private final ParentUserSkillService parentUserSkillService;
+    private final SysUserScopeService sysUserScopeService;
 
     @Override
     public BindResult bind(Long parentUserId, ParentDeviceBindDTO dto) {
@@ -103,7 +102,8 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
                     : "家长";
             AgentCreateDTO agentCreateDTO = new AgentCreateDTO();
             agentCreateDTO.setAgentName(nickname + "的agent");
-            String agentId = agentService.createAgentForOwner(DEFAULT_OWNER_USER_ID, agentCreateDTO);
+            Long platformOwnerUserId = sysUserScopeService.getPlatformOwnerUserId();
+            String agentId = agentService.createAgentForOwner(platformOwnerUserId, agentCreateDTO);
 
             String macAddress = (String) cacheMap.get("mac_address");
             String board = (String) cacheMap.get("board");
@@ -116,9 +116,8 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             deviceEntity.setAppVersion(appVersion);
             deviceEntity.setMacAddress(macAddress != null ? macAddress : deviceId);
             deviceEntity.setAutoUpdate(1);
-            // 按照后台绑定设备的语义，将设备 owner 固定归属到同一个后台用户
-            deviceEntity.setUserId(DEFAULT_OWNER_USER_ID);
-            deviceEntity.setCreator(DEFAULT_OWNER_USER_ID);
+            deviceEntity.setUserId(platformOwnerUserId);
+            deviceEntity.setCreator(platformOwnerUserId);
             deviceEntity.setCreateDate(now);
             deviceEntity.setUpdateDate(now);
             deviceEntity.setLastConnectedAt(now);

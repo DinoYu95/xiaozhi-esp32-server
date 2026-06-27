@@ -54,6 +54,7 @@ import xiaozhi.modules.agent.vo.AgentInfoVO;
 import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.device.service.DeviceService;
 import xiaozhi.modules.security.user.SecurityUser;
+import xiaozhi.modules.sys.service.SysUserScopeService;
 
 @Tag(name = "智能体管理")
 @AllArgsConstructor
@@ -69,6 +70,7 @@ public class AgentController {
     private final AgentContextProviderService agentContextProviderService;
     private final AgentChatSummaryService agentChatSummaryService;
     private final RedisUtils redisUtils;
+    private final SysUserScopeService sysUserScopeService;
 
     @GetMapping("/list")
     @Operation(summary = "获取用户智能体列表")
@@ -76,10 +78,8 @@ public class AgentController {
     public Result<List<AgentDTO>> getUserAgents(
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "searchType", defaultValue = "name") String searchType) {
-        UserDetail user = SecurityUser.getUser();
-        
-        // 直接调用整合后的getUserAgents方法，无需再区分搜索和普通查询
-        List<AgentDTO> agents = agentService.getUserAgents(user.getId(), keyword, searchType);
+        Long scopeUserId = sysUserScopeService.getDataScopeUserId();
+        List<AgentDTO> agents = agentService.getUserAgents(scopeUserId, keyword, searchType);
         return new Result<List<AgentDTO>>().ok(agents);
     }
 

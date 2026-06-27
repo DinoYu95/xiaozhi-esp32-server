@@ -53,6 +53,7 @@ import xiaozhi.modules.model.service.ModelConfigService;
 import xiaozhi.modules.model.service.ModelProviderService;
 import xiaozhi.modules.security.user.SecurityUser;
 import xiaozhi.modules.sys.enums.SuperAdminEnum;
+import xiaozhi.modules.sys.service.SysUserScopeService;
 import xiaozhi.modules.timbre.service.TimbreService;
 
 @Service
@@ -68,6 +69,7 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
     private final AgentTemplateService agentTemplateService;
     private final ModelProviderService modelProviderService;
     private final AgentContextProviderService agentContextProviderService;
+    private final SysUserScopeService sysUserScopeService;
 
     @Override
     public PageData<AgentEntity> adminAgentList(Map<String, Object> params) {
@@ -416,9 +418,7 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String createAgent(AgentCreateDTO dto) {
-        // 使用当前登录后台用户作为 owner
-        UserDetail user = SecurityUser.getUser();
-        return createAgentForOwner(user.getId(), dto);
+        return createAgentForOwner(sysUserScopeService.getDataScopeUserId(), dto);
     }
 
     @Override

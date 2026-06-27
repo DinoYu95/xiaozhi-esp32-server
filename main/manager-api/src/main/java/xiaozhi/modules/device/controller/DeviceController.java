@@ -20,7 +20,6 @@ import jakarta.validation.Valid;
 import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.redis.RedisKeys;
 import xiaozhi.common.redis.RedisUtils;
-import xiaozhi.common.user.UserDetail;
 import xiaozhi.common.utils.Result;
 import xiaozhi.modules.device.dto.DeviceManualAddDTO;
 import xiaozhi.modules.device.dto.DeviceRegisterDTO;
@@ -29,8 +28,8 @@ import xiaozhi.modules.device.dto.DeviceUnBindDTO;
 import xiaozhi.modules.device.dto.DeviceUpdateDTO;
 import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.device.service.DeviceService;
-import xiaozhi.modules.security.user.SecurityUser;
 import xiaozhi.modules.sys.service.SysParamsService;
+import xiaozhi.modules.sys.service.SysUserScopeService;
 
 @Tag(name = "设备管理")
 @RestController
@@ -39,11 +38,14 @@ public class DeviceController {
     private final DeviceService deviceService;
     private final RedisUtils redisUtils;
     private final SysParamsService sysParamsService;
+    private final SysUserScopeService sysUserScopeService;
 
-    public DeviceController(DeviceService deviceService, RedisUtils redisUtils, SysParamsService sysParamsService) {
+    public DeviceController(DeviceService deviceService, RedisUtils redisUtils, SysParamsService sysParamsService,
+            SysUserScopeService sysUserScopeService) {
         this.deviceService = deviceService;
         this.redisUtils = redisUtils;
         this.sysParamsService = sysParamsService;
+        this.sysUserScopeService = sysUserScopeService;
     }
 
     @PostMapping("/bind/{agentId}/{deviceCode}")
@@ -79,8 +81,7 @@ public class DeviceController {
     @Operation(summary = "获取已绑定设备")
     @RequiresPermissions("sys:role:normal")
     public Result<List<DeviceEntity>> getUserDevices(@PathVariable String agentId) {
-        UserDetail user = SecurityUser.getUser();
-        List<DeviceEntity> devices = deviceService.getUserDevices(user.getId(), agentId);
+        List<DeviceEntity> devices = deviceService.getUserDevices(sysUserScopeService.getDataScopeUserId(), agentId);
         return new Result<List<DeviceEntity>>().ok(devices);
     }
 
@@ -99,8 +100,7 @@ public class DeviceController {
     @Operation(summary = "解绑设备")
     @RequiresPermissions("sys:role:normal")
     public Result<Void> unbindDevice(@RequestBody DeviceUnBindDTO unDeviveBind) {
-        UserDetail user = SecurityUser.getUser();
-        deviceService.unbindDevice(user.getId(), unDeviveBind.getDeviceId());
+        deviceService.unbindDevice(sysUserScopeService.getDataScopeUserId(), unDeviveBind.getDeviceId());
         return new Result<Void>();
     }
 
@@ -112,8 +112,7 @@ public class DeviceController {
         if (entity == null) {
             return new Result<Void>().error("设备不存在");
         }
-        UserDetail user = SecurityUser.getUser();
-        if (!entity.getUserId().equals(user.getId())) {
+        if (!sysUserScopeService.isInDataScope(entity.getUserId())) {
             return new Result<Void>().error("设备不存在");
         }
         BeanUtils.copyProperties(deviceUpdateDTO, entity);
@@ -125,8 +124,7 @@ public class DeviceController {
     @Operation(summary = "手动添加设备")
     @RequiresPermissions("sys:role:normal")
     public Result<Void> manualAddDevice(@RequestBody @Valid DeviceManualAddDTO dto) {
-        UserDetail user = SecurityUser.getUser();
-        deviceService.manualAddDevice(user.getId(), dto);
+        deviceService.manualAddDevice(sysUserScopeService.getDataScopeUserId(), dto);
         return new Result<>();
     }
 

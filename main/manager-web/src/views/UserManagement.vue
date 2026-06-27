@@ -5,6 +5,9 @@
     <div class="operation-bar">
       <h2 class="page-title">{{ $t('header.userManagement') }}</h2>
       <div class="right-operations">
+        <el-button type="primary" class="btn-add-super-admin" @click="openCreateSuperAdminDialog">
+          {{ $t('user.addSuperAdmin') }}
+        </el-button>
         <el-input :placeholder="$t('user.searchPhone')" v-model="searchPhone" class="search-input" clearable
           @keyup.enter.native="handleSearch" />
         <el-button class="btn-search" @click="handleSearch">{{ $t('user.search') }}</el-button>
@@ -25,6 +28,12 @@
               </el-table-column>
               <el-table-column :label="$t('user.userid')" prop="userid" align="center"></el-table-column>
               <el-table-column :label="$t('user.mobile')" prop="mobile" align="center"></el-table-column>
+              <el-table-column :label="$t('user.role')" prop="superAdmin" align="center" width="120">
+                <template slot-scope="scope">
+                  <el-tag v-if="scope.row.superAdmin === 1" type="warning">{{ $t('user.superAdmin') }}</el-tag>
+                  <el-tag v-else type="info">{{ $t('user.normalUser') }}</el-tag>
+                </template>
+              </el-table-column>
               <el-table-column :label="$t('user.deviceCount')" prop="deviceCount" align="center"></el-table-column>
               <el-table-column :label="$t('user.createDate')" prop="createDate" align="center"></el-table-column>
               <el-table-column :label="$t('user.status')" prop="status" align="center">
@@ -90,6 +99,33 @@
     </div>
 
     <view-password-dialog :visible.sync="showViewPassword" :password="currentPassword" />
+
+    <el-dialog :title="$t('user.addSuperAdmin')" :visible.sync="showCreateSuperAdminDialog" width="480px"
+      @close="resetCreateSuperAdminForm">
+      <el-form ref="createSuperAdminForm" :model="createSuperAdminForm" :rules="createSuperAdminRules"
+        label-width="100px">
+        <el-form-item :label="$t('user.username')" prop="username">
+          <el-input v-model="createSuperAdminForm.username" :placeholder="$t('user.superAdminUsernamePlaceholder')"
+            autocomplete="off" />
+        </el-form-item>
+        <el-form-item :label="$t('user.password')" prop="password">
+          <el-input v-model="createSuperAdminForm.password" type="password" show-password
+            :placeholder="$t('user.superAdminPasswordPlaceholder')" autocomplete="new-password" />
+        </el-form-item>
+        <el-form-item :label="$t('user.confirmPassword')" prop="confirmPassword">
+          <el-input v-model="createSuperAdminForm.confirmPassword" type="password" show-password
+            :placeholder="$t('user.confirmPasswordPlaceholder')" autocomplete="new-password" />
+        </el-form-item>
+        <p class="super-admin-hint">{{ $t('user.superAdminCreateHint') }}</p>
+      </el-form>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="showCreateSuperAdminDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="createSuperAdminSubmitting" @click="submitCreateSuperAdmin">
+          {{ $t('common.confirm') }}
+        </el-button>
+      </span>
+    </el-dialog>
+
     <el-footer>
       <version-footer />
     </el-footer>
@@ -116,12 +152,49 @@ export default {
       total: 0,
       isAllSelected: false,
       loading: false,
+      showCreateSuperAdminDialog: false,
+      createSuperAdminSubmitting: false,
+      createSuperAdminForm: {
+        username: '',
+        password: '',
+        confirmPassword: '',
+      },
     };
   },
   created() {
     this.fetchUsers();
   },
   computed: {
+    createSuperAdminRules() {
+      const validateConfirm = (rule, value, callback) => {
+        if (value !== this.createSuperAdminForm.password) {
+          callback(new Error(this.$t('register.passwordsNotMatch')));
+        } else {
+          callback();
+        }
+      };
+      const validatePasswordStrength = (rule, value, callback) => {
+        if (!value || !/^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z]).+$/.test(value)) {
+          callback(new Error(this.$t('user.superAdminPasswordWeak')));
+        } else {
+          callback();
+        }
+      };
+      return {
+        username: [
+          { required: true, message: this.$t('register.requiredUsername'), trigger: 'blur' },
+          { min: 2, max: 50, message: this.$t('user.usernameLengthHint'), trigger: 'blur' },
+        ],
+        password: [
+          { required: true, message: this.$t('register.requiredPassword'), trigger: 'blur' },
+          { validator: validatePasswordStrength, trigger: 'blur' },
+        ],
+        confirmPassword: [
+          { required: true, message: this.$t('register.confirmPasswordRequired'), trigger: 'blur' },
+          { validator: validateConfirm, trigger: 'blur' },
+        ],
+      };
+    },
     pageCount() {
       return Math.ceil(this.total / this.pageSize);
     },
@@ -142,6 +215,45 @@ export default {
     }
   },
   methods: {
+    openCreateSuperAdminDialog() {
+      this.showCreateSuperAdminDialog = true;
+    },
+    resetCreateSuperAdminForm() {
+      this.createSuperAdminForm = {
+        username: '',
+        password: '',
+        confirmPassword: '',
+      };
+      if (this.$refs.createSuperAdminForm) {
+        this.$refs.createSuperAdminForm.clearValidate();
+      }
+    },
+    submitCreateSuperAdmin() {
+      this.$refs.createSuperAdminForm.validate((valid) => {
+        if (!valid) return;
+        this.createSuperAdminSubmitting = true;
+        Api.admin.createSuperAdmin(
+          {
+            username: this.createSuperAdminForm.username.trim(),
+            password: this.createSuperAdminForm.password,
+          },
+          ({ data }) => {
+            this.createSuperAdminSubmitting = false;
+            if (data.code === 0) {
+              this.$message.success(this.$t('user.createSuperAdminSuccess'));
+              this.showCreateSuperAdminDialog = false;
+              this.fetchUsers();
+            } else {
+              this.$message.error(data.msg || this.$t('user.createSuperAdminFailed'));
+            }
+          },
+          () => {
+            this.createSuperAdminSubmitting = false;
+            this.$message.error(this.$t('user.createSuperAdminFailed'));
+          }
+        );
+      });
+    },
     handlePageSizeChange(val) {
       this.pageSize = val;
       this.currentPage = 1;
@@ -407,8 +519,20 @@ export default {
 
 .right-operations {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
   margin-left: auto;
+}
+
+.btn-add-super-admin {
+  white-space: nowrap;
+}
+
+.super-admin-hint {
+  margin: 0 0 8px 100px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
 }
 
 .search-input {

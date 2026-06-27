@@ -25,12 +25,14 @@ import xiaozhi.modules.agent.service.AgentService;
 import xiaozhi.modules.device.service.DeviceService;
 import xiaozhi.modules.security.password.PasswordUtils;
 import xiaozhi.modules.sys.dao.SysUserDao;
+import xiaozhi.modules.sys.dto.AdminCreateSuperUserDTO;
 import xiaozhi.modules.sys.dto.AdminPageUserDTO;
 import xiaozhi.modules.sys.dto.PasswordDTO;
 import xiaozhi.modules.sys.dto.SysUserDTO;
 import xiaozhi.modules.sys.entity.SysUserEntity;
 import xiaozhi.modules.sys.enums.SuperAdminEnum;
 import xiaozhi.modules.sys.service.SysParamsService;
+import xiaozhi.modules.sys.service.SysUserScopeService;
 import xiaozhi.modules.sys.service.SysUserService;
 import xiaozhi.modules.sys.vo.AdminPageUserVO;
 
@@ -47,6 +49,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserDao, SysUserEntit
     private final AgentService agentService;
 
     private final SysParamsService sysParamsService;
+
+    private final SysUserScopeService sysUserScopeService;
 
     @Override
     public SysUserDTO getByUsername(String username) {
@@ -95,7 +99,27 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserDao, SysUserEntit
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void createSuperAdmin(AdminCreateSuperUserDTO dto) {
+        if (getByUsername(dto.getUsername()) != null) {
+            throw new RenException(ErrorCode.PHONE_ALREADY_REGISTERED);
+        }
+        if (!isStrongPassword(dto.getPassword())) {
+            throw new RenException(ErrorCode.PASSWORD_WEAK_ERROR);
+        }
+        SysUserEntity entity = new SysUserEntity();
+        entity.setUsername(dto.getUsername().trim());
+        entity.setPassword(PasswordUtils.encode(dto.getPassword()));
+        entity.setSuperAdmin(SuperAdminEnum.YES.value());
+        entity.setStatus(1);
+        insert(entity);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteById(Long id) {
+        if (id != null && id.equals(sysUserScopeService.getPlatformOwnerUserId())) {
+            throw new RenException("不能删除平台主账号");
+        }
         // 删除用户
         baseDao.deleteById(id);
         // 删除设备
@@ -170,7 +194,11 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserDao, SysUserEntit
             AdminPageUserVO adminPageUserVO = new AdminPageUserVO();
             adminPageUserVO.setUserid(user.getId().toString());
             adminPageUserVO.setMobile(user.getUsername());
-            String deviceCount = deviceService.selectCountByUserId(user.getId()).toString();
+            adminPageUserVO.setSuperAdmin(user.getSuperAdmin());
+            Long countUserId = user.getSuperAdmin() != null && user.getSuperAdmin() == SuperAdminEnum.YES.value()
+                    ? sysUserScopeService.getPlatformOwnerUserId()
+                    : user.getId();
+            String deviceCount = deviceService.selectCountByUserId(countUserId).toString();
             adminPageUserVO.setDeviceCount(deviceCount);
             adminPageUserVO.setStatus(user.getStatus());
             adminPageUserVO.setCreateDate(user.getCreateDate());

@@ -3,6 +3,7 @@ package xiaozhi.modules.parent.service;
 import java.util.List;
 
 import xiaozhi.modules.parent.dto.ParentDeviceBindDTO;
+import xiaozhi.modules.parent.dto.ParentDeviceNameUpdateDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceSkillBindDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceUnbindDTO;
 import xiaozhi.modules.parent.vo.ParentDeviceItemVO;
@@ -27,6 +28,11 @@ public interface ParentDeviceService {
      * 当前家长已绑定设备列表
      */
     List<ParentDeviceItemVO> list(Long parentUserId);
+
+    /**
+     * 修改设备名称（写入 ai_device.alias，设备重连后对话自称生效）
+     */
+    void updateDeviceName(Long parentUserId, String deviceId, ParentDeviceNameUpdateDTO dto);
 
     /**
      * 获取某设备下所有技能信息（需校验设备已绑定给当前家长）

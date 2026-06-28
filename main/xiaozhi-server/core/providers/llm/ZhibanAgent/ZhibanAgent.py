@@ -94,6 +94,11 @@ class LLMProvider(LLMProviderBase):
         text_to_send = input_text.strip()
         env = kwargs.get("environment_context") or {}
         prefix_blocks = []
+        assistant_name = (env.get("assistant_name") or "").strip()
+        if assistant_name:
+            prefix_blocks.append(
+                f"【你的名字叫「{assistant_name}」，与孩子对话时请以此自称；被问到「你是谁」时也用这个名字回答】"
+            )
         cg = (env.get("companion_growth_prompt") or "").strip()
         if cg:
             prefix_blocks.append("【成长陪伴与对话风格】\n" + cg)

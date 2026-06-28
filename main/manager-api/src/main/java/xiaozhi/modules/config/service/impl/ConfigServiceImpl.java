@@ -235,8 +235,9 @@ public class ConfigServiceImpl implements ConfigService {
         }
 
         // 构建模块配置
+        String assistantName = resolveAssistantName(device, agent);
         buildModuleConfig(
-                agent.getAgentName(),
+                assistantName,
                 agent.getSystemPrompt(),
                 agent.getSummaryMemory(),
                 voice,
@@ -298,12 +299,23 @@ public class ConfigServiceImpl implements ConfigService {
             result.put("companion_growth_prompt", companionPrompt);
         }
 
-        // 智伴 Agent：下发智能体正式名称（设备绑定 agent.agent_name），供 zhiban 固定助手身份
-        if (StringUtils.isNotBlank(agent.getAgentName())) {
-            result.put("assistant_name", agent.getAgentName());
+        // 智伴 Agent：下发助手名称（优先家长自定义 device.alias，否则 agent.agent_name）
+        if (StringUtils.isNotBlank(assistantName)) {
+            result.put("assistant_name", assistantName);
         }
 
         return result;
+    }
+
+    /** 设备对话自称：优先家长端设置的 alias，否则智能体名称 */
+    private static String resolveAssistantName(DeviceEntity device, AgentEntity agent) {
+        if (device != null && StringUtils.isNotBlank(device.getAlias())) {
+            return device.getAlias().trim();
+        }
+        if (agent != null && StringUtils.isNotBlank(agent.getAgentName())) {
+            return agent.getAgentName().trim();
+        }
+        return null;
     }
 
     /**

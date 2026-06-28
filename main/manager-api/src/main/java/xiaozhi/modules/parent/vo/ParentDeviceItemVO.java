@@ -10,7 +10,7 @@ import lombok.Data;
 public class ParentDeviceItemVO {
     @Schema(description = "设备 id（mac）")
     private String deviceId;
-    @Schema(description = "设备展示名称，为主孩子名+「的机器人」，无主孩子时为「我的机器人」")
+    @Schema(description = "设备展示名称，优先家长自定义名称，否则为主孩子名+「的机器人」，无主孩子时为「我的机器人」")
     private String deviceName;
     @Schema(description = "主孩子名字")
     private String ownerChildName;

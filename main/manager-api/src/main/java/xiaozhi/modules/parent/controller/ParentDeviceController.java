@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -23,6 +24,7 @@ import xiaozhi.common.exception.RenException;
 import xiaozhi.common.utils.Result;
 import xiaozhi.modules.parent.context.ParentContext;
 import xiaozhi.modules.parent.dto.ParentDeviceBindDTO;
+import xiaozhi.modules.parent.dto.ParentDeviceNameUpdateDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceSkillBindDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceUnbindDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceRuleAddDTO;
@@ -72,6 +74,28 @@ public class ParentDeviceController {
         }
         List<ParentDeviceItemVO> list = parentDeviceService.list(parentUserId);
         return new Result<List<ParentDeviceItemVO>>().ok(list);
+    }
+
+    @PutMapping(value = { "/{deviceId:.+}/name", "/name" })
+    @Operation(summary = "修改设备名称（对话自称与列表展示均使用此名称，设备需重连后生效）")
+    public Result<Void> updateDeviceName(
+            @PathVariable(value = "deviceId", required = false) String pathDeviceId,
+            @RequestParam(value = "deviceId", required = false) String queryDeviceId,
+            @RequestBody @Valid ParentDeviceNameUpdateDTO dto) {
+        Long parentUserId = ParentContext.getParentUserId();
+        if (parentUserId == null) {
+            throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
+        }
+        String deviceId = pathDeviceId != null ? pathDeviceId : queryDeviceId;
+        if (StringUtils.isBlank(deviceId)) {
+            deviceId = dto.getDeviceId();
+        }
+        if (StringUtils.isBlank(deviceId)) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        deviceId = decodeDeviceId(deviceId);
+        parentDeviceService.updateDeviceName(parentUserId, deviceId, dto);
+        return new Result<Void>().ok(null);
     }
 
     @GetMapping(value = { "/{deviceId:.+}/skills", "/skills" })

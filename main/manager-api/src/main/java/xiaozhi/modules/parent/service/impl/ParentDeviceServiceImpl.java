@@ -31,6 +31,7 @@ import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dao.ParentUserDao;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.dto.ParentDeviceBindDTO;
+import xiaozhi.modules.parent.dto.ParentDeviceNameUpdateDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceSkillBindDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceUnbindDTO;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
@@ -166,17 +167,17 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             ParentDeviceItemVO vo = new ParentDeviceItemVO();
             vo.setDeviceId(b.getDeviceId());
             vo.setBindTime(b.getBindTime());
-            // 主孩子名 + "的机器人"
+            DeviceEntity device = deviceDao.selectById(b.getDeviceId());
+            String childName = null;
             DeviceChildEntity child = deviceChildDao.selectOne(
                     new LambdaQueryWrapper<DeviceChildEntity>()
                             .eq(DeviceChildEntity::getDeviceId, b.getDeviceId()));
-            String childName = (child != null && StringUtils.isNotBlank(child.getName()))
-                    ? child.getName().trim()
-                    : null;
+            if (child != null && StringUtils.isNotBlank(child.getName())) {
+                childName = child.getName().trim();
+            }
             vo.setOwnerChildName(childName);
-            vo.setDeviceName(childName != null ? childName + "的机器人" : "我的机器人");
+            vo.setDeviceName(resolveDeviceDisplayName(device, childName));
             // 设备最后连接时间、在线状态
-            DeviceEntity device = deviceDao.selectById(b.getDeviceId());
             if (device != null) {
                 vo.setLastConnectedAt(device.getLastConnectedAt());
                 vo.setIsOnline(device.getLastConnectedAt() != null
@@ -189,6 +190,35 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             vo.setWifiName("--");
             return vo;
         }).collect(Collectors.toList());
+    }
+
+    @Override
+    public void updateDeviceName(Long parentUserId, String deviceId, ParentDeviceNameUpdateDTO dto) {
+        if (StringUtils.isBlank(deviceId) || dto == null || StringUtils.isBlank(dto.getDeviceName())) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        ensureDeviceBoundAndGetAgentId(parentUserId, deviceId);
+        DeviceEntity device = deviceDao.selectById(deviceId);
+        if (device == null) {
+            device = deviceDao.selectByIdOrMacVariant(deviceId);
+        }
+        if (device == null) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        device.setAlias(dto.getDeviceName().trim());
+        device.setUpdateDate(new Date());
+        deviceDao.updateById(device);
+    }
+
+    /** 小程序展示名：优先家长自定义 alias，否则主孩子名+「的机器人」，无主孩子时为「我的机器人」 */
+    private static String resolveDeviceDisplayName(DeviceEntity device, String childName) {
+        if (device != null && StringUtils.isNotBlank(device.getAlias())) {
+            return device.getAlias().trim();
+        }
+        if (childName != null) {
+            return childName + "的机器人";
+        }
+        return "我的机器人";
     }
 
     @Override

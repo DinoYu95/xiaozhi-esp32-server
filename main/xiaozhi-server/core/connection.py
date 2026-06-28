@@ -313,8 +313,22 @@ class ConnectionHandler:
 
             asyncio.create_task(check_bind_device(self))
 
+    def _is_hello_message(self, message) -> bool:
+        if not isinstance(message, str):
+            return False
+        try:
+            msg_json = json.loads(message)
+        except json.JSONDecodeError:
+            return False
+        return isinstance(msg_json, dict) and msg_json.get("type") == "hello"
+
     async def _route_message(self, message):
         """消息路由"""
+        # hello 必须立即响应（server hello），不能等绑定状态或丢弃
+        if self._is_hello_message(message):
+            await handleTextMessage(self, message)
+            return
+
         # 检查是否已经获取到真实的绑定状态
         if not self.bind_completed_event.is_set():
             # 还没有获取到真实状态，等待直到获取到真实状态或超时
@@ -476,6 +490,11 @@ class ConnectionHandler:
             )
             if self.need_bind:
                 self.bind_completed_event.set()
+                from core.handle.receiveAudioHandle import check_bind_device
+
+                asyncio.run_coroutine_threadsafe(
+                    check_bind_device(self), self.loop
+                )
                 return
             self.selected_module_str = build_module_string(
                 self.config.get("selected_module", {})

@@ -34,6 +34,7 @@ import xiaozhi.modules.agent.service.AgentContextProviderService;
 import xiaozhi.modules.agent.service.AgentMcpAccessPointService;
 import xiaozhi.modules.agent.service.AgentPluginMappingService;
 import xiaozhi.modules.agent.service.AgentService;
+import xiaozhi.modules.agent.service.AgentSkillService;
 import xiaozhi.modules.agent.service.AgentTemplateService;
 import xiaozhi.modules.agent.vo.AgentVoicePrintVO;
 import xiaozhi.modules.config.service.ConfigService;
@@ -68,6 +69,7 @@ public class ConfigServiceImpl implements ConfigService {
     private final VoiceCloneService cloneVoiceService;
     private final AgentVoicePrintDao agentVoicePrintDao;
     private final AgentSkillMappingDao agentSkillMappingDao;
+    private final AgentSkillService agentSkillService;
     private final DeviceChildDao deviceChildDao;
     private final ParentDeviceRuleService parentDeviceRuleService;
 
@@ -232,6 +234,10 @@ public class ConfigServiceImpl implements ConfigService {
                 skillMapping.computeIfAbsent(m.getSpeakerType(), k -> new ArrayList<>()).add(m.getSkillId());
             }
             result.put("skill_mapping", skillMapping);
+        }
+        String defaultFallbackSkillId = agentSkillService.getDefaultFallbackSkillId();
+        if (StringUtils.isNotBlank(defaultFallbackSkillId)) {
+            result.put("default_fallback_skill_id", defaultFallbackSkillId);
         }
 
         // 构建模块配置

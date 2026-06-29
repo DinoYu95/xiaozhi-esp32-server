@@ -17,6 +17,8 @@ public class AgentSkillVO {
     private String metadata;
     @Schema(description = "是否官方推荐：0否 1是")
     private Integer isOfficialRecommended;
+    @Schema(description = "是否意图未匹配时的默认兜底技能：0否 1是")
+    private Integer isDefaultFallback;
     private Date createTime;
     private Date updateTime;
 }

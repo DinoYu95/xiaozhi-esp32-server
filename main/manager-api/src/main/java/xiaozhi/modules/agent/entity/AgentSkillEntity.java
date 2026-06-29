@@ -30,6 +30,9 @@ public class AgentSkillEntity {
     /** 是否官方推荐：0否 1是 */
     @TableField("is_official_recommended")
     private Integer isOfficialRecommended;
+    /** 意图未匹配时的全局默认兜底技能：0否 1是（全平台仅一个） */
+    @TableField("is_default_fallback")
+    private Integer isDefaultFallback;
 
     @TableField("create_time")
     private Date createTime;

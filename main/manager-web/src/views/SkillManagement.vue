@@ -19,6 +19,13 @@
                 </el-tag>
               </template>
             </el-table-column>
+            <el-table-column label="默认兜底" width="100" align="center">
+              <template slot-scope="scope">
+                <el-tag :type="scope.row.isDefaultFallback === 1 ? 'warning' : 'info'" size="small">
+                  {{ scope.row.isDefaultFallback === 1 ? '是' : '否' }}
+                </el-tag>
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="160">
               <template slot-scope="scope">
                 <el-button size="small" @click="openEdit(scope.row)">编辑</el-button>
@@ -67,6 +74,10 @@
         <el-form-item label="官方推荐">
           <el-switch v-model="form.isOfficialRecommended" active-text="是" inactive-text="否" />
         </el-form-item>
+        <el-form-item label="默认兜底">
+          <el-switch v-model="form.isDefaultFallback" active-text="是" inactive-text="否" />
+          <div class="form-tip">意图未匹配任何已绑定技能时使用；全平台仅一个</div>
+        </el-form-item>
       </el-form>
       <span slot="footer">
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -97,6 +108,7 @@ export default {
         instructions: "",
         version: "1.0",
         isOfficialRecommended: false,
+        isDefaultFallback: false,
       },
     };
   },
@@ -126,7 +138,7 @@ export default {
     },
     openAdd() {
       this.editingId = null;
-      this.form = { id: "", name: "", description: "", instructions: "", version: "1.0", isOfficialRecommended: false };
+      this.form = { id: "", name: "", description: "", instructions: "", version: "1.0", isOfficialRecommended: false, isDefaultFallback: false };
       this.dialogVisible = true;
     },
     openEdit(row) {
@@ -138,6 +150,7 @@ export default {
         instructions: row.instructions || "",
         version: row.version || "1.0",
         isOfficialRecommended: row.isOfficialRecommended === 1,
+        isDefaultFallback: row.isDefaultFallback === 1,
       };
       this.dialogVisible = true;
     },

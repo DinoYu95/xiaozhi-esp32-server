@@ -108,6 +108,7 @@ class ZhibanAgentClient:
         user_id: Optional[str] = None,
         speaker_context: Optional[Dict[str, Any]] = None,
         skill_ids: Optional[list] = None,
+        fallback_skill_id: Optional[str] = None,
         environment_context: Optional[Dict[str, Any]] = None,
         messages: Optional[List[Dict[str, str]]] = None,
     ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
@@ -131,6 +132,8 @@ class ZhibanAgentClient:
             payload["speaker_context"] = speaker_context
         if skill_ids:
             payload["skill_ids"] = skill_ids
+        if fallback_skill_id:
+            payload["fallback_skill_id"] = fallback_skill_id
         if environment_context:
             payload["environment_context"] = environment_context
         if messages:
@@ -172,6 +175,7 @@ class ZhibanAgentClient:
         user_id: Optional[str] = None,
         speaker_context: Optional[Dict[str, Any]] = None,
         skill_ids: Optional[list] = None,
+        fallback_skill_id: Optional[str] = None,
         environment_context: Optional[Dict[str, Any]] = None,
         messages: Optional[List[Dict[str, str]]] = None,
         persist_memory: bool = True,
@@ -197,6 +201,8 @@ class ZhibanAgentClient:
             payload["speaker_context"] = speaker_context
         if skill_ids:
             payload["skill_ids"] = skill_ids
+        if fallback_skill_id:
+            payload["fallback_skill_id"] = fallback_skill_id
         if environment_context:
             payload["environment_context"] = environment_context
         if messages:

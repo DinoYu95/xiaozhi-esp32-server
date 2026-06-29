@@ -35,4 +35,7 @@ public class AgentSkillSaveDTO {
 
     @Schema(description = "是否官方推荐：true是 false否，家长端展示推荐技能")
     private Boolean isOfficialRecommended;
+
+    @Schema(description = "是否意图未匹配时的默认兜底技能（全平台仅一个）")
+    private Boolean isDefaultFallback;
 }

@@ -1,8 +1,9 @@
 import time
 import json
+import uuid
 import asyncio
 from core.utils.util import audio_to_data
-from core.providers.tts.dto.dto import ContentType
+from core.providers.tts.dto.dto import ContentType, TTSMessageDTO
 from core.handle.abortHandle import handleAbortMessage
 from core.handle.intentHandler import handle_user_intent
 from core.utils.output_counter import check_device_output_limit
@@ -22,6 +23,28 @@ from core.utils.owner_dialogue_guard import (
 TAG = __name__
 
 DEFAULT_DEVICE_BIND_PROMPT = "请打开智伴未来微信小程序扫码绑定设备"
+
+
+def speak_one_sentence(conn, text: str):
+    """单句 TTS：需 FIRST/LAST 收尾，否则无标点文本不会触发合成"""
+    conn.client_abort = False
+    if not conn.sentence_id:
+        conn.sentence_id = str(uuid.uuid4().hex)
+    conn.tts.tts_text_queue.put(
+        TTSMessageDTO(
+            sentence_id=conn.sentence_id,
+            sentence_type=SentenceType.FIRST,
+            content_type=ContentType.ACTION,
+        )
+    )
+    conn.tts.tts_one_sentence(conn, ContentType.TEXT, content_detail=text)
+    conn.tts.tts_text_queue.put(
+        TTSMessageDTO(
+            sentence_id=conn.sentence_id,
+            sentence_type=SentenceType.LAST,
+            content_type=ContentType.ACTION,
+        )
+    )
 
 
 def get_device_bind_prompt(conn) -> str:
@@ -218,23 +241,25 @@ async def max_out_size(conn):
 
 
 async def check_bind_device(conn):
+    if conn.tts is None:
+        conn.logger.bind(tag=TAG).warning("绑定提示跳过: TTS 尚未初始化")
+        return
     if conn.bind_code:
         # 确保bind_code是6位数字（仍用于设备屏显/二维码，语音不再逐位播报）
         if len(conn.bind_code) != 6:
             conn.logger.bind(tag=TAG).error(f"无效的绑定码格式: {conn.bind_code}")
             text = "绑定码格式错误，请检查配置。"
             await send_stt_message(conn, text)
-            conn.tts.tts_one_sentence(conn, ContentType.TEXT, content_detail=text)
+            speak_one_sentence(conn, text)
             return
 
         text = get_device_bind_prompt(conn)
-        conn.client_abort = False
+        conn.logger.bind(tag=TAG).info(f"播放未绑定设备提示: {text}")
         await send_stt_message(conn, text)
-        conn.tts.tts_one_sentence(conn, ContentType.TEXT, content_detail=text)
+        speak_one_sentence(conn, text)
     else:
-        # 播放未绑定提示
-        conn.client_abort = False
-        text = f"没有找到该设备的版本信息，请正确配置 OTA地址，然后重新编译固件。"
+        text = "没有找到该设备的版本信息，请正确配置 OTA地址，然后重新编译固件。"
+        conn.logger.bind(tag=TAG).info("播放未绑定设备提示（无绑定码）")
         await send_stt_message(conn, text)
         music_path = "config/assets/bind_not_found.wav"
         opus_packets = await audio_to_data(music_path)

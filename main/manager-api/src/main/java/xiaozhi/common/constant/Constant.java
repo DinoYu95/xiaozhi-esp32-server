@@ -161,6 +161,16 @@ public interface Constant {
     String SERVER_AUTH_ENABLED = "server.auth.enabled";
 
     /**
+     * 新建智能体默认「说话人→技能」映射（JSON：speaker_type -> skill_id 数组；owner_child 仍走官方推荐）
+     */
+    String SERVER_AGENT_DEFAULT_SKILL_MAPPING = "server.agent_default_skill_mapping";
+
+    /**
+     * 家长端绑设备自动创建智能体时的模型/记忆/TTS 默认值（JSON）
+     */
+    String SERVER_AGENT_DEVICE_BIND_DEFAULTS = "server.agent_device_bind_defaults";
+
+    /**
      * 无记忆
      */
     String MEMORY_NO_MEM = "Memory_nomem";

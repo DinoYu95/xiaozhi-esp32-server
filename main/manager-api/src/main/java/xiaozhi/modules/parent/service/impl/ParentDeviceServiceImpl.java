@@ -104,7 +104,7 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             AgentCreateDTO agentCreateDTO = new AgentCreateDTO();
             agentCreateDTO.setAgentName(nickname + "的agent");
             Long platformOwnerUserId = sysUserScopeService.getPlatformOwnerUserId();
-            String agentId = agentService.createAgentForOwner(platformOwnerUserId, agentCreateDTO);
+            String agentId = agentService.createAgentForDeviceBind(platformOwnerUserId, agentCreateDTO);
 
             String macAddress = (String) cacheMap.get("mac_address");
             String board = (String) cacheMap.get("board");

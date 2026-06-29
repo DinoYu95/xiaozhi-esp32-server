@@ -184,6 +184,7 @@ class LLMProvider(LLMProviderBase):
             user_id=kwargs.get("user_id"),
             speaker_context=kwargs.get("speaker_context"),
             skill_ids=kwargs.get("skill_ids"),
+            fallback_skill_id=kwargs.get("fallback_skill_id"),
             environment_context=kwargs.get("environment_context"),
             messages=messages,
         ):
@@ -201,6 +202,7 @@ class LLMProvider(LLMProviderBase):
                 user_id=kwargs.get("user_id"),
                 speaker_context=kwargs.get("speaker_context"),
                 skill_ids=kwargs.get("skill_ids"),
+                fallback_skill_id=kwargs.get("fallback_skill_id"),
                 environment_context=kwargs.get("environment_context"),
                 messages=messages,
             )

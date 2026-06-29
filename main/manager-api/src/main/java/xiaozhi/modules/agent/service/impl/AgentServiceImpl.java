@@ -14,6 +14,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -54,7 +55,9 @@ import xiaozhi.modules.model.service.ModelProviderService;
 import xiaozhi.modules.security.user.SecurityUser;
 import xiaozhi.modules.sys.enums.SuperAdminEnum;
 import xiaozhi.modules.sys.service.SysUserScopeService;
+import xiaozhi.modules.sys.service.SysParamsService;
 import xiaozhi.modules.timbre.service.TimbreService;
+import xiaozhi.modules.timbre.vo.TimbreDetailsVO;
 
 @Service
 @AllArgsConstructor
@@ -70,6 +73,7 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
     private final ModelProviderService modelProviderService;
     private final AgentContextProviderService agentContextProviderService;
     private final SysUserScopeService sysUserScopeService;
+    private final SysParamsService sysParamsService;
 
     @Override
     public PageData<AgentEntity> adminAgentList(Map<String, Object> params) {
@@ -418,12 +422,22 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String createAgent(AgentCreateDTO dto) {
-        return createAgentForOwner(sysUserScopeService.getDataScopeUserId(), dto);
+        return createAgentInternal(sysUserScopeService.getDataScopeUserId(), dto, false);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String createAgentForOwner(Long ownerId, AgentCreateDTO dto) {
+        return createAgentInternal(ownerId, dto, false);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String createAgentForDeviceBind(Long ownerId, AgentCreateDTO dto) {
+        return createAgentInternal(ownerId, dto, true);
+    }
+
+    private String createAgentInternal(Long ownerId, AgentCreateDTO dto, boolean deviceBind) {
         // 转换为实体
         AgentEntity entity = ConvertUtils.sourceToTarget(dto, AgentEntity.class);
 
@@ -469,6 +483,10 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
             entity.setLanguage(template.getLanguage());
         }
 
+        if (deviceBind) {
+            applyDeviceBindAgentDefaults(entity);
+        }
+
         // 设置用户ID和创建者信息
         entity.setUserId(ownerId);
         entity.setCreator(ownerId);
@@ -504,6 +522,72 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
         // 保存默认插件
         agentPluginMappingService.saveBatch(toInsert);
         return entity.getId();
+    }
+
+    private void applyDeviceBindAgentDefaults(AgentEntity entity) {
+        Map<String, Object> defaults = loadDeviceBindAgentDefaults();
+        String memModelId = asString(defaults.get("memModelId"));
+        if (StringUtils.isNotBlank(memModelId) && modelConfigService.selectById(memModelId) != null) {
+            entity.setMemModelId(memModelId);
+        }
+        Integer chatHistoryConf = asInteger(defaults.get("chatHistoryConf"));
+        if (chatHistoryConf != null) {
+            entity.setChatHistoryConf(chatHistoryConf);
+        }
+        String ttsModelId = asString(defaults.get("ttsModelId"));
+        if (StringUtils.isNotBlank(ttsModelId) && modelConfigService.selectById(ttsModelId) != null) {
+            entity.setTtsModelId(ttsModelId);
+        }
+        String ttsVoiceId = asString(defaults.get("ttsVoiceId"));
+        if (StringUtils.isNotBlank(ttsVoiceId)) {
+            TimbreDetailsVO voice = timbreModelService.get(ttsVoiceId);
+            if (voice != null) {
+                String resolvedTtsModelId = entity.getTtsModelId();
+                if (StringUtils.isBlank(resolvedTtsModelId)
+                        || resolvedTtsModelId.equals(voice.getTtsModelId())) {
+                    entity.setTtsVoiceId(ttsVoiceId);
+                }
+            }
+        }
+    }
+
+    private Map<String, Object> loadDeviceBindAgentDefaults() {
+        String json = sysParamsService.getValue(Constant.SERVER_AGENT_DEVICE_BIND_DEFAULTS, true);
+        if (StringUtils.isNotBlank(json)) {
+            try {
+                Map<String, Object> parsed = JsonUtils.parseObject(json, new TypeReference<Map<String, Object>>() {
+                });
+                if (parsed != null && !parsed.isEmpty()) {
+                    return parsed;
+                }
+            } catch (Exception ignored) {
+                // fall through
+            }
+        }
+        Map<String, Object> builtIn = new HashMap<>();
+        builtIn.put("memModelId", Constant.MEMORY_NO_MEM);
+        builtIn.put("chatHistoryConf", Constant.ChatHistoryConfEnum.RECORD_TEXT_AUDIO.getCode());
+        builtIn.put("ttsModelId", "TTS_HuoshanDoubleStreamTTS");
+        builtIn.put("ttsVoiceId", "TTS_HuoshanDoubleStreamTTS_0023");
+        return builtIn;
+    }
+
+    private static String asString(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private static Integer asInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
 }

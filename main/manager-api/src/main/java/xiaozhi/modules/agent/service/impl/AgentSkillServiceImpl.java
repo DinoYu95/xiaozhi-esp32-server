@@ -5,8 +5,10 @@ import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
 import xiaozhi.common.utils.ConvertUtils;
@@ -55,6 +57,16 @@ public class AgentSkillServiceImpl extends ServiceImpl<AgentSkillDao, AgentSkill
     }
 
     @Override
+    public String getDefaultFallbackSkillId() {
+        AgentSkillEntity entity = baseMapper.selectOne(
+                new LambdaQueryWrapper<AgentSkillEntity>()
+                        .eq(AgentSkillEntity::getIsDefaultFallback, 1)
+                        .last("LIMIT 1"));
+        return entity == null ? null : entity.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean saveSkill(AgentSkillSaveDTO dto) {
         if (baseMapper.selectById(dto.getId()) != null) {
             return false;
@@ -66,10 +78,15 @@ public class AgentSkillServiceImpl extends ServiceImpl<AgentSkillDao, AgentSkill
             entity.setVersion("1.0");
         }
         entity.setIsOfficialRecommended(Boolean.TRUE.equals(dto.getIsOfficialRecommended()) ? 1 : 0);
+        entity.setIsDefaultFallback(Boolean.TRUE.equals(dto.getIsDefaultFallback()) ? 1 : 0);
+        if (entity.getIsDefaultFallback() == 1) {
+            clearOtherDefaultFallback(dto.getId());
+        }
         return baseMapper.insert(entity) > 0;
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean updateSkill(AgentSkillSaveDTO dto) {
         AgentSkillEntity entity = baseMapper.selectById(dto.getId());
         if (entity == null) {
@@ -82,12 +99,25 @@ public class AgentSkillServiceImpl extends ServiceImpl<AgentSkillDao, AgentSkill
         entity.setTools(dto.getTools());
         entity.setMetadata(dto.getMetadata());
         entity.setIsOfficialRecommended(Boolean.TRUE.equals(dto.getIsOfficialRecommended()) ? 1 : 0);
+        entity.setIsDefaultFallback(Boolean.TRUE.equals(dto.getIsDefaultFallback()) ? 1 : 0);
         entity.setUpdateTime(new Date());
+        if (entity.getIsDefaultFallback() == 1) {
+            clearOtherDefaultFallback(dto.getId());
+        }
         return baseMapper.updateById(entity) > 0;
     }
 
     @Override
     public boolean removeById(String id) {
         return baseMapper.deleteById(id) > 0;
+    }
+
+    private void clearOtherDefaultFallback(String keepSkillId) {
+        baseMapper.update(
+                null,
+                new LambdaUpdateWrapper<AgentSkillEntity>()
+                        .set(AgentSkillEntity::getIsDefaultFallback, 0)
+                        .eq(AgentSkillEntity::getIsDefaultFallback, 1)
+                        .ne(AgentSkillEntity::getId, keepSkillId));
     }
 }

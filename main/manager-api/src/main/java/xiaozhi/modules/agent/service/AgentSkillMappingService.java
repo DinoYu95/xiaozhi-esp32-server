@@ -12,7 +12,8 @@ public interface AgentSkillMappingService {
     void saveMapping(String agentId, List<AgentSkillMappingItemDTO> items);
 
     /**
-     * 为 agent 添加官方推荐技能（仅当 agent 尚无技能映射时）
+     * 为 agent 写入默认「说话人→技能」映射（仅当 agent 尚无映射时）：
+     * owner_child = 全部官方推荐；其余说话人见 sys_params server.agent_default_skill_mapping
      */
     void addOfficialRecommendedSkillsIfEmpty(String agentId);
 

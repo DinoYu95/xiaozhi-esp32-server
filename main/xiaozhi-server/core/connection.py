@@ -154,6 +154,7 @@ class ConnectionHandler:
         self.owner_child_birthday = None
         self.owner_child_voice_print_id = None
         self.skill_mapping = {}
+        self.default_fallback_skill_id = None
         # 影子任务拉取短缓存（秒级），减轻 manager-api 压力
         self._shadow_mission_cache_ts = 0.0
         self._shadow_mission_cache_key = None
@@ -484,18 +485,16 @@ class ConnectionHandler:
         try:
             if self.tts is None:
                 self.tts = self._initialize_tts()
+            if self.need_bind:
+                self.bind_completed_event.set()
+                asyncio.run_coroutine_threadsafe(
+                    self._activate_need_bind(), self.loop
+                )
+                return
             # 打开语音合成通道
             asyncio.run_coroutine_threadsafe(
                 self.tts.open_audio_channels(self), self.loop
             )
-            if self.need_bind:
-                self.bind_completed_event.set()
-                from core.handle.receiveAudioHandle import check_bind_device
-
-                asyncio.run_coroutine_threadsafe(
-                    check_bind_device(self), self.loop
-                )
-                return
             self.selected_module_str = build_module_string(
                 self.config.get("selected_module", {})
             )
@@ -561,15 +560,26 @@ class ConnectionHandler:
             self.logger.bind(tag=TAG).info("TTS上报线程已启动")
 
     def _initialize_tts(self):
-        """初始化TTS"""
-        tts = None
-        if not self.need_bind:
-            tts = initialize_tts(self.config)
-
+        """初始化TTS（未绑定设备也需真实 TTS 播绑定提示）"""
+        tts = initialize_tts(self.config)
         if tts is None:
             tts = DefaultTTS(self.config, delete_audio_file=True)
-
         return tts
+
+    async def _activate_need_bind(self):
+        """未绑定：打开 TTS 通道后播绑定提示"""
+        await self.tts.open_audio_channels(self)
+        start_time = time.time()
+        while time.time() - start_time < 3:
+            if (
+                hasattr(self.tts, "tts_priority_thread")
+                and self.tts.tts_priority_thread.is_alive()
+            ):
+                break
+            await asyncio.sleep(0.1)
+        from core.handle.receiveAudioHandle import check_bind_device
+
+        await check_bind_device(self)
 
     def _initialize_asr(self):
         """初始化ASR"""
@@ -745,6 +755,7 @@ class ConnectionHandler:
             self.owner_child_birthday = None
             self.owner_child_voice_print_id = None
         self.skill_mapping = private_config.get("skill_mapping") or {}
+        self.default_fallback_skill_id = private_config.get("default_fallback_skill_id")
         # 智伴：成长陪伴 Prompt（manager-api 已按模板替换占位符）
         cgp = private_config.get("companion_growth_prompt")
         if cgp is not None and str(cgp).strip():
@@ -1160,6 +1171,7 @@ class ConnectionHandler:
                 "user_id": role_id,
                 "speaker_context": speaker_context,
                 "skill_ids": skill_ids,
+                "fallback_skill_id": getattr(self, "default_fallback_skill_id", None),
                 "environment_context": environment_context,
             }
             if self.intent_type == "function_call" and functions is not None:

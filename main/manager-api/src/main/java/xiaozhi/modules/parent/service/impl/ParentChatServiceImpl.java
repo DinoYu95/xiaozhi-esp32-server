@@ -32,6 +32,7 @@ import xiaozhi.common.exception.RenException;
 import xiaozhi.common.redis.RedisKeys;
 import xiaozhi.common.redis.RedisUtils;
 import xiaozhi.modules.agent.dao.AgentSkillMappingDao;
+import xiaozhi.modules.agent.service.AgentSkillService;
 import xiaozhi.modules.agent.dao.AgentVoicePrintDao;
 import xiaozhi.modules.agent.entity.AgentSkillMappingEntity;
 import xiaozhi.modules.agent.entity.AgentVoicePrintEntity;
@@ -76,6 +77,7 @@ public class ParentChatServiceImpl implements ParentChatService {
     private final DeviceDao deviceDao;
     private final ParentDeviceBindingDao parentDeviceBindingDao;
     private final AgentSkillMappingDao agentSkillMappingDao;
+    private final AgentSkillService agentSkillService;
     private final AgentVoicePrintDao agentVoicePrintDao;
     private final ParentUserDao parentUserDao;
     private final ParentDeviceRuleService parentDeviceRuleService;
@@ -294,6 +296,10 @@ public class ParentChatServiceImpl implements ParentChatService {
                             .eq(AgentSkillMappingEntity::getSpeakerType, "parent"));
             if (parentMappings != null && !parentMappings.isEmpty()) {
                 body.put("skill_ids", parentMappings.stream().map(AgentSkillMappingEntity::getSkillId).toList());
+            }
+            String fallbackSkillId = agentSkillService.getDefaultFallbackSkillId();
+            if (StringUtils.isNotBlank(fallbackSkillId)) {
+                body.put("fallback_skill_id", fallbackSkillId);
             }
             List<Map<String, String>> zhibanMessages = buildZhibanChatMessages(sessionId, text);
             if (zhibanMessages.size() >= 2) {

@@ -29,4 +29,7 @@ public interface AgentSkillService extends IService<AgentSkillEntity> {
     boolean updateSkill(AgentSkillSaveDTO dto);
 
     boolean removeById(String id);
+
+    /** 意图未匹配时的全局默认兜底 skill_id */
+    String getDefaultFallbackSkillId();
 }

@@ -110,5 +110,10 @@ public interface AgentService extends BaseService<AgentEntity> {
      */
     String createAgentForOwner(Long ownerId, AgentCreateDTO dto);
 
+    /**
+     * 家长端绑设备时创建智能体：在模板默认值之上套用 server.agent_device_bind_defaults
+     */
+    String createAgentForDeviceBind(Long ownerId, AgentCreateDTO dto);
+
 
 }

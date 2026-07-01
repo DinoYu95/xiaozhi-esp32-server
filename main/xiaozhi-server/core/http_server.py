@@ -5,6 +5,7 @@ from core.api.ota_handler import OTAHandler
 from core.api.vision_handler import VisionHandler
 from core.api.parent_chat_handler import ParentChatHandler
 from core.api.parent_chat_websocket import handle_parent_chat_ws
+from core.api.zhiban_tool_handler import ZhibanToolHandler
 
 TAG = __name__
 
@@ -16,6 +17,7 @@ class SimpleHttpServer:
         self.ota_handler = OTAHandler(config)
         self.vision_handler = VisionHandler(config)
         self.parent_chat_handler = ParentChatHandler(config)
+        self.zhiban_tool_handler = ZhibanToolHandler(config)
 
     def _get_websocket_url(self, local_ip: str, port: int) -> str:
         """获取websocket地址
@@ -95,6 +97,47 @@ class SimpleHttpServer:
                         ),
                         # 家长端聊天 WebSocket（小程序直连，与设备 8000 端口完全独立）
                         web.get("/parent/chat/ws", handle_parent_chat_ws),
+                        # Zhiban 工具桥接（zhiban-agent 内部调用，Bearer 鉴权）
+                        web.get(
+                            "/internal/zhiban/device/mcp/status",
+                            self.zhiban_tool_handler.handle_device_mcp_status,
+                        ),
+                        web.get(
+                            "/internal/zhiban/device/mcp/tools",
+                            self.zhiban_tool_handler.handle_device_mcp_tools,
+                        ),
+                        web.post(
+                            "/internal/zhiban/device/mcp/call",
+                            self.zhiban_tool_handler.handle_device_mcp_call,
+                        ),
+                        web.get(
+                            "/internal/zhiban/plugins/schemas",
+                            self.zhiban_tool_handler.handle_plugin_schemas,
+                        ),
+                        web.post(
+                            "/internal/zhiban/plugins/execute",
+                            self.zhiban_tool_handler.handle_plugin_execute,
+                        ),
+                        web.options(
+                            "/internal/zhiban/device/mcp/status",
+                            self.zhiban_tool_handler.handle_options,
+                        ),
+                        web.options(
+                            "/internal/zhiban/device/mcp/tools",
+                            self.zhiban_tool_handler.handle_options,
+                        ),
+                        web.options(
+                            "/internal/zhiban/device/mcp/call",
+                            self.zhiban_tool_handler.handle_options,
+                        ),
+                        web.options(
+                            "/internal/zhiban/plugins/schemas",
+                            self.zhiban_tool_handler.handle_options,
+                        ),
+                        web.options(
+                            "/internal/zhiban/plugins/execute",
+                            self.zhiban_tool_handler.handle_options,
+                        ),
                     ]
                 )
 

@@ -5,10 +5,12 @@ from .zhiban_agent_client import (
     ZhibanStreamFrame,
     make_zhiban_meta_marker,
 )
+from .xiaozhi_tool_client import XiaozhiToolClient
 
 __all__ = [
     "ZhibanAgentClient",
     "ZHIBAN_META_KEY",
     "ZhibanStreamFrame",
     "make_zhiban_meta_marker",
+    "XiaozhiToolClient",
 ]

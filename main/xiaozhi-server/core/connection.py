@@ -532,6 +532,10 @@ class ConnectionHandler:
             """更新系统提示词"""
             self._init_prompt_enhancement()
 
+            from core.zhibanAgent.zhiban_connection_hooks import maybe_register_connection
+
+            maybe_register_connection(self)
+
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"实例化组件失败: {e}")
 
@@ -996,6 +1000,12 @@ class ConnectionHandler:
                 "environment_context cautious_unknown_speaker=true（不注入主孩子档案）"
             )
         self._maybe_attach_shadow_mission(ctx)
+        if self._is_zhiban_llm():
+            from core.zhibanAgent.zhiban_connection_hooks import (
+                attach_tool_context_to_environment,
+            )
+
+            attach_tool_context_to_environment(self, ctx)
         return ctx
 
     def _maybe_attach_shadow_mission(self, ctx: Dict[str, Any]) -> None:
@@ -1467,6 +1477,12 @@ class ConnectionHandler:
     async def close(self, ws=None):
         """资源清理方法"""
         try:
+            from core.zhibanAgent.zhiban_connection_hooks import (
+                maybe_unregister_connection,
+            )
+
+            maybe_unregister_connection(self)
+
             # 清理音频缓冲区
             if hasattr(self, "audio_buffer"):
                 self.audio_buffer.clear()

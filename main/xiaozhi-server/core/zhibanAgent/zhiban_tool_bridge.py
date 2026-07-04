@@ -5,12 +5,14 @@ Zhiban 工具桥接：调用现有 Device MCP / Server Plugin 实现，不修改
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 from typing import Any, Dict, List, Optional
 
 from config.logger import setup_logging
 from plugins_func.register import Action, ActionResponse
 from core.providers.tools.device_mcp.mcp_executor import DeviceMCPExecutor
+from core.providers.tools.device_mcp.mcp_handler import send_mcp_tool_call
 from core.providers.tools.server_plugins.plugin_executor import ServerPluginExecutor
 
 TAG = __name__
@@ -81,7 +83,11 @@ def get_plugin_function_names(conn) -> List[str]:
 
 
 async def execute_device_mcp(
-    conn, tool_name: str, arguments: Optional[Dict[str, Any]] = None, timeout: int = 30
+    conn,
+    tool_name: str,
+    arguments: Optional[Dict[str, Any]] = None,
+    timeout: int = 45,
+    wait_result: bool = True,
 ) -> Dict[str, Any]:
     executor = DeviceMCPExecutor(conn)
     if not executor.has_tool(tool_name):
@@ -95,6 +101,36 @@ async def execute_device_mcp(
                 )
             ),
         }
+
+    if not wait_result:
+        if not hasattr(conn, "mcp_client") or not conn.mcp_client:
+            return {
+                "ok": False,
+                "action": "ERROR",
+                "result": None,
+                "response": "设备端MCP客户端未初始化",
+                "error": "mcp_client_missing",
+            }
+        try:
+            args_str = json.dumps(arguments or {})
+            await send_mcp_tool_call(conn, conn.mcp_client, tool_name, args_str)
+            return {
+                "ok": True,
+                "action": "RESPONSE",
+                "result": None,
+                "response": "指令已发送至设备",
+                "meta": {"fire_and_forget": True},
+            }
+        except Exception as e:
+            logger.bind(tag=TAG).error(f"execute_device_mcp(不等待结果) 失败: {e}")
+            return {
+                "ok": False,
+                "action": "ERROR",
+                "result": None,
+                "response": str(e),
+                "error": str(e),
+            }
+
     try:
         response = await asyncio.wait_for(
             executor.execute(conn, tool_name, arguments or {}),
@@ -163,15 +199,49 @@ async def execute_server_plugin(
         }
 
 
-def run_on_conn_loop(conn, coro, timeout: float = 65):
-    """在设备连接所属 asyncio 事件循环上执行协程（供 aiohttp handler 调用）。"""
+async def await_on_conn_loop(conn, coro, timeout: float = 75):
+    """在设备连接所属 asyncio loop 上执行协程。
+
+    aiohttp internal API 与 WebSocket 共用同一 loop 时必须直接 await，
+    不能用 run_coroutine_threadsafe + future.result()，否则会阻塞 loop 导致协程无法调度。
+    """
     loop = getattr(conn, "loop", None)
     if loop is None:
         raise RuntimeError("连接无 event loop")
+    try:
+        running = asyncio.get_running_loop()
+    except RuntimeError:
+        running = None
+    if running is loop:
+        return await asyncio.wait_for(coro, timeout=timeout)
+    if loop.is_running():
+        fut = asyncio.run_coroutine_threadsafe(coro, loop)
+        return await asyncio.wait_for(asyncio.wrap_future(fut), timeout=timeout)
+    return await asyncio.wait_for(coro, timeout=timeout)
+
+
+def run_on_conn_loop(conn, coro, timeout: float = 75):
+    """在设备连接所属 asyncio 事件循环上执行协程（供同步线程调用，勿在 aiohttp handler 中使用）。"""
+    loop = getattr(conn, "loop", None)
+    if loop is None:
+        raise RuntimeError("连接无 event loop")
+    try:
+        if asyncio.get_running_loop() is loop:
+            raise RuntimeError(
+                "当前已在设备 event loop 上，请使用 await await_on_conn_loop(...)"
+            )
+    except RuntimeError as e:
+        if "请使用 await" in str(e):
+            raise
     if loop.is_running():
         future = asyncio.run_coroutine_threadsafe(coro, loop)
-        return future.result(timeout=timeout)
-    return loop.run_until_complete(coro)
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError as e:
+            raise TimeoutError(
+                f"设备连接事件循环执行超时({timeout}s)；MCP 指令可能已发出但 HTTP 未等到完成"
+            ) from e
+    return loop.run_until_complete(asyncio.wait_for(coro, timeout=timeout))
 
 
 async def build_environment_tool_context(conn) -> Dict[str, Any]:

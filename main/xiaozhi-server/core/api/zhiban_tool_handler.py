@@ -75,7 +75,7 @@ class ZhibanToolHandler:
         if err:
             return self._bad_request(err)
         try:
-            status = zhiban_tool_bridge.run_on_conn_loop(
+            status = await zhiban_tool_bridge.await_on_conn_loop(
                 conn, zhiban_tool_bridge.get_device_mcp_status(conn)
             )
             return web.json_response(
@@ -128,14 +128,29 @@ class ZhibanToolHandler:
                 return self._bad_request("arguments 不是合法 JSON")
         if not isinstance(arguments, dict):
             return self._bad_request("arguments 必须是 object")
-        timeout = int(body.get("timeout") or 30)
+        timeout = int(body.get("timeout") or 45)
+        wait_result = body.get("wait_result", True)
+        if isinstance(wait_result, str):
+            wait_result = wait_result.strip().lower() not in ("0", "false", "no")
+        loop_timeout = timeout + (30 if wait_result else 15)
         try:
-            result = zhiban_tool_bridge.run_on_conn_loop(
+            self.logger.bind(tag=TAG).info(
+                "device_mcp/call 开始: tool=%s wait_result=%s timeout=%s loop_timeout=%s",
+                tool_name,
+                wait_result,
+                timeout,
+                loop_timeout,
+            )
+            result = await zhiban_tool_bridge.await_on_conn_loop(
                 conn,
                 zhiban_tool_bridge.execute_device_mcp(
-                    conn, tool_name, arguments, timeout=timeout
+                    conn,
+                    tool_name,
+                    arguments,
+                    timeout=timeout,
+                    wait_result=wait_result,
                 ),
-                timeout=timeout + 5,
+                timeout=loop_timeout,
             )
             return web.json_response(
                 {
@@ -144,6 +159,17 @@ class ZhibanToolHandler:
                     "tool_name": tool_name,
                     **result,
                 }
+            )
+        except TimeoutError as e:
+            self.logger.bind(tag=TAG).warning("device_mcp/call 超时: %s", e)
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": "timeout",
+                    "detail": str(e),
+                    "tool_name": tool_name,
+                },
+                status=504,
             )
         except Exception as e:
             self.logger.bind(tag=TAG).error("device_mcp/call 失败: %s", e)
@@ -194,12 +220,12 @@ class ZhibanToolHandler:
             return self._bad_request("arguments 必须是 object")
         timeout = int(body.get("timeout") or 60)
         try:
-            result = zhiban_tool_bridge.run_on_conn_loop(
+            result = await zhiban_tool_bridge.await_on_conn_loop(
                 conn,
                 zhiban_tool_bridge.execute_server_plugin(
                     conn, function_name, arguments, timeout=timeout
                 ),
-                timeout=timeout + 5,
+                timeout=timeout + 10,
             )
             return web.json_response(
                 {

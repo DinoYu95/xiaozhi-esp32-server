@@ -287,6 +287,71 @@ async def send_mcp_tools_list_continue_request(conn, cursor: str):
     await send_mcp_message(conn, payload)
 
 
+def _parse_mcp_tool_arguments(args) -> dict:
+    """解析 MCP tools/call 的 arguments 参数。"""
+    if isinstance(args, str):
+        if not args.strip():
+            return {}
+        try:
+            arguments = json.loads(args)
+        except json.JSONDecodeError:
+            json_objects = re.findall(r"\{[^{}]*\}", args)
+            if len(json_objects) > 1:
+                merged_dict = {}
+                for json_str in json_objects:
+                    try:
+                        obj = json.loads(json_str)
+                        if isinstance(obj, dict):
+                            merged_dict.update(obj)
+                    except json.JSONDecodeError:
+                        continue
+                if merged_dict:
+                    arguments = merged_dict
+                else:
+                    raise ValueError(f"无法解析任何有效的JSON对象: {args}")
+            else:
+                raise ValueError(f"参数JSON解析失败: {args}")
+    elif isinstance(args, dict):
+        arguments = args
+    else:
+        raise ValueError(f"参数类型错误，期望字符串或字典，实际类型: {type(args)}")
+
+    if not isinstance(arguments, dict):
+        raise ValueError(f"参数必须是字典类型，实际类型: {type(arguments)}")
+    return arguments
+
+
+async def send_mcp_tool_call(
+    conn, mcp_client: MCPClient, tool_name: str, args: str = "{}"
+):
+    """向设备发送 MCP tools/call，不等待设备回包（适用于激光等慢响应指令）。"""
+    if not await mcp_client.is_ready():
+        raise RuntimeError("MCP客户端尚未准备就绪")
+    if not mcp_client.has_tool(tool_name):
+        raise ValueError(f"工具 {tool_name} 不存在")
+
+    try:
+        arguments = _parse_mcp_tool_arguments(args)
+    except Exception as e:
+        if not isinstance(e, ValueError):
+            raise ValueError(f"参数处理失败: {str(e)}")
+        raise e
+
+    tool_call_id = await mcp_client.get_next_id()
+    actual_name = mcp_client.name_mapping.get(tool_name, tool_name)
+    payload = {
+        "jsonrpc": "2.0",
+        "id": tool_call_id,
+        "method": "tools/call",
+        "params": {"name": actual_name, "arguments": arguments},
+    }
+    logger.bind(tag=TAG).info(
+        f"发送客户端mcp工具调用请求(不等待结果): {actual_name}，参数: {args}"
+    )
+    await send_mcp_message(conn, payload)
+    return actual_name
+
+
 async def call_mcp_tool(
     conn, mcp_client: MCPClient, tool_name: str, args: str = "{}", timeout: int = 30
 ):
@@ -303,52 +368,10 @@ async def call_mcp_tool(
     result_future = asyncio.Future()
     await mcp_client.register_call_result_future(tool_call_id, result_future)
 
-    # 处理参数
     try:
-        if isinstance(args, str):
-            # 确保字符串是有效的JSON
-            if not args.strip():
-                arguments = {}
-            else:
-                try:
-                    # 尝试直接解析
-                    arguments = json.loads(args)
-                except json.JSONDecodeError:
-                    # 如果解析失败，尝试合并多个JSON对象
-                    try:
-                        # 使用正则表达式匹配所有JSON对象
-                        json_objects = re.findall(r"\{[^{}]*\}", args)
-                        if len(json_objects) > 1:
-                            # 合并所有JSON对象
-                            merged_dict = {}
-                            for json_str in json_objects:
-                                try:
-                                    obj = json.loads(json_str)
-                                    if isinstance(obj, dict):
-                                        merged_dict.update(obj)
-                                except json.JSONDecodeError:
-                                    continue
-                            if merged_dict:
-                                arguments = merged_dict
-                            else:
-                                raise ValueError(f"无法解析任何有效的JSON对象: {args}")
-                        else:
-                            raise ValueError(f"参数JSON解析失败: {args}")
-                    except Exception as e:
-                        logger.bind(tag=TAG).error(
-                            f"参数JSON解析失败: {str(e)}, 原始参数: {args}"
-                        )
-                        raise ValueError(f"参数JSON解析失败: {str(e)}")
-        elif isinstance(args, dict):
-            arguments = args
-        else:
-            raise ValueError(f"参数类型错误，期望字符串或字典，实际类型: {type(args)}")
-
-        # 确保参数是字典类型
-        if not isinstance(arguments, dict):
-            raise ValueError(f"参数必须是字典类型，实际类型: {type(arguments)}")
-
+        arguments = _parse_mcp_tool_arguments(args)
     except Exception as e:
+        await mcp_client.cleanup_call_result(tool_call_id)
         if not isinstance(e, ValueError):
             raise ValueError(f"参数处理失败: {str(e)}")
         raise e

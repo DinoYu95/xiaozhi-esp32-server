@@ -201,4 +201,19 @@ public class RedisKeys {
     public static String getOtaUploadCountKey(Long username) {
         return "ota:upload:count:" + username;
     }
+
+    /**
+     * 设备实时状态（电量、WiFi），TTL 约 5 分钟。
+     */
+    public static String getDeviceStatusKey(String deviceId) {
+        return "device:status:" + normalizeDeviceId(deviceId);
+    }
+
+    /** 统一 deviceId 格式（冒号转下划线、小写），便于 Redis 键与 MAC 变体对齐。 */
+    public static String normalizeDeviceId(String deviceId) {
+        if (deviceId == null) {
+            return "";
+        }
+        return deviceId.replace(":", "_").toLowerCase();
+    }
 }

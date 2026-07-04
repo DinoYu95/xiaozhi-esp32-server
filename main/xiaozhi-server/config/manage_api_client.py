@@ -297,6 +297,31 @@ async def save_parent_chat(
         return False
 
 
+async def report_device_telemetry(
+    device_id: str, telemetry: Dict[str, Any]
+) -> bool:
+    """上报设备实时状态（电量、WiFi）到 manager-api Redis 缓存。"""
+    if not device_id or not telemetry or not ManageApiClient._instance:
+        return False
+    if telemetry.get("batteryLevel") is None and not telemetry.get("wifiName"):
+        return False
+    try:
+        payload: Dict[str, Any] = {"deviceId": device_id}
+        if telemetry.get("batteryLevel") is not None:
+            payload["batteryLevel"] = telemetry["batteryLevel"]
+        if telemetry.get("wifiName"):
+            payload["wifiName"] = telemetry["wifiName"]
+        await ManageApiClient._instance._execute_async_request(
+            "POST",
+            "config/device/telemetry",
+            json=payload,
+        )
+        return True
+    except Exception as e:
+        print(f"report_device_telemetry 失败: {e}")
+        return False
+
+
 def fetch_active_shadow_missions_sync(device_id: str, child_id: int) -> List[Dict[str, Any]]:
     """
     同步拉取当前生效的影子任务列表（按 priority、id 排序）。

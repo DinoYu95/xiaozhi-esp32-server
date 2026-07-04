@@ -63,6 +63,11 @@ async def handleHelloMessage(conn, msg_json):
         conn.environment_description = env.get("environment_description") or msg_json.get("environment_description") or getattr(conn, "environment_description", None)
         conn.device_reported_context = env.get("device_reported_context") or msg_json.get("device_reported_context") or getattr(conn, "device_reported_context", None) or {}
 
+    # 小程序设备列表：hello 中的电量/WiFi 上报 manager-api
+    from core.utils.device_telemetry import report_device_telemetry
+
+    await report_device_telemetry(conn, msg_json, reason="hello")
+
     await conn.websocket.send(json.dumps(conn.welcome_msg))
 
 

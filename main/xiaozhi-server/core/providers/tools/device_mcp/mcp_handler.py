@@ -210,6 +210,8 @@ async def handle_mcp_message(conn, mcp_client: MCPClient, payload: dict):
                     if hasattr(conn, "func_handler") and conn.func_handler:
                         conn.func_handler.tool_manager.refresh_tools()
                         conn.func_handler.current_support_functions()
+
+                    asyncio.create_task(_probe_device_status_telemetry(conn, mcp_client))
             return
 
     # Handle method calls (requests from the client)
@@ -242,6 +244,11 @@ async def send_mcp_initialize_message(conn):
         "url": vision_url,
         "token": token,
     }
+    logger.bind(tag=TAG).info(
+        "MCP initialize 下发 vision.url=%s device_id=%s",
+        vision_url,
+        conn.headers.get("device-id"),
+    )
 
     payload = {
         "jsonrpc": "2.0",
@@ -262,6 +269,27 @@ async def send_mcp_initialize_message(conn):
     }
     logger.bind(tag=TAG).debug("发送MCP初始化消息")
     await send_mcp_message(conn, payload)
+
+
+async def _probe_device_status_telemetry(conn, mcp_client: MCPClient):
+    """MCP 就绪后主动拉一次 self.get_device_status，供小程序展示。"""
+    from core.utils.device_telemetry import MCP_DEVICE_STATUS_TOOL
+
+    if not mcp_client.has_tool(MCP_DEVICE_STATUS_TOOL):
+        return
+    try:
+        text = await call_mcp_tool(conn, mcp_client, MCP_DEVICE_STATUS_TOOL, "{}", timeout=10)
+        await _report_mcp_status_text(conn, text, reason="mcp_probe")
+    except Exception as e:
+        logger.bind(tag=TAG).debug("MCP 探测设备状态失败（可忽略）: %s", e)
+
+
+async def _report_mcp_status_text(conn, text: str, reason: str = "mcp_call"):
+    from core.utils.device_telemetry import parse_mcp_status_text, report_telemetry_dict
+
+    telemetry = parse_mcp_status_text(text)
+    if telemetry:
+        await report_telemetry_dict(conn, telemetry, reason=reason)
 
 
 async def send_mcp_tools_list_request(conn):
@@ -404,10 +432,15 @@ async def call_mcp_tool(
             content = raw_result.get("content")
             if isinstance(content, list) and len(content) > 0:
                 if isinstance(content[0], dict) and "text" in content[0]:
-                    # 直接返回文本内容，不进行JSON解析
-                    return content[0]["text"]
+                    text = content[0]["text"]
+                    if "get_device_status" in actual_name:
+                        await _report_mcp_status_text(conn, text, reason="mcp_call")
+                    return text
         # 如果结果不是预期的格式，将其转换为字符串
-        return str(raw_result)
+        result_str = str(raw_result)
+        if "get_device_status" in actual_name:
+            await _report_mcp_status_text(conn, result_str, reason="mcp_call")
+        return result_str
     except asyncio.TimeoutError:
         await mcp_client.cleanup_call_result(tool_call_id)
         raise TimeoutError("工具调用请求超时")

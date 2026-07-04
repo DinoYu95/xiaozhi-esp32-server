@@ -522,12 +522,23 @@ def get_vision_url(config: dict) -> str:
     Returns:
         str: vision URL
     """
+    from config.logger import setup_logging
+
+    logger = setup_logging()
     server_config = config["server"]
-    vision_explain = server_config.get("vision_explain", "")
-    if "你的" in vision_explain:
+    vision_explain = (server_config.get("vision_explain") or "").strip()
+    invalid_markers = ("你的", "【必填", "null")
+    if not vision_explain or any(m in vision_explain for m in invalid_markers):
         local_ip = get_local_ip()
         port = int(server_config.get("http_port", 8003))
-        vision_explain = f"http://{local_ip}:{port}/mcp/vision/explain"
+        fallback = f"http://{local_ip}:{port}/mcp/vision/explain"
+        logger.bind(tag=TAG).warning(
+            "server.vision_explain 未正确配置(当前=%r)，使用 fallback=%s；"
+            "Docker/阿里云请在 deploy/data/.config.yaml 填写设备可访问的公网 IP 或域名",
+            vision_explain or "(empty)",
+            fallback,
+        )
+        return fallback
     return vision_explain
 
 

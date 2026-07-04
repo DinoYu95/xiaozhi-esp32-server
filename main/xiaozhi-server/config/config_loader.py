@@ -73,15 +73,15 @@ async def get_config_from_api_async(config):
         "secret": config["manager-api"].get("secret", ""),
     }
     auth_enabled = config_data.get("server", {}).get("auth", {}).get("enabled", False)
-    # server的配置以本地为准
-    if config.get("server"):
-        config_data["server"] = {
-            "ip": config["server"].get("ip", ""),
-            "port": config["server"].get("port", ""),
-            "http_port": config["server"].get("http_port", ""),
-            "vision_explain": config["server"].get("vision_explain", ""),
-            "auth_key": config["server"].get("auth_key", ""),
-        }
+    # server 网络相关字段以本地 data/.config.yaml 为准（vision_explain 必须写公网/LAN IP）
+    local_server = config.get("server") or {}
+    if local_server:
+        merged_server = dict(config_data.get("server") or {})
+        for key in ("ip", "port", "http_port", "vision_explain", "auth_key"):
+            val = local_server.get(key)
+            if val is not None and str(val).strip() != "":
+                merged_server[key] = val
+        config_data["server"] = merged_server
     config_data["server"]["auth"] = {"enabled": auth_enabled}
     # 如果服务器没有prompt_template，则从本地配置读取
     if not config_data.get("prompt_template"):

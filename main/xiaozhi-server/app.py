@@ -5,7 +5,7 @@ import asyncio
 from aioconsole import ainput
 from config.settings import load_config
 from config.logger import setup_logging
-from core.utils.util import get_local_ip, validate_mcp_endpoint
+from core.utils.util import get_local_ip, validate_mcp_endpoint, get_vision_url
 from core.http_server import SimpleHttpServer
 from core.websocket_server import WebSocketServer
 from core.utils.util import check_ffmpeg_installed
@@ -83,10 +83,11 @@ async def main():
             get_local_ip(),
             port,
         )
+    vision_explain_url = get_vision_url(config)
     logger.bind(tag=TAG).info(
-        "视觉分析接口是\thttp://{}:{}/mcp/vision/explain",
-        get_local_ip(),
-        port,
+        "视觉分析接口是\t%s（server.vision_explain 配置=%s）",
+        vision_explain_url,
+        (config.get("server") or {}).get("vision_explain") or "(未设置)",
     )
     mcp_endpoint = config.get("mcp_endpoint", None)
     if mcp_endpoint is not None and "你" not in mcp_endpoint:

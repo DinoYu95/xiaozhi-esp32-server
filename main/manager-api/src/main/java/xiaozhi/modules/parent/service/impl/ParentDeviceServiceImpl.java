@@ -41,6 +41,8 @@ import xiaozhi.modules.parent.service.ParentUserSkillService;
 import xiaozhi.modules.parent.vo.ParentDeviceItemVO;
 import xiaozhi.modules.parent.vo.ParentDeviceSkillVO;
 import xiaozhi.modules.parent.vo.ParentUserSkillVO;
+import xiaozhi.modules.device.service.DeviceTelemetryService;
+import xiaozhi.modules.device.vo.DeviceStatusCacheVO;
 import xiaozhi.modules.sys.service.SysParamsService;
 import xiaozhi.modules.sys.service.SysUserScopeService;
 
@@ -59,6 +61,7 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
     private final ParentUserDao parentUserDao;
     private final ParentUserSkillService parentUserSkillService;
     private final SysUserScopeService sysUserScopeService;
+    private final DeviceTelemetryService deviceTelemetryService;
 
     @Override
     public BindResult bind(Long parentUserId, ParentDeviceBindDTO dto) {
@@ -185,9 +188,18 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             } else {
                 vo.setIsOnline(false);
             }
-            // 电量、WiFi 需设备上报，暂无数据源，降级写死占位值，后续补充
-            vo.setBatteryLevel(0);
-            vo.setWifiName("--");
+            // 电量、WiFi：从 Redis 读取设备上报缓存，无数据时占位
+            DeviceStatusCacheVO status = deviceTelemetryService.getStatus(b.getDeviceId());
+            if (status != null && status.getBatteryLevel() != null) {
+                vo.setBatteryLevel(status.getBatteryLevel());
+            } else {
+                vo.setBatteryLevel(0);
+            }
+            if (status != null && StringUtils.isNotBlank(status.getWifiName())) {
+                vo.setWifiName(status.getWifiName());
+            } else {
+                vo.setWifiName("--");
+            }
             return vo;
         }).collect(Collectors.toList());
     }

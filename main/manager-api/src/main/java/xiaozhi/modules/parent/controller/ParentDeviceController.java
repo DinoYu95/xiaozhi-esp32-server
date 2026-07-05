@@ -61,8 +61,57 @@ public class ParentDeviceController {
         if (parentUserId == null) {
             throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
         }
-        parentDeviceService.unbind(parentUserId, dto);
+        doUnbind(parentUserId, dto != null ? dto.getDeviceId() : null);
         return new Result<Void>().ok(null);
+    }
+
+    @DeleteMapping("/unbind")
+    @Operation(summary = "解绑设备（DELETE，query 或 body 传 deviceId，兼容小程序）")
+    public Result<Void> unbindByDelete(
+            @RequestParam(value = "deviceId", required = false) String queryDeviceId,
+            @RequestBody(required = false) ParentDeviceUnbindDTO body) {
+        Long parentUserId = ParentContext.getParentUserId();
+        if (parentUserId == null) {
+            throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
+        }
+        String deviceId = queryDeviceId;
+        if (StringUtils.isBlank(deviceId) && body != null) {
+            deviceId = body.getDeviceId();
+        }
+        doUnbind(parentUserId, deviceId);
+        return new Result<Void>().ok(null);
+    }
+
+    @DeleteMapping("/{deviceId:.+}")
+    @Operation(summary = "解绑设备（DELETE /parent-api/device/{deviceId}，兼容 REST 风格小程序）")
+    public Result<Void> unbindByDevicePath(@PathVariable("deviceId") String deviceId) {
+        Long parentUserId = ParentContext.getParentUserId();
+        if (parentUserId == null) {
+            throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
+        }
+        if (isReservedDevicePathSegment(deviceId)) {
+            throw new RenException(ErrorCode.PARAMS_GET_ERROR, "不支持的请求路径");
+        }
+        doUnbind(parentUserId, deviceId);
+        return new Result<Void>().ok(null);
+    }
+
+    private void doUnbind(Long parentUserId, String deviceId) {
+        if (StringUtils.isBlank(deviceId)) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        ParentDeviceUnbindDTO dto = new ParentDeviceUnbindDTO();
+        dto.setDeviceId(decodeDeviceId(deviceId));
+        parentDeviceService.unbind(parentUserId, dto);
+    }
+
+    private static boolean isReservedDevicePathSegment(String segment) {
+        if (StringUtils.isBlank(segment)) {
+            return true;
+        }
+        String s = segment.trim().toLowerCase();
+        return "bind".equals(s) || "unbind".equals(s) || "list".equals(s) || "skills".equals(s)
+                || "rules".equals(s) || "name".equals(s) || "skill".equals(s);
     }
 
     @GetMapping("/list")

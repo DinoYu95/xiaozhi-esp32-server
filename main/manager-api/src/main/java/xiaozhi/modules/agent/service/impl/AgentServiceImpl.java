@@ -41,6 +41,7 @@ import xiaozhi.modules.agent.entity.AgentPluginMapping;
 import xiaozhi.modules.agent.entity.AgentTemplateEntity;
 import xiaozhi.modules.agent.service.AgentChatHistoryService;
 import xiaozhi.modules.agent.service.AgentContextProviderService;
+import xiaozhi.modules.agent.service.AgentParentBindingService;
 import xiaozhi.modules.agent.service.AgentPluginMappingService;
 import xiaozhi.modules.agent.service.AgentService;
 import xiaozhi.modules.agent.service.AgentTemplateService;
@@ -74,6 +75,7 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
     private final AgentContextProviderService agentContextProviderService;
     private final SysUserScopeService sysUserScopeService;
     private final SysParamsService sysParamsService;
+    private final AgentParentBindingService agentParentBindingService;
 
     @Override
     public PageData<AgentEntity> adminAgentList(Map<String, Object> params) {
@@ -134,7 +136,7 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
     }
 
     @Override
-    public List<AgentDTO> getUserAgents(Long userId, String keyword, String searchType) {
+    public List<AgentDTO> getUserAgents(Long userId, String keyword, String searchType, String activationFilter) {
         QueryWrapper<AgentEntity> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("user_id", userId).orderByDesc("created_at");
 
@@ -164,7 +166,9 @@ public class AgentServiceImpl extends BaseServiceImpl<AgentDao, AgentEntity> imp
         List<AgentEntity> agentEntities = baseDao.selectList(queryWrapper);
 
         // 转换为DTO并设置所有必要字段
-        return agentEntities.stream().map(this::buildAgentDTO).collect(Collectors.toList());
+        List<AgentDTO> result = agentEntities.stream().map(this::buildAgentDTO).collect(Collectors.toList());
+        agentParentBindingService.enrichParentBinding(result);
+        return agentParentBindingService.filterByActivation(result, activationFilter);
     }
 
     /**

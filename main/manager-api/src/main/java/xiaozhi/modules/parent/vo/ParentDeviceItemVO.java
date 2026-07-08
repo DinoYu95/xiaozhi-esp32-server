@@ -24,4 +24,12 @@ public class ParentDeviceItemVO {
     private Integer batteryLevel;
     @Schema(description = "当前连接的 WiFi 名称，设备未上报时为占位值 \"--\"，后续设备上报后替换")
     private String wifiName;
+    @Schema(description = "当前家长在该设备上的角色：owner | member")
+    private String role;
+    @Schema(description = "是否首绑 Owner")
+    private Boolean isPrimaryOwner;
+    @Schema(description = "是否可发起邀请（Owner 为 true）")
+    private Boolean canInvite;
+    @Schema(description = "该设备 active 成员总数")
+    private Integer memberCount;
 }

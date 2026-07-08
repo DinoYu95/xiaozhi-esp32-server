@@ -216,4 +216,11 @@ public class RedisKeys {
         }
         return deviceId.replace(":", "_").toLowerCase();
     }
+
+    /**
+     * 设备邀请生成限流（按 deviceId，每小时计数）。
+     */
+    public static String getDeviceInviteRateLimitKey(String deviceId) {
+        return "parent:device:invite:rate:" + normalizeDeviceId(deviceId);
+    }
 }

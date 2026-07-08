@@ -58,7 +58,7 @@ public interface AgentService extends BaseService<AgentEntity> {
      * @param searchType 搜索类型（name - 按名称搜索，mac - 按MAC地址搜索）
      * @return 智能体列表
      */
-    List<AgentDTO> getUserAgents(Long userId, String keyword, String searchType);
+    List<AgentDTO> getUserAgents(Long userId, String keyword, String searchType, String activationFilter);
 
     /**
      * 根据智能体ID获取设备数量

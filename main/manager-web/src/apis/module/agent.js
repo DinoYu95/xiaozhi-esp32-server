@@ -4,18 +4,27 @@ import RequestService from '../httpRequest';
 
 export default {
     // 获取智能体列表
-    getAgentList(callback) {
+    getAgentList(callback, failCallback, params = {}) {
+        const query = new URLSearchParams();
+        if (params.activationFilter && params.activationFilter !== 'all') {
+            query.set('activationFilter', params.activationFilter);
+        }
+        const qs = query.toString();
         RequestService.sendRequest()
-            .url(`${getServiceUrl()}/agent/list`)
+            .url(`${getServiceUrl()}/agent/list${qs ? `?${qs}` : ''}`)
             .method('GET')
             .success((res) => {
                 RequestService.clearRequestTime();
                 callback(res);
             })
             .networkFail(() => {
-                RequestService.reAjaxFun(() => {
-                    this.getAgentList(callback);
-                });
+                if (failCallback) {
+                    failCallback();
+                } else {
+                    RequestService.reAjaxFun(() => {
+                        this.getAgentList(callback, failCallback, params);
+                    });
+                }
             }).send();
     },
     // 添加智能体
@@ -492,9 +501,13 @@ export default {
     },
 
     // 搜索智能体
-    searchAgent(keyword, searchType, callback) {
+    searchAgent(keyword, searchType, activationFilter, callback) {
+        const query = new URLSearchParams();
+        if (keyword) query.set('keyword', keyword);
+        if (searchType) query.set('searchType', searchType);
+        if (activationFilter) query.set('activationFilter', activationFilter);
         RequestService.sendRequest()
-            .url(`${getServiceUrl()}/agent/list?keyword=${encodeURIComponent(keyword)}&searchType=${searchType}`)
+            .url(`${getServiceUrl()}/agent/list?${query.toString()}`)
             .method('GET')
             .success((res) => {
                 RequestService.clearRequestTime();
@@ -504,6 +517,36 @@ export default {
                 RequestService.reAjaxFun(() => {
                     this.searchAgent(keyword, searchType, callback);
                 });
+            }).send();
+    },
+
+    searchParentUsers(keyword, callback, failCallback) {
+        const query = keyword ? `?keyword=${encodeURIComponent(keyword)}` : '';
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/agent/parent-user/search${query}`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime();
+                callback(res);
+            })
+            .networkFail(() => {
+                if (failCallback) failCallback();
+                else RequestService.reAjaxFun(() => this.searchParentUsers(keyword, callback, failCallback));
+            }).send();
+    },
+
+    bindParent(agentId, data, callback, failCallback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/agent/${agentId}/bind-parent`)
+            .method('POST')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime();
+                callback(res);
+            })
+            .networkFail(() => {
+                if (failCallback) failCallback();
+                else RequestService.reAjaxFun(() => this.bindParent(agentId, data, callback, failCallback));
             }).send();
     },
 }

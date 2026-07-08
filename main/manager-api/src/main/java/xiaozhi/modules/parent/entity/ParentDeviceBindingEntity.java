@@ -8,23 +8,25 @@ import com.baomidou.mybatisplus.annotation.TableName;
 
 import lombok.Data;
 
-/**
- * 家长-设备绑定
- */
 @Data
 @TableName("parent_device_binding")
 public class ParentDeviceBindingEntity {
 
+    public static final String ROLE_OWNER = "owner";
+    public static final String ROLE_MEMBER = "member";
+    public static final String STATUS_ACTIVE = "active";
+    public static final String STATUS_REMOVED = "removed";
+
     @TableId(type = IdType.AUTO)
     private Long id;
-    /** 家长用户 id */
     private Long parentUserId;
-    /** 设备标识（mac） */
     private String deviceId;
-    /** 绑定时间 */
     private Date bindTime;
-    /** 绑定来源：code/qrcode */
     private String bindSource;
-    /** 创建时间 */
+    private String role;
+    private Integer isPrimary;
+    private Long invitedBy;
+    private String status;
     private Date createTime;
+    private Date updatedAt;
 }

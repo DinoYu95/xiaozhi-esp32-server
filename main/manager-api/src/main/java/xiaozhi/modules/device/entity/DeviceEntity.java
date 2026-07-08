@@ -31,6 +31,15 @@ public class DeviceEntity {
     @Schema(description = "最后连接时间")
     private Date lastConnectedAt;
 
+    @Schema(description = "最近一次上报电量 0-100")
+    private Integer batteryLevel;
+
+    @Schema(description = "最近一次上报 WiFi 名称")
+    private String wifiName;
+
+    @Schema(description = "电量/WiFi 最近上报时间")
+    private Date telemetryUpdatedAt;
+
     @Schema(description = "自动更新开关(0关闭/1开启)")
     private Integer autoUpdate;
 

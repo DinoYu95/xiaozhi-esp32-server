@@ -9,7 +9,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 import lombok.RequiredArgsConstructor;
-import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.exception.RenException;
 import xiaozhi.common.utils.ConvertUtils;
 import xiaozhi.modules.agent.service.AgentVoicePrintService;
@@ -18,8 +17,8 @@ import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dto.DeviceChildSaveDTO;
 import xiaozhi.modules.parent.dto.DeviceChildUpdateDTO;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
-import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.service.DeviceChildService;
+import xiaozhi.modules.parent.util.ParentDeviceAccessHelper;
 import xiaozhi.modules.parent.vo.DeviceChildVO;
 
 @Service
@@ -33,7 +32,7 @@ public class DeviceChildServiceImpl implements DeviceChildService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DeviceChildVO saveOrUpdate(Long parentUserId, DeviceChildSaveDTO dto) {
-        ensureDeviceBoundToParent(parentUserId, dto.getDeviceId());
+        ParentDeviceAccessHelper.requireOwnerWrite(parentDeviceBindingDao, parentUserId, dto.getDeviceId());
         DeviceChildEntity existing = deviceChildDao.selectOne(
                 new LambdaQueryWrapper<DeviceChildEntity>()
                         .eq(DeviceChildEntity::getDeviceId, dto.getDeviceId()));
@@ -53,7 +52,7 @@ public class DeviceChildServiceImpl implements DeviceChildService {
 
     @Override
     public DeviceChildVO getByDeviceId(Long parentUserId, String deviceId) {
-        ensureDeviceBoundToParent(parentUserId, deviceId);
+        ParentDeviceAccessHelper.requireActiveBinding(parentDeviceBindingDao, parentUserId, deviceId);
         DeviceChildEntity entity = deviceChildDao.selectOne(
                 new LambdaQueryWrapper<DeviceChildEntity>()
                         .eq(DeviceChildEntity::getDeviceId, deviceId));
@@ -66,7 +65,7 @@ public class DeviceChildServiceImpl implements DeviceChildService {
         if (entity == null) {
             throw new RenException("孩子不存在");
         }
-        ensureDeviceBoundToParent(parentUserId, entity.getDeviceId());
+        ParentDeviceAccessHelper.requireOwnerWrite(parentDeviceBindingDao, parentUserId, entity.getDeviceId());
         copyUpdateDtoToEntity(dto, entity);
         entity.setUpdateTime(new Date());
         deviceChildDao.updateById(entity);
@@ -75,26 +74,13 @@ public class DeviceChildServiceImpl implements DeviceChildService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteByDeviceId(Long parentUserId, String deviceId) {
-        ensureDeviceBoundToParent(parentUserId, deviceId);
+        ParentDeviceAccessHelper.requireOwnerWrite(parentDeviceBindingDao, parentUserId, deviceId);
         DeviceChildEntity child = deviceChildDao.selectOne(
                 new LambdaQueryWrapper<DeviceChildEntity>()
                         .eq(DeviceChildEntity::getDeviceId, deviceId));
         if (child != null) {
             agentVoicePrintService.deleteByChildId(child.getId());
             deviceChildDao.deleteById(child.getId());
-        }
-    }
-
-    private void ensureDeviceBoundToParent(Long parentUserId, String deviceId) {
-        if (StringUtils.isBlank(deviceId)) {
-            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
-        }
-        ParentDeviceBindingEntity binding = parentDeviceBindingDao.selectOne(
-                new LambdaQueryWrapper<ParentDeviceBindingEntity>()
-                        .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId)
-                        .eq(ParentDeviceBindingEntity::getDeviceId, deviceId));
-        if (binding == null) {
-            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
         }
     }
 

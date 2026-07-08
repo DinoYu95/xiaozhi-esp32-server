@@ -1,8 +1,12 @@
 <template>
-  <div class="device-item">
-    <div style="display: flex;justify-content: space-between;">
-      <div style="font-weight: 700;font-size: 18px;text-align: left;color: #3d4566;">
-        {{ device.agentName }}
+  <div class="device-item" :class="{ 'device-item--active': device.parentActivated, 'device-item--inactive': !device.parentActivated }">
+    <div style="display: flex;justify-content: space-between;align-items: flex-start;">
+      <div class="title-row">
+        <div style="font-weight: 700;font-size: 18px;text-align: left;color: #3d4566;">
+          {{ device.agentName }}
+        </div>
+        <span v-if="device.parentActivated" class="status-badge status-badge--active">{{ $t('home.parentActivated') }}</span>
+        <span v-else class="status-badge status-badge--inactive">{{ $t('home.parentInactive') }}</span>
       </div>
       <div>
         <img src="@/assets/home/delete.png" alt="" style="width: 18px;height: 18px;margin-right: 10px;"
@@ -16,10 +20,17 @@
     <div class="device-name">
       {{ $t('home.languageModel') }}：{{ device.llmModelName }}
     </div>
+    <div v-if="device.parentActivated" class="parent-info">
+      {{ $t('home.boundParent') }}：{{ device.ownerParentNickname || '--' }}
+      <span v-if="device.boundParentCount > 1">（{{ $t('home.parentMemberCount', { count: device.boundParentCount }) }}）</span>
+    </div>
+    <div v-else class="parent-info parent-info--muted">
+      {{ $t('home.noBoundParentHint') }}
+    </div>
     <div class="device-name">
       {{ $t('home.voiceModel') }}：{{ device.ttsModelName }} ({{ device.ttsVoiceName }})
     </div>
-    <div style="display: flex;gap: 10px;align-items: center;">
+    <div style="display: flex;gap: 10px;align-items: center;flex-wrap: wrap;">
       <div class="settings-btn" @click="handleConfigure">
         {{ $t('home.configureRole') }}
       </div>
@@ -28,6 +39,9 @@
       </div>
       <div class="settings-btn" @click="handleDeviceManage">
         {{ $t('home.deviceManagement') }}({{ device.deviceCount }})
+      </div>
+      <div v-if="!device.parentActivated && device.deviceCount > 0" class="settings-btn bind-parent-btn" @click="handleBindParent">
+        {{ $t('home.bindParent') }}
       </div>
       <div :class="['settings-btn', { 'disabled-btn': !device.chatHistoryConf }]"
         @click="handleChatHistory">
@@ -101,6 +115,9 @@ export default {
         return
       }
       this.$emit('chat-history', { agentId: this.device.agentId, agentName: this.device.agentName })
+    },
+    handleBindParent() {
+      this.$emit('bind-parent', this.device)
     }
   }
 }
@@ -112,6 +129,64 @@ export default {
   background: #fafcfe;
   padding: 22px;
   box-sizing: border-box;
+  border: 2px solid transparent;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.device-item--active {
+  border-color: #67c23a;
+  box-shadow: 0 6px 18px rgba(103, 194, 58, 0.12);
+  background: linear-gradient(180deg, #f8fff8 0%, #fafcfe 100%);
+}
+
+.device-item--inactive {
+  border-color: #e4e7ed;
+  background: #f5f7fa;
+  opacity: 0.96;
+}
+
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 50px);
+}
+
+.status-badge {
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.status-badge--active {
+  color: #389e0d;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+}
+
+.status-badge--inactive {
+  color: #909399;
+  background: #f4f4f5;
+  border: 1px solid #dcdfe6;
+}
+
+.parent-info {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  color: #409eff;
+  text-align: left;
+}
+
+.parent-info--muted {
+  color: #909399;
+}
+
+.bind-parent-btn {
+  background: #fff7e6;
+  color: #fa8c16;
 }
 
 .device-name {

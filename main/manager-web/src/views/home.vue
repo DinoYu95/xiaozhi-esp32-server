@@ -1,7 +1,7 @@
 <template>
   <div class="welcome">
     <!-- 公共头部 -->
-    <HeaderBar :devices="devices" @search="handleSearch" @search-reset="handleSearchReset" />
+    <HeaderBar :devices="devices" @search="handleSearch" @search-reset="handleSearchReset" @filter-change="handleFilterChange" />
     <el-main style="padding: 20px;display: flex;flex-direction: column;">
       <div>
         <!-- 首页内容 -->
@@ -41,11 +41,12 @@
           <template v-else>
             <DeviceItem v-for="(item, index) in devices" :key="index" :device="item" :feature-status="featureStatus" 
               @configure="goToRoleConfig" @deviceManage="handleDeviceManage" @delete="handleDeleteAgent" 
-              @chat-history="handleShowChatHistory" />
+              @chat-history="handleShowChatHistory" @bind-parent="handleBindParent" />
           </template>
         </div>
       </div>
       <AddWisdomBodyDialog :visible.sync="addDeviceDialogVisible" @confirm="handleWisdomBodyAdded" />
+      <BindParentDialog :visible.sync="bindParentDialogVisible" :agent="bindParentAgent" @success="fetchAgentList" />
     </el-main>
     <el-footer>
       <version-footer />
@@ -58,6 +59,7 @@
 <script>
 import Api from '@/apis/api';
 import AddWisdomBodyDialog from '@/components/AddWisdomBodyDialog.vue';
+import BindParentDialog from '@/components/BindParentDialog.vue';
 import ChatHistoryDialog from '@/components/ChatHistoryDialog.vue';
 import DeviceItem from '@/components/DeviceItem.vue';
 import HeaderBar from '@/components/HeaderBar.vue';
@@ -66,19 +68,22 @@ import featureManager from '@/utils/featureManager';
 
 export default {
   name: 'HomePage',
-  components: { DeviceItem, AddWisdomBodyDialog, HeaderBar, VersionFooter, ChatHistoryDialog },
+  components: { DeviceItem, AddWisdomBodyDialog, HeaderBar, VersionFooter, ChatHistoryDialog, BindParentDialog },
   data() {
     return {
       addDeviceDialogVisible: false,
       devices: [],
       originalDevices: [],
       isSearching: false,
+      activationFilter: 'all',
       searchRegex: null,
       isLoading: true,
       skeletonCount: localStorage.getItem('skeletonCount') || 8,
       showChatHistory: false,
       currentAgentId: '',
       currentAgentName: '',
+      bindParentDialogVisible: false,
+      bindParentAgent: null,
       // 功能状态
       featureStatus: {
         voiceprintRecognition: false,
@@ -119,13 +124,15 @@ export default {
     handleDeviceManage() {
       this.$router.push('/device-management');
     },
-    handleSearch(keyword) {
+    handleSearch(payload) {
+      const keyword = typeof payload === 'string' ? payload : payload?.keyword;
+      const activationFilter = typeof payload === 'object' ? (payload.activationFilter || this.activationFilter) : this.activationFilter;
+      this.activationFilter = activationFilter;
       this.isSearching = true;
       this.isLoading = true;
-      // 检测MAC地址格式：包含4个冒号
       const isMac = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(keyword)
       const searchType = isMac ? 'mac' : 'name';
-      Api.agent.searchAgent(keyword, searchType, ({ data }) => {
+      Api.agent.searchAgent(keyword, searchType, activationFilter, ({ data }) => {
         if (data?.data) {
           this.devices = data.data.map(item => ({
             ...item,
@@ -139,10 +146,19 @@ export default {
         this.$message.error(this.$t('message.searchFailed'));
       });
     },
-    handleSearchReset() {
+    handleSearchReset(payload) {
       this.isSearching = false;
-      // 直接将原始设备列表赋值给显示设备列表，避免重新加载数据
-      this.devices = [...this.originalDevices];
+      if (payload?.activationFilter) {
+        this.activationFilter = payload.activationFilter;
+      }
+      this.fetchAgentList();
+    },
+    handleFilterChange(payload) {
+      if (payload?.activationFilter) {
+        this.activationFilter = payload.activationFilter;
+      }
+      this.isSearching = false;
+      this.fetchAgentList();
     },
 
     // 搜索更新智能体列表
@@ -154,24 +170,21 @@ export default {
       this.isLoading = true;
       Api.agent.getAgentList(({ data }) => {
         if (data?.data) {
-          this.originalDevices = data.data.map(item => ({
+          const mapped = data.data.map(item => ({
             ...item,
             agentId: item.id
           }));
-
-          // 动态设置骨架屏数量（可选）
-          this.skeletonCount = Math.min(
-            Math.max(this.originalDevices.length, 3), // 最少3个
-            10 // 最多10个
-          );
-
-          this.handleSearchReset();
+          this.originalDevices = mapped;
+          if (!this.isSearching) {
+            this.devices = mapped;
+          }
+          this.skeletonCount = Math.min(Math.max(mapped.length, 3), 10);
         }
         this.isLoading = false;
       }, (error) => {
         console.error('Failed to fetch agent list:', error);
         this.isLoading = false;
-      });
+      }, { activationFilter: this.activationFilter });
     },
     // 删除智能体
     handleDeleteAgent(agentId) {
@@ -200,6 +213,10 @@ export default {
       this.currentAgentId = agentId;
       this.currentAgentName = agentName;
       this.showChatHistory = true;
+    },
+    handleBindParent(agent) {
+      this.bindParentAgent = agent;
+      this.bindParentDialogVisible = true;
     }
   }
 }

@@ -111,7 +111,8 @@ public class ParentDeviceController {
         }
         String s = segment.trim().toLowerCase();
         return "bind".equals(s) || "unbind".equals(s) || "list".equals(s) || "skills".equals(s)
-                || "rules".equals(s) || "name".equals(s) || "skill".equals(s);
+                || "rules".equals(s) || "name".equals(s) || "skill".equals(s)
+                || "invite".equals(s) || "invites".equals(s) || "members".equals(s);
     }
 
     @GetMapping("/list")

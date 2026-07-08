@@ -161,6 +161,11 @@
       <!-- 右侧元素 -->
       <div class="header-right">
         <div class="search-container" v-if="$route.path === '/home' && !(isSuperAdmin && isSmallScreen)">
+          <el-select v-model="activationFilter" class="activation-filter" size="small" @change="handleFilterChange">
+            <el-option :label="$t('header.activationFilterAll')" value="all" />
+            <el-option :label="$t('header.activationFilterActive')" value="active" />
+            <el-option :label="$t('header.activationFilterInactive')" value="inactive" />
+          </el-select>
           <div class="search-wrapper">
             <el-input v-model="search" :placeholder="$t('header.searchPlaceholder')" class="custom-search-input"
               @keyup.enter.native="handleSearch" @focus="showSearchHistory" @blur="hideSearchHistory" clearable
@@ -222,6 +227,7 @@ export default {
   data() {
     return {
       search: "",
+      activationFilter: "all",
       userInfo: {
         username: "",
         mobile: "",
@@ -431,21 +437,24 @@ export default {
     handleSearch() {
       const searchValue = this.search.trim();
 
-      // 如果搜索内容为空，触发重置事件
       if (!searchValue) {
-        this.$emit("search-reset");
+        this.$emit("search-reset", { activationFilter: this.activationFilter });
         return;
       }
 
-      // 保存搜索历史
       this.saveSearchHistory(searchValue);
+      this.$emit("search", { keyword: searchValue, activationFilter: this.activationFilter });
 
-      // 触发搜索事件，将搜索关键词传递给父组件
-      this.$emit("search", searchValue);
-
-      // 搜索完成后让输入框失去焦点，从而触发blur事件隐藏搜索历史
       if (this.$refs.searchInput) {
         this.$refs.searchInput.blur();
+      }
+    },
+    handleFilterChange() {
+      const searchValue = this.search.trim();
+      if (searchValue) {
+        this.$emit("search", { keyword: searchValue, activationFilter: this.activationFilter });
+      } else {
+        this.$emit("filter-change", { activationFilter: this.activationFilter });
       }
     },
 
@@ -760,10 +769,23 @@ export default {
 }
 
 .search-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-right: 5px;
   flex: 0.9;
   min-width: 60px;
   max-width: none;
+}
+
+.activation-filter {
+  width: 108px;
+}
+
+.activation-filter>>>.el-input__inner {
+  border-radius: 16px;
+  height: 32px;
+  line-height: 32px;
 }
 
 .search-wrapper {

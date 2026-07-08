@@ -36,8 +36,10 @@ import xiaozhi.modules.parent.dto.ParentDeviceSkillBindDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceUnbindDTO;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
+import xiaozhi.modules.parent.service.DeviceInviteService;
 import xiaozhi.modules.parent.service.ParentDeviceService;
 import xiaozhi.modules.parent.service.ParentUserSkillService;
+import xiaozhi.modules.parent.util.ParentDeviceAccessHelper;
 import xiaozhi.modules.parent.vo.ParentDeviceItemVO;
 import xiaozhi.modules.parent.vo.ParentDeviceSkillVO;
 import xiaozhi.modules.parent.vo.ParentUserSkillVO;
@@ -62,6 +64,7 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
     private final ParentUserSkillService parentUserSkillService;
     private final SysUserScopeService sysUserScopeService;
     private final DeviceTelemetryService deviceTelemetryService;
+    private final DeviceInviteService deviceInviteService;
 
     @Override
     public BindResult bind(Long parentUserId, ParentDeviceBindDTO dto) {
@@ -85,16 +88,16 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             throw new RenException(ErrorCode.PARENT_BIND_CODE_INVALID);
         }
 
-        // 是否已被其他家长绑定
-        ParentDeviceBindingEntity existing = parentDeviceBindingDao.selectOne(
-                new LambdaQueryWrapper<ParentDeviceBindingEntity>()
-                        .eq(ParentDeviceBindingEntity::getDeviceId, deviceId));
-        if (existing != null && !existing.getParentUserId().equals(parentUserId)) {
-            throw new RenException(ErrorCode.PARENT_DEVICE_ALREADY_BOUND);
-        }
-        if (existing != null && existing.getParentUserId().equals(parentUserId)) {
+        // 设备是否已有 active 绑定（首绑后需走邀请链路）
+        long activeMemberCount = ParentDeviceAccessHelper.countActiveMembers(parentDeviceBindingDao, deviceId);
+        ParentDeviceBindingEntity myActive = ParentDeviceAccessHelper.findActiveBinding(
+                parentDeviceBindingDao, parentUserId, deviceId);
+        if (myActive != null) {
             redisUtils.delete(List.of(cacheDeviceKey, deviceKey));
             return new BindResult(deviceId, "已绑定");
+        }
+        if (activeMemberCount > 0) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_ALREADY_BOUND);
         }
 
         // ai_device 不存在则创建（同时自动为固定后台用户创建一个默认智能体）
@@ -130,13 +133,31 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             agentSkillMappingService.addOfficialRecommendedSkillsIfEmpty(agentId);
         }
 
-        ParentDeviceBindingEntity binding = new ParentDeviceBindingEntity();
-        binding.setParentUserId(parentUserId);
-        binding.setDeviceId(deviceId);
-        binding.setBindTime(new Date());
-        binding.setBindSource(StringUtils.isNotBlank(dto.getBindSource()) ? dto.getBindSource() : "code");
-        binding.setCreateTime(new Date());
-        parentDeviceBindingDao.insert(binding);
+        Date bindNow = new Date();
+        ParentDeviceBindingEntity anyBinding = ParentDeviceAccessHelper.findAnyBinding(
+                parentDeviceBindingDao, parentUserId, deviceId);
+        if (anyBinding != null) {
+            anyBinding.setRole(ParentDeviceBindingEntity.ROLE_OWNER);
+            anyBinding.setIsPrimary(1);
+            anyBinding.setInvitedBy(null);
+            anyBinding.setStatus(ParentDeviceBindingEntity.STATUS_ACTIVE);
+            anyBinding.setBindTime(bindNow);
+            anyBinding.setBindSource(StringUtils.isNotBlank(dto.getBindSource()) ? dto.getBindSource() : "code");
+            anyBinding.setUpdatedAt(bindNow);
+            parentDeviceBindingDao.updateById(anyBinding);
+        } else {
+            ParentDeviceBindingEntity binding = new ParentDeviceBindingEntity();
+            binding.setParentUserId(parentUserId);
+            binding.setDeviceId(deviceId);
+            binding.setBindTime(bindNow);
+            binding.setBindSource(StringUtils.isNotBlank(dto.getBindSource()) ? dto.getBindSource() : "code");
+            binding.setRole(ParentDeviceBindingEntity.ROLE_OWNER);
+            binding.setIsPrimary(1);
+            binding.setStatus(ParentDeviceBindingEntity.STATUS_ACTIVE);
+            binding.setCreateTime(bindNow);
+            binding.setUpdatedAt(bindNow);
+            parentDeviceBindingDao.insert(binding);
+        }
 
         redisUtils.delete(List.of(cacheDeviceKey, deviceKey));
         return new BindResult(deviceId, "绑定成功");
@@ -147,14 +168,19 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         if (StringUtils.isBlank(dto.getDeviceId())) {
             throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
         }
-        ParentDeviceBindingEntity binding = parentDeviceBindingDao.selectOne(
-                new LambdaQueryWrapper<ParentDeviceBindingEntity>()
-                        .eq(ParentDeviceBindingEntity::getDeviceId, dto.getDeviceId())
-                        .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId));
-        if (binding == null) {
-            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        ParentDeviceBindingEntity binding = ParentDeviceAccessHelper.requireActiveBinding(
+                parentDeviceBindingDao, parentUserId, dto.getDeviceId());
+        String deviceId = binding.getDeviceId();
+        if (ParentDeviceAccessHelper.isOwner(binding)) {
+            List<ParentDeviceBindingEntity> all =
+                    ParentDeviceAccessHelper.findActiveBindingsForDevice(parentDeviceBindingDao, deviceId);
+            for (ParentDeviceBindingEntity b : all) {
+                parentDeviceBindingDao.deleteById(b.getId());
+            }
+            deviceInviteService.revokeActiveInvitesForDevice(deviceId);
+        } else {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_OWNER);
         }
-        parentDeviceBindingDao.deleteById(binding.getId());
     }
 
     private static final long ONLINE_THRESHOLD_MS = TimeUnit.MINUTES.toMillis(5);
@@ -164,6 +190,7 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         List<ParentDeviceBindingEntity> list = parentDeviceBindingDao.selectList(
                 new LambdaQueryWrapper<ParentDeviceBindingEntity>()
                         .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId)
+                        .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
                         .orderByDesc(ParentDeviceBindingEntity::getBindTime));
         Date now = new Date();
         return list.stream().map(b -> {
@@ -200,6 +227,11 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             } else {
                 vo.setWifiName("--");
             }
+            String role = StringUtils.isNotBlank(b.getRole()) ? b.getRole() : ParentDeviceBindingEntity.ROLE_OWNER;
+            vo.setRole(role);
+            vo.setIsPrimaryOwner(b.getIsPrimary() != null && b.getIsPrimary() == 1);
+            vo.setCanInvite(ParentDeviceBindingEntity.ROLE_OWNER.equalsIgnoreCase(role));
+            vo.setMemberCount((int) ParentDeviceAccessHelper.countActiveMembers(parentDeviceBindingDao, b.getDeviceId()));
             return vo;
         }).collect(Collectors.toList());
     }
@@ -209,7 +241,7 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         if (StringUtils.isBlank(deviceId) || dto == null || StringUtils.isBlank(dto.getDeviceName())) {
             throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
         }
-        ensureDeviceBoundAndGetAgentId(parentUserId, deviceId);
+        ParentDeviceAccessHelper.requireOwnerWrite(parentDeviceBindingDao, parentUserId, deviceId);
         DeviceEntity device = deviceDao.selectById(deviceId);
         if (device == null) {
             device = deviceDao.selectByIdOrMacVariant(deviceId);
@@ -238,25 +270,9 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         if (StringUtils.isBlank(deviceId)) {
             throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
         }
-        // 校验设备已绑定给当前家长（兼容 deviceId 格式：B6:C8:35:D6:10:48 / b6_c8_35_d6_10_48）
-        ParentDeviceBindingEntity binding = parentDeviceBindingDao.selectOne(
-                new LambdaQueryWrapper<ParentDeviceBindingEntity>()
-                        .eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
-                        .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId));
-        if (binding == null) {
-            List<ParentDeviceBindingEntity> list = parentDeviceBindingDao.selectList(
-                    new LambdaQueryWrapper<ParentDeviceBindingEntity>()
-                            .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId));
-            String normalized = deviceId.replace(":", "_").toLowerCase();
-            binding = list != null ? list.stream().filter(b -> {
-                if (b.getDeviceId() == null) return false;
-                String bNorm = b.getDeviceId().replace(":", "_").toLowerCase();
-                return bNorm.equals(normalized);
-            }).findFirst().orElse(null) : null;
-        }
-        if (binding == null) {
-            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
-        }
+        ParentDeviceBindingEntity binding = ParentDeviceAccessHelper.requireActiveBinding(
+                parentDeviceBindingDao, parentUserId, deviceId);
+        deviceId = binding.getDeviceId();
         // 获取设备的 agentId（兼容 deviceId 格式：B6:C8:35:D6:10:48 / b6_c8_35_d6_10_48）
         DeviceEntity device = deviceDao.selectById(deviceId);
         if (device == null) {
@@ -374,28 +390,8 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         return skillId.toString().trim();
     }
 
-    /** 校验设备已绑定给当前家长 */
     private void ensureDeviceBoundAndGetAgentId(Long parentUserId, String deviceId) {
-        ParentDeviceBindingEntity binding = parentDeviceBindingDao.selectOne(
-                new LambdaQueryWrapper<ParentDeviceBindingEntity>()
-                        .eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
-                        .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId));
-        if (binding == null) {
-            List<ParentDeviceBindingEntity> list = parentDeviceBindingDao.selectList(
-                    new LambdaQueryWrapper<ParentDeviceBindingEntity>()
-                            .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId));
-            if (list != null) {
-                String normalized = deviceId.replace(":", "_").toLowerCase();
-                binding = list.stream().filter(b -> {
-                    if (b.getDeviceId() == null) return false;
-                    String bNorm = b.getDeviceId().replace(":", "_").toLowerCase();
-                    return bNorm.equals(normalized);
-                }).findFirst().orElse(null);
-            }
-        }
-        if (binding == null) {
-            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
-        }
+        ParentDeviceAccessHelper.requireActiveBinding(parentDeviceBindingDao, parentUserId, deviceId);
     }
 
     private static String normalizeSpeakerType(String speakerType) {

@@ -34,6 +34,7 @@ import xiaozhi.common.redis.RedisUtils;
 import xiaozhi.common.user.UserDetail;
 import xiaozhi.common.utils.Result;
 import xiaozhi.common.utils.ResultUtils;
+import xiaozhi.modules.agent.dto.AgentBindParentDTO;
 import xiaozhi.modules.agent.dto.AgentChatHistoryDTO;
 import xiaozhi.modules.agent.dto.AgentChatSessionDTO;
 import xiaozhi.modules.agent.dto.AgentCreateDTO;
@@ -46,11 +47,13 @@ import xiaozhi.modules.agent.service.AgentChatAudioService;
 import xiaozhi.modules.agent.service.AgentChatHistoryService;
 import xiaozhi.modules.agent.service.AgentChatSummaryService;
 import xiaozhi.modules.agent.service.AgentContextProviderService;
+import xiaozhi.modules.agent.service.AgentParentBindingService;
 import xiaozhi.modules.agent.service.AgentPluginMappingService;
 import xiaozhi.modules.agent.service.AgentService;
 import xiaozhi.modules.agent.service.AgentTemplateService;
 import xiaozhi.modules.agent.vo.AgentChatHistoryUserVO;
 import xiaozhi.modules.agent.vo.AgentInfoVO;
+import xiaozhi.modules.agent.vo.ParentUserSearchVO;
 import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.device.service.DeviceService;
 import xiaozhi.modules.security.user.SecurityUser;
@@ -71,16 +74,36 @@ public class AgentController {
     private final AgentChatSummaryService agentChatSummaryService;
     private final RedisUtils redisUtils;
     private final SysUserScopeService sysUserScopeService;
+    private final AgentParentBindingService agentParentBindingService;
 
     @GetMapping("/list")
     @Operation(summary = "获取用户智能体列表")
     @RequiresPermissions("sys:role:normal")
     public Result<List<AgentDTO>> getUserAgents(
             @RequestParam(value = "keyword", required = false) String keyword,
-            @RequestParam(value = "searchType", defaultValue = "name") String searchType) {
+            @RequestParam(value = "searchType", defaultValue = "name") String searchType,
+            @RequestParam(value = "activationFilter", defaultValue = "all") String activationFilter) {
         Long scopeUserId = sysUserScopeService.getDataScopeUserId();
-        List<AgentDTO> agents = agentService.getUserAgents(scopeUserId, keyword, searchType);
+        List<AgentDTO> agents = agentService.getUserAgents(scopeUserId, keyword, searchType, activationFilter);
         return new Result<List<AgentDTO>>().ok(agents);
+    }
+
+    @GetMapping("/parent-user/search")
+    @Operation(summary = "搜索家长用户（智控台绑定用）")
+    @RequiresPermissions("sys:role:normal")
+    public Result<List<ParentUserSearchVO>> searchParentUsers(
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        return new Result<List<ParentUserSearchVO>>().ok(agentParentBindingService.searchParentUsers(keyword));
+    }
+
+    @PostMapping("/{agentId}/bind-parent")
+    @Operation(summary = "为未激活智能体绑定家长（建立 Owner 关系）")
+    @RequiresPermissions("sys:role:normal")
+    public Result<Void> bindParent(@PathVariable("agentId") String agentId,
+            @RequestBody AgentBindParentDTO dto) {
+        Long scopeUserId = sysUserScopeService.getDataScopeUserId();
+        agentParentBindingService.adminBindParent(scopeUserId, agentId, dto);
+        return new Result<Void>().ok(null);
     }
 
     @GetMapping("/all")

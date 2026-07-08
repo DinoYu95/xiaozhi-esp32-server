@@ -49,4 +49,19 @@ public class AgentDTO {
 
     @Schema(description = "设备数量", example = "10")
     private Integer deviceCount;
+
+    @Schema(description = "是否已绑定家长（存在 active 的 Owner 绑定）")
+    private Boolean parentActivated;
+
+    @Schema(description = "Owner 家长用户 ID")
+    private Long ownerParentId;
+
+    @Schema(description = "Owner 家长昵称")
+    private String ownerParentNickname;
+
+    @Schema(description = "Owner 绑定的设备 ID（MAC）")
+    private String ownerDeviceId;
+
+    @Schema(description = "该设备 active 家长成员总数")
+    private Integer boundParentCount;
 }

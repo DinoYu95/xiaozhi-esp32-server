@@ -263,5 +263,13 @@ public interface ErrorCode {
     int PARENT_BETA_MISSION_CONTEXT_LOCKED = 20015; // 体验孩子已锁定不可更换
     int PARENT_STORAGE_CATEGORY_INVALID = 20016; // 无效的文件存储类别
     int PARENT_STORAGE_OBJECT_INVALID = 20017; // 文件引用无效或无权使用
+    int PARENT_DEVICE_NOT_OWNER = 20018; // 非设备 Owner 无权限
+    int PARENT_INVITE_INVALID = 20019; // 邀请无效
+    int PARENT_INVITE_EXPIRED = 20020; // 邀请已过期
+    int PARENT_INVITE_ALREADY_MEMBER = 20021; // 已是设备成员
+    int PARENT_INVITE_SELF = 20022; // 不能接受自己的邀请
+    int PARENT_INVITE_EXHAUSTED = 20023; // 邀请已用完
+    int PARENT_DEVICE_MEMBER_READONLY = 20024; // Member 只读无写权限
+    int PARENT_DEVICE_CANNOT_REMOVE = 20025; // 无法移除该成员
 
 }

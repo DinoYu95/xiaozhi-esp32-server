@@ -40,8 +40,8 @@
       <div class="settings-btn" @click="handleDeviceManage">
         {{ $t('home.deviceManagement') }}({{ device.deviceCount }})
       </div>
-      <div v-if="!device.parentActivated && device.deviceCount > 0" class="settings-btn bind-parent-btn" @click="handleBindParent">
-        {{ $t('home.bindParent') }}
+      <div v-if="device.deviceCount > 0" :class="['settings-btn', device.parentActivated ? 'update-parent-btn' : 'bind-parent-btn']" @click="handleBindParent">
+        {{ device.parentActivated ? $t('home.updateParent') : $t('home.bindParent') }}
       </div>
       <div :class="['settings-btn', { 'disabled-btn': !device.chatHistoryConf }]"
         @click="handleChatHistory">
@@ -187,6 +187,11 @@ export default {
 .bind-parent-btn {
   background: #fff7e6;
   color: #fa8c16;
+}
+
+.update-parent-btn {
+  background: #ecf5ff;
+  color: #409eff;
 }
 
 .device-name {

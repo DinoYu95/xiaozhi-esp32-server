@@ -881,6 +881,12 @@ export default {
   'home.selectParentRequired': 'Please select a parent user',
   'home.bindParentSuccess': 'Bound successfully',
   'home.bindParentFailed': 'Bind failed',
+  'home.updateParent': 'Update parent',
+  'home.updateParentTitle': 'Change bound parent',
+  'home.updateParentConfirm': 'The previous owner will lose access to this device. Members are not affected. Continue?',
+  'home.currentBoundParent': 'Current bound parent',
+  'home.updateParentSuccess': 'Parent updated successfully',
+  'home.updateParentFailed': 'Failed to update parent',
 
   // Parameter management page text
   'paramManagement.pageTitle': 'Parameter Management',

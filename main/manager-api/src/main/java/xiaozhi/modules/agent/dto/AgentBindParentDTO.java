@@ -11,4 +11,7 @@ public class AgentBindParentDTO {
 
     @Schema(description = "设备 ID（可选；多设备时指定，默认取该 Agent 下第一台设备）")
     private String deviceId;
+
+    @Schema(description = "是否替换已有 Owner（已激活时更新家长须为 true）")
+    private Boolean replaceExisting;
 }

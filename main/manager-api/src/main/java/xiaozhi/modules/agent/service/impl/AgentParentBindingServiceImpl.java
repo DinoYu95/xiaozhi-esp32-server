@@ -152,15 +152,39 @@ public class AgentParentBindingServiceImpl implements AgentParentBindingService 
         }
         DeviceEntity device = resolveTargetDevice(devices, dto.getDeviceId());
         String deviceId = device.getId();
+        boolean replaceExisting = Boolean.TRUE.equals(dto.getReplaceExisting());
 
-        if (ParentDeviceAccessHelper.findPrimaryOwner(parentDeviceBindingDao, deviceId) != null) {
-            throw new RenException("该设备已有绑定家长，请先解绑后再操作");
+        ParentDeviceBindingEntity currentOwner =
+                ParentDeviceAccessHelper.findPrimaryOwner(parentDeviceBindingDao, deviceId);
+        if (currentOwner != null && !replaceExisting) {
+            throw new RenException("该设备已有绑定家长，如需更换请使用更新家长");
         }
-        if (ParentDeviceAccessHelper.findActiveBinding(parentDeviceBindingDao, dto.getParentUserId(), deviceId) != null) {
-            throw new RenException(ErrorCode.PARENT_INVITE_ALREADY_MEMBER);
+        if (currentOwner != null
+                && currentOwner.getParentUserId().equals(dto.getParentUserId())) {
+            throw new RenException("该家长已是当前绑定家长");
         }
 
         Date now = new Date();
+        if (currentOwner != null) {
+            currentOwner.setStatus(ParentDeviceBindingEntity.STATUS_REMOVED);
+            currentOwner.setUpdatedAt(now);
+            parentDeviceBindingDao.updateById(currentOwner);
+        }
+
+        ParentDeviceBindingEntity existingActive = ParentDeviceAccessHelper.findActiveBinding(
+                parentDeviceBindingDao, dto.getParentUserId(), deviceId);
+        if (existingActive != null) {
+            existingActive.setRole(ParentDeviceBindingEntity.ROLE_OWNER);
+            existingActive.setIsPrimary(1);
+            existingActive.setInvitedBy(null);
+            existingActive.setStatus(ParentDeviceBindingEntity.STATUS_ACTIVE);
+            existingActive.setBindTime(now);
+            existingActive.setBindSource(replaceExisting ? "admin_replace" : "admin");
+            existingActive.setUpdatedAt(now);
+            parentDeviceBindingDao.updateById(existingActive);
+            return;
+        }
+
         ParentDeviceBindingEntity anyBinding = ParentDeviceAccessHelper.findAnyBinding(
                 parentDeviceBindingDao, dto.getParentUserId(), deviceId);
         if (anyBinding != null) {
@@ -169,7 +193,7 @@ public class AgentParentBindingServiceImpl implements AgentParentBindingService 
             anyBinding.setInvitedBy(null);
             anyBinding.setStatus(ParentDeviceBindingEntity.STATUS_ACTIVE);
             anyBinding.setBindTime(now);
-            anyBinding.setBindSource("admin");
+            anyBinding.setBindSource(replaceExisting ? "admin_replace" : "admin");
             anyBinding.setUpdatedAt(now);
             parentDeviceBindingDao.updateById(anyBinding);
         } else {
@@ -177,7 +201,7 @@ public class AgentParentBindingServiceImpl implements AgentParentBindingService 
             binding.setParentUserId(dto.getParentUserId());
             binding.setDeviceId(deviceId);
             binding.setBindTime(now);
-            binding.setBindSource("admin");
+            binding.setBindSource(replaceExisting ? "admin_replace" : "admin");
             binding.setRole(ParentDeviceBindingEntity.ROLE_OWNER);
             binding.setIsPrimary(1);
             binding.setStatus(ParentDeviceBindingEntity.STATUS_ACTIVE);

@@ -895,6 +895,12 @@ export default {
   'home.selectParentRequired': '请选择家长用户',
   'home.bindParentSuccess': '绑定成功，家长端可见该设备',
   'home.bindParentFailed': '绑定失败',
+  'home.updateParent': '更新家长',
+  'home.updateParentTitle': '更换绑定家长',
+  'home.updateParentConfirm': '更换后原绑定家长将失去该设备的管理权限（Member 不受影响），确定继续？',
+  'home.currentBoundParent': '当前绑定家长',
+  'home.updateParentSuccess': '家长已更新，小程序端将显示新绑定关系',
+  'home.updateParentFailed': '更新家长失败',
 
   // 参数管理页面文本
   'paramManagement.pageTitle': '参数管理',

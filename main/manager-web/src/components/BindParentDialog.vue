@@ -1,6 +1,6 @@
 <template>
   <el-dialog
-    :title="$t('home.bindParentTitle')"
+    :title="dialogTitle"
     :visible.sync="dialogVisible"
     width="480px"
     @open="handleOpen"
@@ -8,6 +8,10 @@
     <div v-if="agent" class="bind-parent-tip">
       {{ $t('home.bindParentAgent') }}：<strong>{{ agent.agentName }}</strong>
       <span v-if="agent.deviceCount > 0">（{{ $t('home.deviceManagement') }} {{ agent.deviceCount }}）</span>
+    </div>
+    <div v-if="agent && isUpdate" class="bind-parent-current">
+      {{ $t('home.currentBoundParent') }}：<strong>{{ agent.ownerParentNickname || '--' }}</strong>
+      <span v-if="agent.ownerParentId">（ID: {{ agent.ownerParentId }}）</span>
     </div>
     <el-form label-width="90px" @submit.native.prevent>
       <el-form-item :label="$t('home.searchParent')">
@@ -65,6 +69,12 @@ export default {
     dialogVisible: {
       get() { return this.visible; },
       set(val) { this.$emit('update:visible', val); }
+    },
+    isUpdate() {
+      return Boolean(this.agent && this.agent.parentActivated);
+    },
+    dialogTitle() {
+      return this.isUpdate ? this.$t('home.updateParentTitle') : this.$t('home.bindParentTitle');
     }
   },
   methods: {
@@ -100,20 +110,35 @@ export default {
         this.$message.warning(this.$t('home.selectParentRequired'));
         return;
       }
-      this.submitting = true;
-      Api.agent.bindParent(this.agent.agentId, { parentUserId: this.selectedParentId }, (res) => {
-        this.submitting = false;
-        if (res.data?.code === 0) {
-          this.$message.success(this.$t('home.bindParentSuccess'));
-          this.dialogVisible = false;
-          this.$emit('success');
-        } else {
-          this.$message.error(res.data?.msg || this.$t('home.bindParentFailed'));
-        }
-      }, () => {
-        this.submitting = false;
-        this.$message.error(this.$t('home.bindParentFailed'));
-      });
+      const doBind = () => {
+        this.submitting = true;
+        const payload = {
+          parentUserId: this.selectedParentId,
+          replaceExisting: this.isUpdate
+        };
+        Api.agent.bindParent(this.agent.agentId, payload, (res) => {
+          this.submitting = false;
+          if (res.data?.code === 0) {
+            this.$message.success(this.isUpdate ? this.$t('home.updateParentSuccess') : this.$t('home.bindParentSuccess'));
+            this.dialogVisible = false;
+            this.$emit('success');
+          } else {
+            this.$message.error(res.data?.msg || (this.isUpdate ? this.$t('home.updateParentFailed') : this.$t('home.bindParentFailed')));
+          }
+        }, () => {
+          this.submitting = false;
+          this.$message.error(this.isUpdate ? this.$t('home.updateParentFailed') : this.$t('home.bindParentFailed'));
+        });
+      };
+      if (this.isUpdate) {
+        this.$confirm(this.$t('home.updateParentConfirm'), this.$t('home.updateParentTitle'), {
+          confirmButtonText: this.$t('button.ok'),
+          cancelButtonText: this.$t('button.cancel'),
+          type: 'warning'
+        }).then(doBind).catch(() => {});
+        return;
+      }
+      doBind();
     }
   }
 };
@@ -125,5 +150,15 @@ export default {
   font-size: 13px;
   color: #606266;
   line-height: 1.6;
+}
+
+.bind-parent-current {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: #f0f9eb;
+  border: 1px solid #c2e7b0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #529b2e;
 }
 </style>

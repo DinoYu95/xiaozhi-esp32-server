@@ -97,7 +97,7 @@ public class AgentController {
     }
 
     @PostMapping("/{agentId}/bind-parent")
-    @Operation(summary = "为未激活智能体绑定家长（建立 Owner 关系）")
+    @Operation(summary = "为智能体绑定或更换家长 Owner")
     @RequiresPermissions("sys:role:normal")
     public Result<Void> bindParent(@PathVariable("agentId") String agentId,
             @RequestBody AgentBindParentDTO dto) {

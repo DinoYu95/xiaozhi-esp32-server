@@ -147,7 +147,7 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
                 parentDeviceBindingDao, parentUserId, deviceId);
         if (existing != null) {
             DeviceInviteAcceptVO vo = new DeviceInviteAcceptVO();
-            vo.setDeviceId(deviceId);
+            fillAcceptDeviceInfo(vo, deviceId);
             vo.setRole(existing.getRole());
             vo.setMessage("您已在该设备中");
             vo.setAlreadyMember(true);
@@ -193,11 +193,20 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
                 deviceId, parentUserId, invite.getId());
 
         DeviceInviteAcceptVO vo = new DeviceInviteAcceptVO();
-        vo.setDeviceId(deviceId);
+        fillAcceptDeviceInfo(vo, deviceId);
         vo.setRole(ParentDeviceBindingEntity.ROLE_MEMBER);
         vo.setMessage("加入成功");
         vo.setAlreadyMember(false);
         return vo;
+    }
+
+    private void fillAcceptDeviceInfo(DeviceInviteAcceptVO vo, String deviceId) {
+        vo.setDeviceName(resolveDeviceDisplayName(deviceId));
+        DeviceEntity device = deviceDao.selectById(deviceId);
+        if (device == null) {
+            device = deviceDao.selectByIdOrMacVariant(deviceId);
+        }
+        vo.setDeviceId(device != null ? device.getId() : deviceId);
     }
 
     @Override

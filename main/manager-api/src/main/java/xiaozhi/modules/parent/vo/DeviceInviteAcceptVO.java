@@ -7,6 +7,7 @@ import lombok.Data;
 @Schema(description = "接受邀请响应")
 public class DeviceInviteAcceptVO {
     private String deviceId;
+    private String deviceName;
     private String message;
     private String role;
     private Boolean alreadyMember;

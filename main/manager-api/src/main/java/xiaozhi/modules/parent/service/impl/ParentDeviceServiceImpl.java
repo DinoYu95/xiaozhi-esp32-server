@@ -195,13 +195,19 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         Date now = new Date();
         return list.stream().map(b -> {
             ParentDeviceItemVO vo = new ParentDeviceItemVO();
-            vo.setDeviceId(b.getDeviceId());
+            String bindingDeviceId = b.getDeviceId();
+            DeviceEntity device = deviceDao.selectById(bindingDeviceId);
+            if (device == null) {
+                device = deviceDao.selectByIdOrMacVariant(bindingDeviceId);
+            }
+            String canonicalDeviceId = device != null ? device.getId() : bindingDeviceId;
+            vo.setDeviceId(canonicalDeviceId);
             vo.setBindTime(b.getBindTime());
-            DeviceEntity device = deviceDao.selectById(b.getDeviceId());
+            DeviceChildEntity child = ParentDeviceAccessHelper.findDeviceChild(deviceChildDao, canonicalDeviceId);
+            if (child == null && !canonicalDeviceId.equals(bindingDeviceId)) {
+                child = ParentDeviceAccessHelper.findDeviceChild(deviceChildDao, bindingDeviceId);
+            }
             String childName = null;
-            DeviceChildEntity child = deviceChildDao.selectOne(
-                    new LambdaQueryWrapper<DeviceChildEntity>()
-                            .eq(DeviceChildEntity::getDeviceId, b.getDeviceId()));
             if (child != null && StringUtils.isNotBlank(child.getName())) {
                 childName = child.getName().trim();
             }
@@ -216,7 +222,7 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
                 vo.setIsOnline(false);
             }
             // 电量、WiFi：从 Redis 读取设备上报缓存，无数据时占位
-            DeviceStatusCacheVO status = deviceTelemetryService.getStatus(b.getDeviceId());
+            DeviceStatusCacheVO status = deviceTelemetryService.getStatus(canonicalDeviceId);
             if (status != null && status.getBatteryLevel() != null) {
                 vo.setBatteryLevel(status.getBatteryLevel());
             } else {
@@ -231,7 +237,8 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             vo.setRole(role);
             vo.setIsPrimaryOwner(b.getIsPrimary() != null && b.getIsPrimary() == 1);
             vo.setCanInvite(ParentDeviceBindingEntity.ROLE_OWNER.equalsIgnoreCase(role));
-            vo.setMemberCount((int) ParentDeviceAccessHelper.countActiveMembers(parentDeviceBindingDao, b.getDeviceId()));
+            vo.setMemberCount((int) ParentDeviceAccessHelper.countActiveMembers(
+                    parentDeviceBindingDao, canonicalDeviceId));
             return vo;
         }).collect(Collectors.toList());
     }
@@ -259,8 +266,8 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         if (device != null && StringUtils.isNotBlank(device.getAlias())) {
             return device.getAlias().trim();
         }
-        if (childName != null) {
-            return childName + "的机器人";
+        if (StringUtils.isNotBlank(childName)) {
+            return childName.trim() + "的机器人";
         }
         return "我的机器人";
     }

@@ -8,7 +8,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.exception.RenException;
+import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
+import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 
 public final class ParentDeviceAccessHelper {
@@ -121,5 +123,22 @@ public final class ParentDeviceAccessHelper {
                         .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
                         .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
                                 .or().eq(ParentDeviceBindingEntity::getDeviceId, normalized)));
+    }
+
+    /** 兼容 device_id 存 MAC 冒号/下划线两种格式 */
+    public static DeviceChildEntity findDeviceChild(DeviceChildDao deviceChildDao, String deviceId) {
+        if (deviceChildDao == null || StringUtils.isBlank(deviceId)) {
+            return null;
+        }
+        String normalized = normalizeDeviceId(deviceId);
+        String colonForm = deviceId.contains("_") && !deviceId.contains(":")
+                ? deviceId.replace('_', ':')
+                : deviceId;
+        return deviceChildDao.selectOne(
+                new LambdaQueryWrapper<DeviceChildEntity>()
+                        .and(w -> w.eq(DeviceChildEntity::getDeviceId, deviceId)
+                                .or().eq(DeviceChildEntity::getDeviceId, normalized)
+                                .or().eq(DeviceChildEntity::getDeviceId, colonForm))
+                        .last("LIMIT 1"));
     }
 }

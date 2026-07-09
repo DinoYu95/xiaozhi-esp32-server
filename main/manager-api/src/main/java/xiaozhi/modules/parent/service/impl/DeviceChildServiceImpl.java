@@ -53,9 +53,7 @@ public class DeviceChildServiceImpl implements DeviceChildService {
     @Override
     public DeviceChildVO getByDeviceId(Long parentUserId, String deviceId) {
         ParentDeviceAccessHelper.requireActiveBinding(parentDeviceBindingDao, parentUserId, deviceId);
-        DeviceChildEntity entity = deviceChildDao.selectOne(
-                new LambdaQueryWrapper<DeviceChildEntity>()
-                        .eq(DeviceChildEntity::getDeviceId, deviceId));
+        DeviceChildEntity entity = ParentDeviceAccessHelper.findDeviceChild(deviceChildDao, deviceId);
         return entity != null ? ConvertUtils.sourceToTarget(entity, DeviceChildVO.class) : null;
     }
 

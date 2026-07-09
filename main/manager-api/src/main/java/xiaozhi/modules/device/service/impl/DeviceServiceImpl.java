@@ -63,6 +63,9 @@ import xiaozhi.modules.device.entity.OtaEntity;
 import xiaozhi.modules.device.service.DeviceService;
 import xiaozhi.modules.device.service.OtaService;
 import xiaozhi.modules.device.vo.UserShowDeviceListVO;
+import xiaozhi.modules.parent.dao.DeviceChildDao;
+import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
+import xiaozhi.modules.parent.util.ParentDeviceDisplayResolver;
 import xiaozhi.modules.security.user.SecurityUser;
 import xiaozhi.modules.sys.service.SysParamsService;
 import xiaozhi.modules.sys.service.SysUserUtilService;
@@ -79,6 +82,8 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
     private final RedisUtils redisUtils;
     private final OtaService otaService;
     private final SysUserScopeService sysUserScopeService;
+    private final DeviceChildDao deviceChildDao;
+    private final ParentDeviceBindingDao parentDeviceBindingDao;
 
     @Async
     public void updateDeviceConnectionInfo(String agentId, String deviceId, String appVersion) {
@@ -294,7 +299,12 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
         QueryWrapper<DeviceEntity> wrapper = new QueryWrapper<>();
         wrapper.eq("user_id", userId);
         wrapper.eq("agent_id", agentId);
-        return baseDao.selectList(wrapper);
+        List<DeviceEntity> devices = baseDao.selectList(wrapper);
+        for (DeviceEntity device : devices) {
+            device.setParentDisplayName(ParentDeviceDisplayResolver.resolveDeviceName(
+                    deviceDao, deviceChildDao, parentDeviceBindingDao, device.getId()));
+        }
+        return devices;
     }
 
     @Override

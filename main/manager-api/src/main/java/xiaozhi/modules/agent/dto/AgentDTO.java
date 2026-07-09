@@ -64,4 +64,7 @@ public class AgentDTO {
 
     @Schema(description = "该设备 active 家长成员总数")
     private Integer boundParentCount;
+
+    @Schema(description = "家长端小程序展示的设备名（alias 或主孩子名+「的机器人」）")
+    private String parentDeviceDisplayName;
 }

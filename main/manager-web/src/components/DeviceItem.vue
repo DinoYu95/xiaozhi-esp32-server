@@ -3,10 +3,13 @@
     <div style="display: flex;justify-content: space-between;align-items: flex-start;">
       <div class="title-row">
         <div style="font-weight: 700;font-size: 18px;text-align: left;color: #3d4566;">
-          {{ device.agentName }}
+          {{ primaryTitle }}
         </div>
         <span v-if="device.parentActivated" class="status-badge status-badge--active">{{ $t('home.parentActivated') }}</span>
         <span v-else class="status-badge status-badge--inactive">{{ $t('home.parentInactive') }}</span>
+      </div>
+      <div v-if="showAgentSubname" class="agent-subname">
+        {{ $t('home.agentInternalName') }}：{{ device.agentName }}
       </div>
       <div>
         <img src="@/assets/home/delete.png" alt="" style="width: 18px;height: 18px;margin-right: 10px;"
@@ -77,6 +80,13 @@ export default {
     return { switchValue: false }
   },
   computed: {
+    primaryTitle() {
+      return this.device.parentDeviceDisplayName || this.device.agentName
+    },
+    showAgentSubname() {
+      const displayName = this.device.parentDeviceDisplayName
+      return displayName && displayName !== this.device.agentName
+    },
     formattedLastConnectedTime() {
       if (!this.device.lastConnectedAt) return this.$t('home.noConversation');
 
@@ -182,6 +192,14 @@ export default {
 
 .parent-info--muted {
   color: #909399;
+}
+
+.agent-subname {
+  margin: 2px 0 6px;
+  font-size: 12px;
+  color: #909399;
+  text-align: left;
+  line-height: 1.4;
 }
 
 .bind-parent-btn {

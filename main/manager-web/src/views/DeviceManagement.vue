@@ -32,6 +32,11 @@
               <el-table-column :label="$t('device.firmwareVersion')" prop="firmwareVersion"
                 align="center"></el-table-column>
               <el-table-column :label="$t('device.macAddress')" prop="macAddress" align="center"></el-table-column>
+              <el-table-column :label="$t('device.parentDisplayName')" prop="parentDisplayName" align="center" min-width="130">
+                <template slot-scope="scope">
+                  <span class="parent-display-name">{{ scope.row.parentDisplayName || '--' }}</span>
+                </template>
+              </el-table-column>
               <el-table-column :label="$t('device.bindTime')" prop="bindTime" align="center"></el-table-column>
               <el-table-column :label="$t('device.lastConversation')" prop="lastConversation"
                 align="center"></el-table-column>
@@ -159,7 +164,8 @@ export default {
       if (!keyword) return this.deviceList;
       return this.deviceList.filter(device =>
         (device.model && device.model.toLowerCase().includes(keyword)) ||
-        (device.macAddress && device.macAddress.toLowerCase().includes(keyword))
+        (device.macAddress && device.macAddress.toLowerCase().includes(keyword)) ||
+        (device.parentDisplayName && device.parentDisplayName.toLowerCase().includes(keyword))
       );
     },
 
@@ -368,6 +374,7 @@ export default {
               model: device.board,
               firmwareVersion: device.appVersion,
               macAddress: device.macAddress,
+              parentDisplayName: device.parentDisplayName,
               bindTime: device.createDate,
               lastConversation: device.lastConnectedAt,
               remark: device.alias,
@@ -788,6 +795,11 @@ export default {
 
 :deep(.el-icon-edit:hover) {
   color: #5a64b5;
+}
+
+.parent-display-name {
+  color: #409eff;
+  font-weight: 500;
 }
 
 :deep(.custom-selection-header .el-checkbox) {

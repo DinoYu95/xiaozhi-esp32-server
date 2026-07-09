@@ -27,11 +27,13 @@ import xiaozhi.modules.agent.vo.ParentUserSearchVO;
 import xiaozhi.modules.device.dao.DeviceDao;
 import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.device.service.DeviceService;
+import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dao.ParentUserDao;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.util.ParentDeviceAccessHelper;
+import xiaozhi.modules.parent.util.ParentDeviceDisplayResolver;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +44,7 @@ public class AgentParentBindingServiceImpl implements AgentParentBindingService 
     private final ParentDeviceBindingDao parentDeviceBindingDao;
     private final ParentUserDao parentUserDao;
     private final AgentDao agentDao;
+    private final DeviceChildDao deviceChildDao;
 
     @Override
     public void enrichParentBinding(List<AgentDTO> agents) {
@@ -77,6 +80,11 @@ public class AgentParentBindingServiceImpl implements AgentParentBindingService 
             dto.setParentActivated(false);
             dto.setBoundParentCount(0);
             List<DeviceEntity> agentDeviceList = agentDevices.getOrDefault(dto.getId(), List.of());
+            DeviceEntity displayDevice = pickDisplayDevice(agentDeviceList, ownerByDeviceKey);
+            if (displayDevice != null) {
+                dto.setParentDeviceDisplayName(ParentDeviceDisplayResolver.resolveDeviceName(
+                        deviceDao, deviceChildDao, parentDeviceBindingDao, displayDevice.getId()));
+            }
             for (DeviceEntity device : agentDeviceList) {
                 ParentDeviceBindingEntity owner = findOwnerForDevice(device.getId(), ownerByDeviceKey);
                 if (owner != null) {
@@ -273,6 +281,20 @@ public class AgentParentBindingServiceImpl implements AgentParentBindingService 
             return null;
         }
         return ownerByDeviceKey.get(ParentDeviceAccessHelper.normalizeDeviceId(deviceId));
+    }
+
+    /** 优先取已绑定家长的设备，否则取列表首台，用于解析家长端展示名 */
+    private static DeviceEntity pickDisplayDevice(
+            List<DeviceEntity> agentDeviceList, Map<String, ParentDeviceBindingEntity> ownerByDeviceKey) {
+        if (agentDeviceList == null || agentDeviceList.isEmpty()) {
+            return null;
+        }
+        for (DeviceEntity device : agentDeviceList) {
+            if (findOwnerForDevice(device.getId(), ownerByDeviceKey) != null) {
+                return device;
+            }
+        }
+        return agentDeviceList.get(0);
     }
 
     private static long findMemberCount(String deviceId, Map<String, Long> memberCountByDeviceKey) {

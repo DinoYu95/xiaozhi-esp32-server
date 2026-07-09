@@ -49,6 +49,10 @@ public class DeviceEntity {
     @Schema(description = "设备别名")
     private String alias;
 
+    @TableField(exist = false)
+    @Schema(description = "家长端小程序展示的设备名")
+    private String parentDisplayName;
+
     @Schema(description = "智能体ID")
     private String agentId;
 

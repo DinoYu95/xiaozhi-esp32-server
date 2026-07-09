@@ -18,12 +18,12 @@ public final class ParentChildAccessHelper {
 
     public static void ensureParentCanAccessChild(
             ParentDeviceBindingDao bindingDao, Long parentUserId, String deviceId) {
-        String normalized = deviceId.replace(":", "_").toLowerCase();
         ParentDeviceBindingEntity binding = bindingDao.selectOne(
                 new LambdaQueryWrapper<ParentDeviceBindingEntity>()
                         .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId)
-                        .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
-                                .or().eq(ParentDeviceBindingEntity::getDeviceId, normalized)));
+                        .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
+                        .and(ParentDeviceAccessHelper.deviceIdMatch(deviceId))
+                        .last("LIMIT 1"));
         if (binding == null) {
             throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
         }

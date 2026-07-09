@@ -81,6 +81,37 @@ public class ParentStorageServiceImpl implements ParentStorageService {
     }
 
     @Override
+    public boolean isManagedAvatarReference(String storedReference) {
+        if (StringUtils.isBlank(storedReference)) {
+            return false;
+        }
+        String ref = storedReference.trim();
+        if (LOCAL_FILENAME_PATTERN.matcher(ref).matches()) {
+            return true;
+        }
+        OssConfig cfg = loadOssConfig();
+        if (cfg.enabled && isOssObjectKey(ref, cfg)) {
+            return true;
+        }
+        if (ref.startsWith("http://") || ref.startsWith("https://")) {
+            if (isLegacyApiUrl(ref)) {
+                String filename = extractLegacyFilename(ref);
+                return filename != null && LOCAL_FILENAME_PATTERN.matcher(filename).matches();
+            }
+            return cfg.enabled && extractObjectKeyFromUrl(ref, cfg) != null;
+        }
+        return false;
+    }
+
+    @Override
+    public String resolveSharingAvatarUrl(String storedReference) {
+        if (!isManagedAvatarReference(storedReference)) {
+            return null;
+        }
+        return resolveAccessUrl(ParentStorageCategory.AVATAR, storedReference);
+    }
+
+    @Override
     public String resolveAccessUrl(ParentStorageCategory category, String storedReference) {
         if (StringUtils.isBlank(storedReference)) {
             return null;

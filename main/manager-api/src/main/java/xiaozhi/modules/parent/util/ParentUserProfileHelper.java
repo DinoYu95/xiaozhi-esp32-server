@@ -3,6 +3,7 @@ package xiaozhi.modules.parent.util;
 import org.apache.commons.lang3.StringUtils;
 
 import xiaozhi.modules.parent.entity.ParentUserEntity;
+import xiaozhi.modules.parent.storage.ParentStorageService;
 
 public final class ParentUserProfileHelper {
 
@@ -15,6 +16,17 @@ public final class ParentUserProfileHelper {
             return null;
         }
         return user.getNickname().trim();
+    }
+
+    /**
+     * 家庭共享成员列表：被邀请人通过资料页/上传更换过头像时返回 URL，否则 null（前端不展示头像）。
+     * 微信登录同步的第三方头像 URL 不计入。
+     */
+    public static String resolveSharingAvatarUrl(ParentUserEntity user, ParentStorageService storage) {
+        if (user == null || storage == null) {
+            return null;
+        }
+        return storage.resolveSharingAvatarUrl(user.getAvatarUrl());
     }
 
     /** 列表等场景兜底展示名 */

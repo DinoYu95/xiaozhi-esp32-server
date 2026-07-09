@@ -19,6 +19,16 @@ public interface ParentStorageService {
     String resolveAccessUrl(ParentStorageCategory category, String storedReference);
 
     /**
+     * 是否为家长在本系统上传/资料页更新的头像引用（非微信 CDN 等第三方 URL）。
+     */
+    boolean isManagedAvatarReference(String storedReference);
+
+    /**
+     * 家庭共享成员列表等场景：未主动更换头像时返回 null，否则返回可访问 URL。
+     */
+    String resolveSharingAvatarUrl(String storedReference);
+
+    /**
      * 校验引用属于当前家长及类别，返回建议入库的值（OSS 模式为 objectKey，本地模式为 filename）。
      */
     String normalizeAndValidate(Long parentUserId, ParentStorageCategory category, String objectKeyOrUrl);

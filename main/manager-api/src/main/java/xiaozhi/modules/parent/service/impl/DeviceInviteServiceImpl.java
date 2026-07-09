@@ -38,7 +38,6 @@ import xiaozhi.modules.parent.entity.DeviceInviteEntity;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.service.DeviceInviteService;
-import xiaozhi.modules.parent.storage.ParentStorageCategory;
 import xiaozhi.modules.parent.storage.ParentStorageService;
 import xiaozhi.modules.parent.util.ParentDeviceAccessHelper;
 import xiaozhi.modules.parent.util.ParentDeviceDisplayResolver;
@@ -234,8 +233,7 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
             item.setParentId(b.getParentUserId());
             ParentUserEntity user = parentUserDao.selectById(b.getParentUserId());
             item.setNickname(ParentUserProfileHelper.resolveNickname(user));
-            item.setAvatarUrl(parentStorageService.resolveAccessUrl(
-                    ParentStorageCategory.AVATAR, user != null ? user.getAvatarUrl() : null));
+            item.setAvatarUrl(ParentUserProfileHelper.resolveSharingAvatarUrl(user, parentStorageService));
             item.setRole(b.getRole());
             item.setIsPrimary(b.getIsPrimary() != null && b.getIsPrimary() == 1);
             item.setInvitedBy(b.getInvitedBy());

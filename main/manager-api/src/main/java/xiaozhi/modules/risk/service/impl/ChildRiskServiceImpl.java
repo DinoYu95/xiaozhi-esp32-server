@@ -29,6 +29,7 @@ import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentRiskPreferenceEntity;
 import xiaozhi.modules.parent.entity.ParentRiskWatchEntity;
+import xiaozhi.modules.parent.util.ParentDeviceAccessHelper;
 import xiaozhi.modules.risk.dao.ChildRiskEvaluatorDao;
 import xiaozhi.modules.risk.dao.ChildRiskEventDao;
 import xiaozhi.modules.risk.dao.ChildRiskOutboxDao;
@@ -115,9 +116,8 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         ParentDeviceBindingEntity b =
                 parentDeviceBindingDao.selectOne(new LambdaQueryWrapper<ParentDeviceBindingEntity>()
                         .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId)
-                        .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, dev)
-                                .or()
-                                .eq(ParentDeviceBindingEntity::getDeviceId, normalizeDev(dev)))
+                        .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
+                        .and(ParentDeviceAccessHelper.deviceIdMatch(dev))
                         .last("LIMIT 1"));
         if (b == null) {
             throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
@@ -769,9 +769,8 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         }
         List<ParentDeviceBindingEntity> binds =
                 parentDeviceBindingDao.selectList(new LambdaQueryWrapper<ParentDeviceBindingEntity>()
-                        .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, ev.getDeviceId())
-                                .or()
-                                .eq(ParentDeviceBindingEntity::getDeviceId, normalizeDev(ev.getDeviceId()))));
+                        .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
+                        .and(ParentDeviceAccessHelper.deviceIdMatch(ev.getDeviceId())));
         if (binds.isEmpty()) {
             ChildRiskOutboxEntity op = new ChildRiskOutboxEntity();
             op.setId(ob.getId());

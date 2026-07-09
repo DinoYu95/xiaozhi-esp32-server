@@ -4,6 +4,8 @@ import org.apache.commons.lang3.StringUtils;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import xiaozhi.modules.device.dao.DeviceDao;
 import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
@@ -17,6 +19,15 @@ import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 public final class ParentDeviceDisplayResolver {
 
     private ParentDeviceDisplayResolver() {
+    }
+
+    @Getter
+    @AllArgsConstructor
+    public static class DeviceDisplay {
+        private final String canonicalDeviceId;
+        private final String deviceName;
+        private final String ownerChildName;
+        private final DeviceEntity device;
     }
 
     public static DeviceEntity resolveDevice(DeviceDao deviceDao, String deviceId) {
@@ -38,7 +49,10 @@ public final class ParentDeviceDisplayResolver {
         return device != null ? device.getId() : StringUtils.trimToEmpty(deviceId);
     }
 
-    public static String resolveDeviceName(
+    /**
+     * Owner / Member 统一解析设备展示字段（deviceName、ownerChildName、canonicalDeviceId）。
+     */
+    public static DeviceDisplay resolveDisplay(
             DeviceDao deviceDao,
             DeviceChildDao deviceChildDao,
             ParentDeviceBindingDao bindingDao,
@@ -47,13 +61,38 @@ public final class ParentDeviceDisplayResolver {
         if (device == null && bindingDao != null) {
             device = resolveDeviceViaSiblingBinding(deviceDao, bindingDao, deviceId);
         }
-        String canonicalId = device != null ? device.getId() : deviceId;
-        DeviceChildEntity child = ParentDeviceAccessHelper.findDeviceChild(deviceChildDao, canonicalId);
-        if (child == null && StringUtils.isNotBlank(deviceId) && !deviceId.equals(canonicalId)) {
-            child = ParentDeviceAccessHelper.findDeviceChild(deviceChildDao, deviceId);
+        String canonicalId = device != null ? device.getId() : canonicalDeviceId(deviceDao, deviceId);
+        if (device == null && StringUtils.isNotBlank(canonicalId)) {
+            device = resolveDevice(deviceDao, canonicalId);
         }
-        String name = buildDisplayName(device, child);
-        return StringUtils.defaultIfBlank(name, "我的机器人");
+        DeviceChildEntity child = findDeviceChild(deviceChildDao, canonicalId, deviceId);
+        String ownerChildName = extractChildName(child);
+        String deviceName = StringUtils.defaultIfBlank(buildDisplayName(device, child), "我的机器人");
+        return new DeviceDisplay(canonicalId, deviceName, ownerChildName, device);
+    }
+
+    public static String resolveDeviceName(
+            DeviceDao deviceDao,
+            DeviceChildDao deviceChildDao,
+            ParentDeviceBindingDao bindingDao,
+            String deviceId) {
+        return resolveDisplay(deviceDao, deviceChildDao, bindingDao, deviceId).getDeviceName();
+    }
+
+    private static DeviceChildEntity findDeviceChild(
+            DeviceChildDao deviceChildDao, String canonicalId, String fallbackDeviceId) {
+        DeviceChildEntity child = ParentDeviceAccessHelper.findDeviceChild(deviceChildDao, canonicalId);
+        if (child == null && StringUtils.isNotBlank(fallbackDeviceId) && !fallbackDeviceId.equals(canonicalId)) {
+            child = ParentDeviceAccessHelper.findDeviceChild(deviceChildDao, fallbackDeviceId);
+        }
+        return child;
+    }
+
+    private static String extractChildName(DeviceChildEntity child) {
+        if (child == null || StringUtils.isBlank(child.getName())) {
+            return null;
+        }
+        return child.getName().trim();
     }
 
     private static DeviceEntity resolveDeviceViaSiblingBinding(
@@ -63,20 +102,27 @@ public final class ParentDeviceDisplayResolver {
         if (StringUtils.isBlank(deviceId)) {
             return null;
         }
-        String normalized = ParentDeviceAccessHelper.normalizeDeviceId(deviceId);
         ParentDeviceBindingEntity ownerBinding = ParentDeviceAccessHelper.findPrimaryOwner(bindingDao, deviceId);
         if (ownerBinding == null) {
+            String normalized = ParentDeviceAccessHelper.normalizeDeviceId(deviceId);
             ownerBinding = bindingDao.selectOne(
                     new LambdaQueryWrapper<ParentDeviceBindingEntity>()
                             .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
                             .eq(ParentDeviceBindingEntity::getRole, ParentDeviceBindingEntity.ROLE_OWNER)
-                            .eq(ParentDeviceBindingEntity::getIsPrimary, 1)
                             .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
                                     .or().eq(ParentDeviceBindingEntity::getDeviceId, normalized))
+                            .orderByDesc(ParentDeviceBindingEntity::getIsPrimary)
                             .last("LIMIT 1"));
         }
         if (ownerBinding != null) {
             DeviceEntity device = resolveDevice(deviceDao, ownerBinding.getDeviceId());
+            if (device != null) {
+                return device;
+            }
+        }
+        for (ParentDeviceBindingEntity binding :
+                ParentDeviceAccessHelper.findActiveBindingsForDevice(bindingDao, deviceId)) {
+            DeviceEntity device = resolveDevice(deviceDao, binding.getDeviceId());
             if (device != null) {
                 return device;
             }

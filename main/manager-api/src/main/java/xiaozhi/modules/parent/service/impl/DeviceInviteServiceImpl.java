@@ -73,7 +73,15 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
         String deviceId = dto.getDeviceId().trim();
         ParentDeviceBindingEntity ownerBinding =
                 ParentDeviceAccessHelper.requireOwner(parentDeviceBindingDao, parentUserId, deviceId);
-        deviceId = ownerBinding.getDeviceId();
+        deviceId = ParentDeviceDisplayResolver.canonicalDeviceId(deviceDao, ownerBinding.getDeviceId());
+        if (StringUtils.isBlank(deviceId)) {
+            deviceId = ownerBinding.getDeviceId();
+        }
+        if (!deviceId.equals(ownerBinding.getDeviceId())) {
+            ownerBinding.setDeviceId(deviceId);
+            ownerBinding.setUpdatedAt(new Date());
+            parentDeviceBindingDao.updateById(ownerBinding);
+        }
 
         checkInviteRateLimit(deviceId);
 

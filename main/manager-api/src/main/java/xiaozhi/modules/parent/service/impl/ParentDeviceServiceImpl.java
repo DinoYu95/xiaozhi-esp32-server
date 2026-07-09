@@ -29,7 +29,6 @@ import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dao.ParentUserDao;
-import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.dto.ParentDeviceBindDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceNameUpdateDTO;
 import xiaozhi.modules.parent.dto.ParentDeviceSkillBindDTO;
@@ -197,21 +196,14 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         return list.stream().map(b -> {
             ParentDeviceItemVO vo = new ParentDeviceItemVO();
             String bindingDeviceId = b.getDeviceId();
-            DeviceEntity device = ParentDeviceDisplayResolver.resolveDevice(deviceDao, bindingDeviceId);
-            String canonicalDeviceId = ParentDeviceDisplayResolver.canonicalDeviceId(deviceDao, bindingDeviceId);
+            ParentDeviceDisplayResolver.DeviceDisplay display = ParentDeviceDisplayResolver.resolveDisplay(
+                    deviceDao, deviceChildDao, parentDeviceBindingDao, bindingDeviceId);
+            String canonicalDeviceId = display.getCanonicalDeviceId();
+            DeviceEntity device = display.getDevice();
             vo.setDeviceId(canonicalDeviceId);
             vo.setBindTime(b.getBindTime());
-            DeviceChildEntity child = ParentDeviceAccessHelper.findDeviceChild(deviceChildDao, canonicalDeviceId);
-            if (child == null) {
-                child = ParentDeviceAccessHelper.findDeviceChild(deviceChildDao, bindingDeviceId);
-            }
-            String childName = null;
-            if (child != null && StringUtils.isNotBlank(child.getName())) {
-                childName = child.getName().trim();
-            }
-            vo.setOwnerChildName(childName);
-            vo.setDeviceName(ParentDeviceDisplayResolver.resolveDeviceName(
-                    deviceDao, deviceChildDao, parentDeviceBindingDao, bindingDeviceId));
+            vo.setOwnerChildName(display.getOwnerChildName());
+            vo.setDeviceName(display.getDeviceName());
             if (device != null && !canonicalDeviceId.equals(bindingDeviceId)) {
                 b.setDeviceId(canonicalDeviceId);
                 b.setUpdatedAt(new Date());

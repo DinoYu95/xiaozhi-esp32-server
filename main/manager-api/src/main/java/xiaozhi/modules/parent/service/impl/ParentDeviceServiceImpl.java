@@ -196,15 +196,16 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         return list.stream().map(b -> {
             ParentDeviceItemVO vo = new ParentDeviceItemVO();
             String bindingDeviceId = b.getDeviceId();
-            ParentDeviceDisplayResolver.DeviceDisplay display = ParentDeviceDisplayResolver.resolveDisplay(
-                    deviceDao, deviceChildDao, parentDeviceBindingDao, bindingDeviceId);
+            ParentDeviceDisplayResolver.DeviceDisplay display = ParentDeviceDisplayResolver.resolveDisplayForBinding(
+                    deviceDao, deviceChildDao, parentDeviceBindingDao, bindingDeviceId, b);
             String canonicalDeviceId = display.getCanonicalDeviceId();
             DeviceEntity device = display.getDevice();
             vo.setDeviceId(canonicalDeviceId);
             vo.setBindTime(b.getBindTime());
             vo.setOwnerChildName(display.getOwnerChildName());
             vo.setDeviceName(display.getDeviceName());
-            if (device != null && !canonicalDeviceId.equals(bindingDeviceId)) {
+            if (device != null && StringUtils.isNotBlank(canonicalDeviceId)
+                    && !ParentDeviceAccessHelper.deviceIdsEquivalent(bindingDeviceId, canonicalDeviceId)) {
                 b.setDeviceId(canonicalDeviceId);
                 b.setUpdatedAt(new Date());
                 parentDeviceBindingDao.updateById(b);

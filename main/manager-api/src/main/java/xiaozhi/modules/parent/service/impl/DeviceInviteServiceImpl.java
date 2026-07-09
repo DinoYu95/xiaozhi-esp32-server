@@ -150,7 +150,7 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
             throw new RenException(ErrorCode.PARENT_INVITE_INVALID);
         }
         DeviceInviteEntity invite = requireValidInvite(dto.getInviteToken().trim());
-        String deviceId = ParentDeviceDisplayResolver.canonicalDeviceId(deviceDao, invite.getDeviceId());
+        String deviceId = resolveInviteDeviceId(invite);
 
         if (invite.getInviterParentId().equals(parentUserId)) {
             throw new RenException(ErrorCode.PARENT_INVITE_SELF);
@@ -171,6 +171,7 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
         ParentDeviceBindingEntity anyBinding =
                 ParentDeviceAccessHelper.findAnyBinding(parentDeviceBindingDao, parentUserId, deviceId);
         if (anyBinding != null) {
+            anyBinding.setDeviceId(deviceId);
             anyBinding.setRole(ParentDeviceBindingEntity.ROLE_MEMBER);
             anyBinding.setIsPrimary(0);
             anyBinding.setInvitedBy(invite.getInviterParentId());
@@ -474,6 +475,41 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
         cal.setTime(base);
         cal.add(Calendar.DAY_OF_MONTH, days);
         return cal.getTime();
+    }
+
+    private String resolveInviteDeviceId(DeviceInviteEntity invite) {
+        ParentDeviceBindingEntity ownerBinding = findOwnerBindingForInvite(invite);
+        if (ownerBinding != null && StringUtils.isNotBlank(ownerBinding.getDeviceId())) {
+            DeviceEntity device = ParentDeviceDisplayResolver.resolveDevice(deviceDao, ownerBinding.getDeviceId());
+            if (device != null) {
+                return device.getId();
+            }
+            return ownerBinding.getDeviceId();
+        }
+        return ParentDeviceDisplayResolver.canonicalDeviceId(deviceDao, invite.getDeviceId());
+    }
+
+    private ParentDeviceBindingEntity findOwnerBindingForInvite(DeviceInviteEntity invite) {
+        if (invite == null || invite.getInviterParentId() == null) {
+            return null;
+        }
+        List<ParentDeviceBindingEntity> ownerBindings = parentDeviceBindingDao.selectList(
+                new LambdaQueryWrapper<ParentDeviceBindingEntity>()
+                        .eq(ParentDeviceBindingEntity::getParentUserId, invite.getInviterParentId())
+                        .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
+                        .eq(ParentDeviceBindingEntity::getRole, ParentDeviceBindingEntity.ROLE_OWNER));
+        if (ownerBindings.isEmpty()) {
+            return null;
+        }
+        for (ParentDeviceBindingEntity ownerBinding : ownerBindings) {
+            if (ParentDeviceAccessHelper.deviceIdsEquivalent(ownerBinding.getDeviceId(), invite.getDeviceId())) {
+                return ownerBinding;
+            }
+        }
+        if (ownerBindings.size() == 1) {
+            return ownerBindings.get(0);
+        }
+        return ParentDeviceAccessHelper.findPrimaryOwner(parentDeviceBindingDao, invite.getDeviceId());
     }
 
     @Override

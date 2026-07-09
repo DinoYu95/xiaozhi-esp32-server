@@ -15,6 +15,8 @@
         WHERE id = #{deviceId}
            OR REPLACE(LOWER(id), ':', '_') = REPLACE(LOWER(#{deviceId}), ':', '_')
            OR REPLACE(LOWER(id), '_', ':') = REPLACE(LOWER(#{deviceId}), '_', ':')
+           OR mac_address = #{deviceId}
+           OR REPLACE(LOWER(mac_address), ':', '_') = REPLACE(LOWER(#{deviceId}), ':', '_')
         LIMIT 1
     </select>
 </mapper> 

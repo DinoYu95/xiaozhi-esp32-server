@@ -1,6 +1,7 @@
 package xiaozhi.modules.parent.util;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -25,18 +26,50 @@ public final class ParentDeviceAccessHelper {
         return deviceId.replace(":", "_").toLowerCase();
     }
 
+    public static String toColonDeviceId(String deviceId) {
+        if (StringUtils.isBlank(deviceId)) {
+            return deviceId;
+        }
+        return normalizeDeviceId(deviceId).replace('_', ':');
+    }
+
+    /** 判断两个 device_id 是否指向同一台物理设备（兼容 MAC 冒号/下划线/大小写） */
+    public static boolean deviceIdsEquivalent(String left, String right) {
+        if (StringUtils.isBlank(left) || StringUtils.isBlank(right)) {
+            return false;
+        }
+        if (StringUtils.equals(left, right)) {
+            return true;
+        }
+        return normalizeDeviceId(left).equals(normalizeDeviceId(right));
+    }
+
+    /** binding 表 device_id 等价匹配条件 */
+    public static Consumer<LambdaQueryWrapper<ParentDeviceBindingEntity>> deviceIdMatch(String deviceId) {
+        return w -> {
+            if (StringUtils.isBlank(deviceId)) {
+                w.apply("1 = 0");
+                return;
+            }
+            String normalized = normalizeDeviceId(deviceId);
+            String colonForm = toColonDeviceId(deviceId);
+            w.eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
+                    .or().eq(ParentDeviceBindingEntity::getDeviceId, normalized)
+                    .or().eq(ParentDeviceBindingEntity::getDeviceId, colonForm)
+                    .or().apply("REPLACE(LOWER(device_id), ':', '_') = {0}", normalized);
+        };
+    }
+
     public static ParentDeviceBindingEntity findActiveBinding(
             ParentDeviceBindingDao bindingDao, Long parentUserId, String deviceId) {
         if (parentUserId == null || StringUtils.isBlank(deviceId)) {
             return null;
         }
-        String normalized = normalizeDeviceId(deviceId);
         return bindingDao.selectOne(
                 new LambdaQueryWrapper<ParentDeviceBindingEntity>()
                         .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId)
                         .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
-                        .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
-                                .or().eq(ParentDeviceBindingEntity::getDeviceId, normalized)));
+                        .and(deviceIdMatch(deviceId)));
     }
 
     public static ParentDeviceBindingEntity requireActiveBinding(
@@ -74,12 +107,10 @@ public final class ParentDeviceAccessHelper {
         if (StringUtils.isBlank(deviceId)) {
             return 0;
         }
-        String normalized = normalizeDeviceId(deviceId);
         return bindingDao.selectCount(
                 new LambdaQueryWrapper<ParentDeviceBindingEntity>()
                         .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
-                        .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
-                                .or().eq(ParentDeviceBindingEntity::getDeviceId, normalized)));
+                        .and(deviceIdMatch(deviceId)));
     }
 
     public static ParentDeviceBindingEntity findPrimaryOwner(
@@ -87,14 +118,22 @@ public final class ParentDeviceAccessHelper {
         if (StringUtils.isBlank(deviceId)) {
             return null;
         }
-        String normalized = normalizeDeviceId(deviceId);
-        return bindingDao.selectOne(
+        ParentDeviceBindingEntity owner = bindingDao.selectOne(
                 new LambdaQueryWrapper<ParentDeviceBindingEntity>()
                         .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
                         .eq(ParentDeviceBindingEntity::getRole, ParentDeviceBindingEntity.ROLE_OWNER)
                         .eq(ParentDeviceBindingEntity::getIsPrimary, 1)
-                        .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
-                                .or().eq(ParentDeviceBindingEntity::getDeviceId, normalized))
+                        .and(deviceIdMatch(deviceId))
+                        .last("LIMIT 1"));
+        if (owner != null) {
+            return owner;
+        }
+        return bindingDao.selectOne(
+                new LambdaQueryWrapper<ParentDeviceBindingEntity>()
+                        .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
+                        .eq(ParentDeviceBindingEntity::getRole, ParentDeviceBindingEntity.ROLE_OWNER)
+                        .and(deviceIdMatch(deviceId))
+                        .orderByDesc(ParentDeviceBindingEntity::getIsPrimary)
                         .last("LIMIT 1"));
     }
 
@@ -103,12 +142,10 @@ public final class ParentDeviceAccessHelper {
         if (parentUserId == null || StringUtils.isBlank(deviceId)) {
             return null;
         }
-        String normalized = normalizeDeviceId(deviceId);
         return bindingDao.selectOne(
                 new LambdaQueryWrapper<ParentDeviceBindingEntity>()
                         .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId)
-                        .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
-                                .or().eq(ParentDeviceBindingEntity::getDeviceId, normalized))
+                        .and(deviceIdMatch(deviceId))
                         .last("LIMIT 1"));
     }
 
@@ -117,12 +154,37 @@ public final class ParentDeviceAccessHelper {
         if (StringUtils.isBlank(deviceId)) {
             return List.of();
         }
-        String normalized = normalizeDeviceId(deviceId);
         return bindingDao.selectList(
                 new LambdaQueryWrapper<ParentDeviceBindingEntity>()
                         .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
-                        .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
-                                .or().eq(ParentDeviceBindingEntity::getDeviceId, normalized)));
+                        .and(deviceIdMatch(deviceId)));
+    }
+
+    /**
+     * Member 绑定 device_id 可能与 Owner 格式不一致时，通过邀请人 Owner 绑定解析真实 deviceId。
+     */
+    public static ParentDeviceBindingEntity findInviterOwnerBinding(
+            ParentDeviceBindingDao bindingDao, ParentDeviceBindingEntity memberBinding) {
+        if (bindingDao == null || memberBinding == null || memberBinding.getInvitedBy() == null) {
+            return null;
+        }
+        List<ParentDeviceBindingEntity> inviterBindings = bindingDao.selectList(
+                new LambdaQueryWrapper<ParentDeviceBindingEntity>()
+                        .eq(ParentDeviceBindingEntity::getParentUserId, memberBinding.getInvitedBy())
+                        .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
+                        .eq(ParentDeviceBindingEntity::getRole, ParentDeviceBindingEntity.ROLE_OWNER));
+        if (inviterBindings.isEmpty()) {
+            return null;
+        }
+        for (ParentDeviceBindingEntity ownerBinding : inviterBindings) {
+            if (deviceIdsEquivalent(ownerBinding.getDeviceId(), memberBinding.getDeviceId())) {
+                return ownerBinding;
+            }
+        }
+        if (inviterBindings.size() == 1) {
+            return inviterBindings.get(0);
+        }
+        return null;
     }
 
     /** 兼容 device_id 存 MAC 冒号/下划线两种格式 */
@@ -131,9 +193,7 @@ public final class ParentDeviceAccessHelper {
             return null;
         }
         String normalized = normalizeDeviceId(deviceId);
-        String colonForm = deviceId.contains("_") && !deviceId.contains(":")
-                ? deviceId.replace('_', ':')
-                : deviceId;
+        String colonForm = toColonDeviceId(deviceId);
         return deviceChildDao.selectOne(
                 new LambdaQueryWrapper<DeviceChildEntity>()
                         .and(w -> w.eq(DeviceChildEntity::getDeviceId, deviceId)

@@ -40,6 +40,7 @@ import xiaozhi.modules.parent.service.DeviceInviteService;
 import xiaozhi.modules.parent.service.ParentDeviceService;
 import xiaozhi.modules.parent.service.ParentUserSkillService;
 import xiaozhi.modules.parent.util.ParentDeviceAccessHelper;
+import xiaozhi.modules.parent.util.ParentDeviceDisplayResolver;
 import xiaozhi.modules.parent.vo.ParentDeviceItemVO;
 import xiaozhi.modules.parent.vo.ParentDeviceSkillVO;
 import xiaozhi.modules.parent.vo.ParentUserSkillVO;
@@ -196,15 +197,12 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         return list.stream().map(b -> {
             ParentDeviceItemVO vo = new ParentDeviceItemVO();
             String bindingDeviceId = b.getDeviceId();
-            DeviceEntity device = deviceDao.selectById(bindingDeviceId);
-            if (device == null) {
-                device = deviceDao.selectByIdOrMacVariant(bindingDeviceId);
-            }
-            String canonicalDeviceId = device != null ? device.getId() : bindingDeviceId;
+            DeviceEntity device = ParentDeviceDisplayResolver.resolveDevice(deviceDao, bindingDeviceId);
+            String canonicalDeviceId = ParentDeviceDisplayResolver.canonicalDeviceId(deviceDao, bindingDeviceId);
             vo.setDeviceId(canonicalDeviceId);
             vo.setBindTime(b.getBindTime());
             DeviceChildEntity child = ParentDeviceAccessHelper.findDeviceChild(deviceChildDao, canonicalDeviceId);
-            if (child == null && !canonicalDeviceId.equals(bindingDeviceId)) {
+            if (child == null) {
                 child = ParentDeviceAccessHelper.findDeviceChild(deviceChildDao, bindingDeviceId);
             }
             String childName = null;
@@ -212,7 +210,13 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
                 childName = child.getName().trim();
             }
             vo.setOwnerChildName(childName);
-            vo.setDeviceName(resolveDeviceDisplayName(device, childName));
+            vo.setDeviceName(ParentDeviceDisplayResolver.resolveDeviceName(
+                    deviceDao, deviceChildDao, parentDeviceBindingDao, bindingDeviceId));
+            if (device != null && !canonicalDeviceId.equals(bindingDeviceId)) {
+                b.setDeviceId(canonicalDeviceId);
+                b.setUpdatedAt(new Date());
+                parentDeviceBindingDao.updateById(b);
+            }
             // 设备最后连接时间、在线状态
             if (device != null) {
                 vo.setLastConnectedAt(device.getLastConnectedAt());
@@ -259,17 +263,6 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         device.setAlias(dto.getDeviceName().trim());
         device.setUpdateDate(new Date());
         deviceDao.updateById(device);
-    }
-
-    /** 小程序展示名：优先家长自定义 alias，否则主孩子名+「的机器人」，无主孩子时为「我的机器人」 */
-    private static String resolveDeviceDisplayName(DeviceEntity device, String childName) {
-        if (device != null && StringUtils.isNotBlank(device.getAlias())) {
-            return device.getAlias().trim();
-        }
-        if (StringUtils.isNotBlank(childName)) {
-            return childName.trim() + "的机器人";
-        }
-        return "我的机器人";
     }
 
     @Override

@@ -138,7 +138,8 @@ public final class ParentDeviceAccessHelper {
                 new LambdaQueryWrapper<DeviceChildEntity>()
                         .and(w -> w.eq(DeviceChildEntity::getDeviceId, deviceId)
                                 .or().eq(DeviceChildEntity::getDeviceId, normalized)
-                                .or().eq(DeviceChildEntity::getDeviceId, colonForm))
+                                .or().eq(DeviceChildEntity::getDeviceId, colonForm)
+                                .or().apply("REPLACE(LOWER(device_id), ':', '_') = {0}", normalized))
                         .last("LIMIT 1"));
     }
 }

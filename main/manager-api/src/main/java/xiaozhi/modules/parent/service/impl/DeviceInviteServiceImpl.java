@@ -38,7 +38,11 @@ import xiaozhi.modules.parent.entity.DeviceInviteEntity;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.service.DeviceInviteService;
+import xiaozhi.modules.parent.storage.ParentStorageCategory;
+import xiaozhi.modules.parent.storage.ParentStorageService;
 import xiaozhi.modules.parent.util.ParentDeviceAccessHelper;
+import xiaozhi.modules.parent.util.ParentDeviceDisplayResolver;
+import xiaozhi.modules.parent.util.ParentUserProfileHelper;
 import xiaozhi.modules.parent.vo.DeviceInviteAcceptVO;
 import xiaozhi.modules.parent.vo.DeviceInviteCreateVO;
 import xiaozhi.modules.parent.vo.DeviceInviteItemVO;
@@ -58,6 +62,7 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
     private final DeviceDao deviceDao;
     private final DeviceChildDao deviceChildDao;
     private final RedisUtils redisUtils;
+    private final ParentStorageService parentStorageService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -90,7 +95,8 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
         log.info("device invite created: deviceId={}, inviter={}, inviteId={}",
                 deviceId, parentUserId, invite.getId());
 
-        String deviceName = resolveDeviceDisplayName(deviceId);
+        String deviceName = ParentDeviceDisplayResolver.resolveDeviceName(
+                deviceDao, deviceChildDao, parentDeviceBindingDao, deviceId);
         DeviceInviteCreateVO vo = new DeviceInviteCreateVO();
         vo.setInviteToken(inviteToken);
         vo.setExpiresAt(expiresAt);
@@ -110,13 +116,12 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
             return vo;
         }
         String invalidReason = resolveInvalidReason(invite);
-        vo.setDeviceId(invite.getDeviceId());
+        vo.setDeviceId(ParentDeviceDisplayResolver.canonicalDeviceId(deviceDao, invite.getDeviceId()));
         vo.setExpiresAt(invite.getExpiresAt());
-        vo.setDeviceName(resolveDeviceDisplayName(invite.getDeviceId()));
+        vo.setDeviceName(ParentDeviceDisplayResolver.resolveDeviceName(
+                deviceDao, deviceChildDao, parentDeviceBindingDao, invite.getDeviceId()));
         ParentUserEntity inviter = parentUserDao.selectById(invite.getInviterParentId());
-        vo.setInviterNickname(inviter != null && StringUtils.isNotBlank(inviter.getNickname())
-                ? inviter.getNickname()
-                : "家长");
+        vo.setInviterNickname(ParentUserProfileHelper.resolveNicknameOrFallback(inviter));
         boolean alreadyMember = ParentDeviceAccessHelper.findActiveBinding(
                 parentDeviceBindingDao, parentUserId, invite.getDeviceId()) != null;
         vo.setAlreadyMember(alreadyMember);
@@ -137,7 +142,7 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
             throw new RenException(ErrorCode.PARENT_INVITE_INVALID);
         }
         DeviceInviteEntity invite = requireValidInvite(dto.getInviteToken().trim());
-        String deviceId = invite.getDeviceId();
+        String deviceId = ParentDeviceDisplayResolver.canonicalDeviceId(deviceDao, invite.getDeviceId());
 
         if (invite.getInviterParentId().equals(parentUserId)) {
             throw new RenException(ErrorCode.PARENT_INVITE_SELF);
@@ -201,12 +206,10 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
     }
 
     private void fillAcceptDeviceInfo(DeviceInviteAcceptVO vo, String deviceId) {
-        vo.setDeviceName(resolveDeviceDisplayName(deviceId));
-        DeviceEntity device = deviceDao.selectById(deviceId);
-        if (device == null) {
-            device = deviceDao.selectByIdOrMacVariant(deviceId);
-        }
-        vo.setDeviceId(device != null ? device.getId() : deviceId);
+        String canonicalDeviceId = ParentDeviceDisplayResolver.canonicalDeviceId(deviceDao, deviceId);
+        vo.setDeviceId(canonicalDeviceId);
+        vo.setDeviceName(ParentDeviceDisplayResolver.resolveDeviceName(
+                deviceDao, deviceChildDao, parentDeviceBindingDao, canonicalDeviceId));
     }
 
     @Override
@@ -221,9 +224,9 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
             DeviceMemberItemVO item = new DeviceMemberItemVO();
             item.setParentId(b.getParentUserId());
             ParentUserEntity user = parentUserDao.selectById(b.getParentUserId());
-            item.setNickname(user != null && StringUtils.isNotBlank(user.getNickname())
-                    ? user.getNickname()
-                    : "家长");
+            item.setNickname(ParentUserProfileHelper.resolveNickname(user));
+            item.setAvatarUrl(parentStorageService.resolveAccessUrl(
+                    ParentStorageCategory.AVATAR, user != null ? user.getAvatarUrl() : null));
             item.setRole(b.getRole());
             item.setIsPrimary(b.getIsPrimary() != null && b.getIsPrimary() == 1);
             item.setInvitedBy(b.getInvitedBy());
@@ -456,23 +459,6 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
             return "exhausted";
         }
         return null;
-    }
-
-    private String resolveDeviceDisplayName(String deviceId) {
-        DeviceEntity device = deviceDao.selectById(deviceId);
-        if (device == null) {
-            device = deviceDao.selectByIdOrMacVariant(deviceId);
-        }
-        if (device != null && StringUtils.isNotBlank(device.getAlias())) {
-            return device.getAlias().trim();
-        }
-        DeviceChildEntity child = deviceChildDao.selectOne(
-                new LambdaQueryWrapper<DeviceChildEntity>()
-                        .eq(DeviceChildEntity::getDeviceId, deviceId));
-        if (child != null && StringUtils.isNotBlank(child.getName())) {
-            return child.getName().trim() + "的机器人";
-        }
-        return "我的机器人";
     }
 
     private static Date addDays(Date base, int days) {

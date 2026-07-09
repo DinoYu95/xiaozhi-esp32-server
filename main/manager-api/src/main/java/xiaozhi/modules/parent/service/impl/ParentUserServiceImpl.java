@@ -84,15 +84,9 @@ public class ParentUserServiceImpl implements ParentUserService {
                 parentUserId = parentAuthService.createWechatAuth(openId, unionId, channel);
             }
             ParentUserEntity user = parentUserDao.selectById(parentUserId);
-            if (user != null && (StringUtils.isNotBlank(dto.getNickname()) || StringUtils.isNotBlank(dto.getAvatarUrl()))) {
-                if (StringUtils.isNotBlank(dto.getNickname())) {
-                    user.setNickname(dto.getNickname());
-                }
-                if (StringUtils.isNotBlank(dto.getAvatarUrl())) {
-                    user.setAvatarUrl(dto.getAvatarUrl());
-                }
-                user.setUpdateTime(new Date());
-                parentUserDao.updateById(user);
+            applyWechatProfile(user, dto);
+            if (user == null) {
+                throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
             }
             ParentUserTokenService.TokenResult tr = parentUserTokenService.createToken(user.getId(), channel);
             return buildLoginVO(tr.token(), tr.expireTime(), user);
@@ -129,6 +123,14 @@ public class ParentUserServiceImpl implements ParentUserService {
             parentAuthService.addPhoneAuth(parentUserId, phoneEncrypted, channel);
         }
         ParentUserEntity user = parentUserDao.selectById(parentUserId);
+        if (user != null && StringUtils.isBlank(user.getNickname())) {
+            String masked = maskPhone(dto.getPhone());
+            if (StringUtils.isNotBlank(masked)) {
+                user.setNickname(masked);
+                user.setUpdateTime(new Date());
+                parentUserDao.updateById(user);
+            }
+        }
         ParentUserTokenService.TokenResult tr = parentUserTokenService.createToken(user.getId(), channel);
         return buildLoginVO(tr.token(), tr.expireTime(), user);
     }
@@ -244,5 +246,25 @@ public class ParentUserServiceImpl implements ParentUserService {
             return phone;
         }
         return phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
+    }
+
+    /** 微信登录时同步昵称/头像；前端应在 POST /auth/wechat 传入 nickname（wx 授权） */
+    private void applyWechatProfile(ParentUserEntity user, ParentWechatLoginDTO dto) {
+        if (user == null || dto == null) {
+            return;
+        }
+        boolean changed = false;
+        if (StringUtils.isNotBlank(dto.getNickname())) {
+            user.setNickname(dto.getNickname().trim());
+            changed = true;
+        }
+        if (StringUtils.isNotBlank(dto.getAvatarUrl())) {
+            user.setAvatarUrl(dto.getAvatarUrl().trim());
+            changed = true;
+        }
+        if (changed) {
+            user.setUpdateTime(new Date());
+            parentUserDao.updateById(user);
+        }
     }
 }

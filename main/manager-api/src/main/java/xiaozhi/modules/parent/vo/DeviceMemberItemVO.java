@@ -14,4 +14,6 @@ public class DeviceMemberItemVO {
     private Boolean isPrimary;
     private Long invitedBy;
     private Date joinedAt;
+    @Schema(description = "头像 URL（可访问地址，无则 null）")
+    private String avatarUrl;
 }

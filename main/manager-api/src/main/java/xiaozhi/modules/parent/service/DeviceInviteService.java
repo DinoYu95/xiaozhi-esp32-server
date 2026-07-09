@@ -26,6 +26,11 @@ public interface DeviceInviteService {
 
     List<DeviceMemberItemVO> listMembers(Long parentUserId, String deviceId);
 
+    /**
+     * 「我的」Tab 家庭共享入口：排除本人、跨设备按 parentId 去重，最多 3 个有头像的成员 URL。
+     */
+    List<String> listSharingMemberAvatars(Long parentUserId);
+
     void removeMember(Long ownerParentUserId, String deviceId, Long targetParentId);
 
     void leave(Long parentUserId, DeviceMemberLeaveDTO dto);

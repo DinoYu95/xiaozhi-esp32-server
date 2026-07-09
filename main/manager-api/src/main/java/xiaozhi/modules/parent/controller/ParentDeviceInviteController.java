@@ -90,6 +90,13 @@ public class ParentDeviceInviteController {
                 deviceInviteService.listMembers(parentUserId, decodeDeviceId(deviceId)));
     }
 
+    @GetMapping("/sharing/member-avatars")
+    @Operation(summary = "「我的」家庭共享入口成员头像（排除本人，最多 3 个）")
+    public Result<List<String>> listSharingMemberAvatars() {
+        Long parentUserId = requireParentUserId();
+        return new Result<List<String>>().ok(deviceInviteService.listSharingMemberAvatars(parentUserId));
+    }
+
     @DeleteMapping("/members")
     @Operation(summary = "移除成员（仅 Owner）")
     public Result<Void> removeMember(

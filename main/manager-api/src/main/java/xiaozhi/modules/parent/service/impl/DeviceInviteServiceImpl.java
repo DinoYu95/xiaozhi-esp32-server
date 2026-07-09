@@ -4,8 +4,13 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Calendar;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -241,6 +246,89 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
             result.add(item);
         }
         return result;
+    }
+
+    @Override
+    public List<String> listSharingMemberAvatars(Long parentUserId) {
+        List<ParentDeviceBindingEntity> myBindings = parentDeviceBindingDao.selectList(
+                new LambdaQueryWrapper<ParentDeviceBindingEntity>()
+                        .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId)
+                        .eq(ParentDeviceBindingEntity::getStatus, ParentDeviceBindingEntity.STATUS_ACTIVE)
+                        .orderByAsc(ParentDeviceBindingEntity::getBindTime));
+        if (myBindings.isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> processedDeviceKeys = new HashSet<>();
+        Map<Long, Date> coMemberJoinedAt = new LinkedHashMap<>();
+        for (ParentDeviceBindingEntity myBinding : myBindings) {
+            String canonicalDeviceId = resolveCanonicalDeviceId(myBinding.getDeviceId());
+            String deviceKey = ParentDeviceAccessHelper.normalizeDeviceId(canonicalDeviceId);
+            if (!processedDeviceKeys.add(deviceKey)) {
+                continue;
+            }
+            List<ParentDeviceBindingEntity> deviceBindings = ParentDeviceAccessHelper.findActiveBindingsForDevice(
+                    parentDeviceBindingDao, canonicalDeviceId);
+            Map<Long, ParentDeviceBindingEntity> uniqueOnDevice = new LinkedHashMap<>();
+            for (ParentDeviceBindingEntity binding : deviceBindings) {
+                Long otherParentId = binding.getParentUserId();
+                if (otherParentId == null || otherParentId.equals(parentUserId)) {
+                    continue;
+                }
+                uniqueOnDevice.merge(otherParentId, binding, (existing, incoming) -> {
+                    Date existingTime = existing.getBindTime();
+                    Date incomingTime = incoming.getBindTime();
+                    if (existingTime == null) {
+                        return incoming;
+                    }
+                    if (incomingTime == null) {
+                        return existing;
+                    }
+                    return existingTime.before(incomingTime) ? existing : incoming;
+                });
+            }
+            for (Map.Entry<Long, ParentDeviceBindingEntity> entry : uniqueOnDevice.entrySet()) {
+                Date joinedAt = entry.getValue().getBindTime();
+                coMemberJoinedAt.merge(entry.getKey(), joinedAt, (existing, incoming) -> {
+                    if (existing == null) {
+                        return incoming;
+                    }
+                    if (incoming == null) {
+                        return existing;
+                    }
+                    return existing.before(incoming) ? existing : incoming;
+                });
+            }
+        }
+
+        List<Long> sortedParentIds = coMemberJoinedAt.entrySet().stream()
+                .sorted(Comparator.comparing(Map.Entry::getValue, Comparator.nullsLast(Date::compareTo)))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+
+        List<String> avatars = new ArrayList<>();
+        for (Long otherParentId : sortedParentIds) {
+            if (avatars.size() >= 3) {
+                break;
+            }
+            ParentUserEntity user = parentUserDao.selectById(otherParentId);
+            String avatarUrl = ParentUserProfileHelper.resolveSharingAvatarUrl(user, parentStorageService);
+            if (StringUtils.isNotBlank(avatarUrl)) {
+                avatars.add(avatarUrl);
+            }
+        }
+        return avatars;
+    }
+
+    private String resolveCanonicalDeviceId(String deviceId) {
+        if (StringUtils.isBlank(deviceId)) {
+            return deviceId;
+        }
+        DeviceEntity device = deviceDao.selectById(deviceId);
+        if (device == null) {
+            device = deviceDao.selectByIdOrMacVariant(deviceId);
+        }
+        return device != null ? device.getId() : deviceId;
     }
 
     @Override

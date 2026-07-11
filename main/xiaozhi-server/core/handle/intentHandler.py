@@ -12,6 +12,25 @@ from core.providers.tts.dto.dto import TTSMessageDTO, SentenceType
 TAG = __name__
 
 
+def _is_zhiban_llm(conn) -> bool:
+    """Zhiban 模式下跳过 xiaozhi intent_llm，Server Plugin 由 zhiban-agent tool loop 执行。"""
+    from core.zhibanAgent.zhiban_connection_hooks import is_zhiban_connection
+
+    if is_zhiban_connection(conn):
+        return True
+    try:
+        config = getattr(conn, "config", None) or {}
+        selected = config.get("selected_module") or {}
+        llm_id = selected.get("LLM") or ""
+        if llm_id == "ZhibanAgent":
+            return True
+        llm_cfg = (config.get("LLM") or {}).get(llm_id) or {}
+        llm_type = llm_cfg.get("type") or llm_id
+        return "ZhibanAgent" in str(llm_type)
+    except Exception:
+        return False
+
+
 async def handle_user_intent(conn, text):
     # 预处理输入文本，处理可能的JSON格式
     try:
@@ -35,6 +54,13 @@ async def handle_user_intent(conn, text):
     if conn.intent_type == "function_call":
         # 使用支持function calling的聊天方法,不再进行意图分析
         return False
+
+    if _is_zhiban_llm(conn):
+        conn.logger.bind(tag=TAG).info(
+            "LLM 为 ZhibanAgent，跳过 xiaozhi 意图识别，Server Plugin 由 zhiban-agent 处理"
+        )
+        return False
+
     # 使用LLM进行意图分析
     intent_result = await analyze_intent_with_llm(conn, text)
     if not intent_result:

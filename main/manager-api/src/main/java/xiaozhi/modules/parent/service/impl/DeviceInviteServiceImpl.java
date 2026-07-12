@@ -229,7 +229,6 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
 
     @Override
     public List<DeviceMemberItemVO> listMembers(Long parentUserId, String deviceId) {
-        ParentDeviceAccessHelper.requireOwner(parentDeviceBindingDao, parentUserId, deviceId);
         String resolvedDeviceId = ParentDeviceAccessHelper.requireActiveBinding(
                 parentDeviceBindingDao, parentUserId, deviceId).getDeviceId();
         List<ParentDeviceBindingEntity> bindings =

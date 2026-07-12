@@ -90,7 +90,7 @@ public class ParentDeviceInviteController {
     }
 
     @GetMapping("/members")
-    @Operation(summary = "设备成员列表（仅 Owner）")
+    @Operation(summary = "设备成员列表（Owner / Member 只读；移除成员等写操作仍仅 Owner）")
     public Result<List<DeviceMemberItemVO>> listMembers(@RequestParam("deviceId") String deviceId) {
         Long parentUserId = requireParentUserId();
         return new Result<List<DeviceMemberItemVO>>().ok(

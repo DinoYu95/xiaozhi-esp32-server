@@ -21,6 +21,7 @@ import xiaozhi.modules.parent.entity.ParentFeedbackEntity;
 import xiaozhi.modules.parent.entity.ParentRiskPreferenceEntity;
 import xiaozhi.modules.parent.entity.ParentRiskWatchEntity;
 import xiaozhi.modules.parent.entity.ParentUserSkillEntity;
+import xiaozhi.modules.parent.util.ParentBetaAccessHelper;
 
 @Service
 @RequiredArgsConstructor
@@ -87,9 +88,13 @@ public class BetaMissionVerifyService {
     }
 
     private boolean hasUserSkill(Long parentUserId) {
+        var cohort = ParentBetaAccessHelper.resolveDeviceCohortParentIds(parentDeviceBindingDao, parentUserId);
+        if (cohort.isEmpty()) {
+            return false;
+        }
         return parentUserSkillDao.selectCount(
                 new LambdaQueryWrapper<ParentUserSkillEntity>()
-                        .eq(ParentUserSkillEntity::getParentUserId, parentUserId)) > 0;
+                        .in(ParentUserSkillEntity::getParentUserId, cohort)) > 0;
     }
 
     private boolean hasRiskPreference(Long parentUserId, BetaMissionUserStateEntity state) {

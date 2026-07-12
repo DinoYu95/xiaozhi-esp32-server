@@ -25,6 +25,7 @@ import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.exception.RenException;
 import xiaozhi.common.page.PageData;
 import xiaozhi.modules.parent.dao.ParentFeedbackDao;
+import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dao.ParentUserDao;
 import xiaozhi.modules.parent.dto.ParentFeedbackAdminNoteDTO;
 import xiaozhi.modules.parent.dto.ParentFeedbackAdminStatusDTO;
@@ -38,6 +39,7 @@ import xiaozhi.modules.parent.vo.ParentFeedbackAdminVO;
 import xiaozhi.modules.parent.vo.ParentFeedbackDetailVO;
 import xiaozhi.modules.parent.vo.ParentFeedbackEnabledVO;
 import xiaozhi.modules.parent.vo.ParentFeedbackVO;
+import xiaozhi.modules.parent.util.ParentBetaAccessHelper;
 import xiaozhi.modules.sys.service.SysParamsService;
 
 @Service
@@ -57,6 +59,7 @@ public class ParentFeedbackServiceImpl implements ParentFeedbackService {
 
     private final ParentFeedbackDao parentFeedbackDao;
     private final ParentUserDao parentUserDao;
+    private final ParentDeviceBindingDao parentDeviceBindingDao;
     private final SysParamsService sysParamsService;
     private final ObjectMapper objectMapper;
     private final ParentStorageService parentStorageService;
@@ -64,17 +67,20 @@ public class ParentFeedbackServiceImpl implements ParentFeedbackService {
     @Override
     public ParentFeedbackEnabledVO getEntryStatus(Long parentUserId) {
         boolean global = isGlobalBetaFeedbackEnabled();
-        boolean beta = isBetaTester(parentUserId);
+        boolean beta = hasBetaAccess(parentUserId);
+        boolean viaSharing = ParentBetaAccessHelper.hasBetaAccessViaSharing(
+                parentUserDao, parentDeviceBindingDao, parentUserId);
         ParentFeedbackEnabledVO vo = new ParentFeedbackEnabledVO();
         vo.setBetaFeedbackEnabled(global);
         vo.setBetaTester(beta);
+        vo.setBetaAccessViaSharing(viaSharing);
         vo.setShowEntry(global && beta);
         return vo;
     }
 
     @Override
     public void assertBetaFeedbackAllowed(Long parentUserId) {
-        if (!isGlobalBetaFeedbackEnabled() || !isBetaTester(parentUserId)) {
+        if (!isGlobalBetaFeedbackEnabled() || !hasBetaAccess(parentUserId)) {
             throw new RenException(ErrorCode.PARENT_BETA_FEEDBACK_DISABLED);
         }
     }
@@ -265,12 +271,8 @@ public class ParentFeedbackServiceImpl implements ParentFeedbackService {
         return "true".equalsIgnoreCase(StringUtils.trimToEmpty(v));
     }
 
-    private boolean isBetaTester(Long parentUserId) {
-        if (parentUserId == null) {
-            return false;
-        }
-        ParentUserEntity user = parentUserDao.selectById(parentUserId);
-        return user != null && user.getIsBetaTester() != null && user.getIsBetaTester() == 1;
+    private boolean hasBetaAccess(Long parentUserId) {
+        return ParentBetaAccessHelper.hasBetaAccess(parentUserDao, parentDeviceBindingDao, parentUserId);
     }
 
     private static String buildFeedbackNo(Long id) {

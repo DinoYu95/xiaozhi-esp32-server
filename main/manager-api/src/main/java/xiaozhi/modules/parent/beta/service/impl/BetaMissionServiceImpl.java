@@ -41,6 +41,7 @@ import xiaozhi.modules.parent.dao.ParentUserDao;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
+import xiaozhi.modules.parent.util.ParentBetaAccessHelper;
 import xiaozhi.modules.parent.util.ParentChildAccessHelper;
 import xiaozhi.modules.sys.service.SysParamsService;
 
@@ -61,10 +62,13 @@ public class BetaMissionServiceImpl implements BetaMissionService {
     @Override
     public BetaMissionEntryStatusVO getEntryStatus(Long parentUserId) {
         boolean global = isGlobalBetaMissionEnabled();
-        boolean beta = isBetaTester(parentUserId);
+        boolean beta = hasBetaAccess(parentUserId);
+        boolean viaSharing = ParentBetaAccessHelper.hasBetaAccessViaSharing(
+                parentUserDao, parentDeviceBindingDao, parentUserId);
         BetaMissionEntryStatusVO vo = new BetaMissionEntryStatusVO();
         vo.setBetaMissionEnabled(global);
         vo.setBetaTester(beta);
+        vo.setBetaAccessViaSharing(viaSharing);
         vo.setShowEntry(global && beta);
         vo.setRequiredTotal(BetaMissionStepRegistry.requiredCount());
         if (global && beta) {
@@ -81,7 +85,7 @@ public class BetaMissionServiceImpl implements BetaMissionService {
 
     @Override
     public void assertBetaMissionAllowed(Long parentUserId) {
-        if (!isGlobalBetaMissionEnabled() || !isBetaTester(parentUserId)) {
+        if (!isGlobalBetaMissionEnabled() || !hasBetaAccess(parentUserId)) {
             throw new RenException(ErrorCode.PARENT_BETA_MISSION_DISABLED);
         }
     }
@@ -377,6 +381,7 @@ public class BetaMissionServiceImpl implements BetaMissionService {
                 new LambdaQueryWrapper<BetaMissionUserStateEntity>()
                         .eq(BetaMissionUserStateEntity::getParentUserId, parentUserId));
         if (state != null) {
+            maybeInheritHouseholdContext(parentUserId, state);
             return state;
         }
         state = new BetaMissionUserStateEntity();
@@ -398,7 +403,27 @@ public class BetaMissionServiceImpl implements BetaMissionService {
                 throw ex;
             }
         }
+        maybeInheritHouseholdContext(parentUserId, state);
         return state;
+    }
+
+    private void maybeInheritHouseholdContext(Long parentUserId, BetaMissionUserStateEntity state) {
+        if (state == null || state.getContextChildId() != null) {
+            return;
+        }
+        Long inherited = ParentBetaAccessHelper.findHouseholdContextChildId(
+                parentDeviceBindingDao, betaMissionUserStateDao, parentUserDao, parentUserId);
+        if (inherited == null || !isContextChildValid(parentUserId, inherited)) {
+            return;
+        }
+        state.setContextChildId(inherited);
+        state.setUpdateTime(new Date());
+        betaMissionUserStateDao.updateById(state);
+        runAutoSync(parentUserId, state);
+    }
+
+    private boolean hasBetaAccess(Long parentUserId) {
+        return ParentBetaAccessHelper.hasBetaAccess(parentUserDao, parentDeviceBindingDao, parentUserId);
     }
 
     private void saveStepStates(BetaMissionUserStateEntity state, Map<String, String> states) {
@@ -527,14 +552,6 @@ public class BetaMissionServiceImpl implements BetaMissionService {
     private boolean isGlobalBetaMissionEnabled() {
         String v = sysParamsService.getValue(PARAM_BETA_MISSION_ENABLED, true);
         return "true".equalsIgnoreCase(StringUtils.trimToEmpty(v));
-    }
-
-    private boolean isBetaTester(Long parentUserId) {
-        if (parentUserId == null) {
-            return false;
-        }
-        ParentUserEntity user = parentUserDao.selectById(parentUserId);
-        return user != null && user.getIsBetaTester() != null && user.getIsBetaTester() == 1;
     }
 
     private int countBetaTesters() {

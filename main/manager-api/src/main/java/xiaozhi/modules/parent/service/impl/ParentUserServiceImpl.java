@@ -16,6 +16,7 @@ import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.exception.RenException;
 import xiaozhi.common.utils.AESUtils;
 import xiaozhi.modules.parent.dao.ParentUserDao;
+import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dto.ParentPhoneCodeDTO;
 import xiaozhi.modules.parent.dto.ParentPhoneLoginDTO;
 import xiaozhi.modules.parent.dto.ParentProfileDTO;
@@ -29,6 +30,7 @@ import xiaozhi.modules.parent.storage.ParentStorageCategory;
 import xiaozhi.modules.parent.storage.ParentStorageService;
 import xiaozhi.modules.parent.vo.ParentLoginVO;
 import xiaozhi.modules.parent.vo.ParentUserVO;
+import xiaozhi.modules.parent.util.ParentBetaAccessHelper;
 import xiaozhi.modules.security.service.CaptchaService;
 import xiaozhi.modules.sys.service.SysParamsService;
 
@@ -42,6 +44,7 @@ public class ParentUserServiceImpl implements ParentUserService {
     private static final String PARAM_WECHAT_SECRET = "parent.wechat.secret";
 
     private final ParentUserDao parentUserDao;
+    private final ParentDeviceBindingDao parentDeviceBindingDao;
     private final ParentAuthService parentAuthService;
     private final ParentUserTokenService parentUserTokenService;
     private final SysParamsService sysParamsService;
@@ -146,7 +149,8 @@ public class ParentUserServiceImpl implements ParentUserService {
         vo.setNickname(user.getNickname());
         vo.setAvatarUrl(parentStorageService.resolveAccessUrl(ParentStorageCategory.AVATAR, user.getAvatarUrl()));
         vo.setPhone(getMaskedPhoneForUser(parentUserId));
-        vo.setBetaTester(user.getIsBetaTester() != null && user.getIsBetaTester() == 1);
+        vo.setBetaTester(ParentBetaAccessHelper.hasBetaAccess(
+                parentUserDao, parentDeviceBindingDao, parentUserId));
         String enabled = sysParamsService.getValue("server.beta_feedback_enabled", true);
         vo.setBetaFeedbackEnabled("true".equalsIgnoreCase(StringUtils.trimToEmpty(enabled)));
         return vo;

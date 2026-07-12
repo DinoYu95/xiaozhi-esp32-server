@@ -144,6 +144,7 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             anyBinding.setBindTime(bindNow);
             anyBinding.setBindSource(StringUtils.isNotBlank(dto.getBindSource()) ? dto.getBindSource() : "code");
             anyBinding.setUpdatedAt(bindNow);
+            ParentDeviceAccessHelper.applyRiskNotifyDefaults(anyBinding);
             parentDeviceBindingDao.updateById(anyBinding);
         } else {
             ParentDeviceBindingEntity binding = new ParentDeviceBindingEntity();
@@ -156,6 +157,7 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             binding.setStatus(ParentDeviceBindingEntity.STATUS_ACTIVE);
             binding.setCreateTime(bindNow);
             binding.setUpdatedAt(bindNow);
+            ParentDeviceAccessHelper.applyRiskNotifyDefaults(binding);
             parentDeviceBindingDao.insert(binding);
         }
 
@@ -236,6 +238,8 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
             vo.setCanInvite(ParentDeviceBindingEntity.ROLE_OWNER.equalsIgnoreCase(role));
             vo.setMemberCount((int) ParentDeviceAccessHelper.countActiveMembers(
                     parentDeviceBindingDao, canonicalDeviceId));
+            vo.setReceiveRiskNotify(ParentDeviceAccessHelper.isReceiveRiskNotifyEnabled(b));
+            vo.setCanManageRiskNotify(ParentDeviceAccessHelper.isOwner(b));
             return vo;
         }).collect(Collectors.toList());
     }

@@ -32,4 +32,8 @@ public class ParentDeviceItemVO {
     private Boolean canInvite;
     @Schema(description = "该设备 active 成员总数")
     private Integer memberCount;
+    @Schema(description = "当前家长在该设备上是否接收儿童风险提示")
+    private Boolean receiveRiskNotify;
+    @Schema(description = "是否可管理风险通知订阅（Owner 为 true）")
+    private Boolean canManageRiskNotify;
 }

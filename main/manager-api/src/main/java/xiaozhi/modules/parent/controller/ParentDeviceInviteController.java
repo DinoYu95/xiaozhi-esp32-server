@@ -7,7 +7,9 @@ import java.util.List;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -25,12 +27,16 @@ import xiaozhi.modules.parent.dto.DeviceInviteAcceptDTO;
 import xiaozhi.modules.parent.dto.DeviceInviteCreateDTO;
 import xiaozhi.modules.parent.dto.DeviceInviteRevokeDTO;
 import xiaozhi.modules.parent.dto.DeviceMemberLeaveDTO;
+import xiaozhi.modules.parent.dto.DeviceRiskNotifySubscriberUpdateDTO;
 import xiaozhi.modules.parent.service.DeviceInviteService;
+import xiaozhi.modules.parent.service.DeviceRiskNotifyService;
 import xiaozhi.modules.parent.vo.DeviceInviteAcceptVO;
 import xiaozhi.modules.parent.vo.DeviceInviteCreateVO;
 import xiaozhi.modules.parent.vo.DeviceInviteItemVO;
 import xiaozhi.modules.parent.vo.DeviceInvitePreviewVO;
 import xiaozhi.modules.parent.vo.DeviceMemberItemVO;
+import xiaozhi.modules.parent.vo.DeviceRiskNotifyAccessVO;
+import xiaozhi.modules.parent.vo.DeviceRiskNotifySubscribersVO;
 
 @RestController
 @RequestMapping("/parent-api/device")
@@ -39,6 +45,7 @@ import xiaozhi.modules.parent.vo.DeviceMemberItemVO;
 public class ParentDeviceInviteController {
 
     private final DeviceInviteService deviceInviteService;
+    private final DeviceRiskNotifyService deviceRiskNotifyService;
 
     @PostMapping("/invite")
     @Operation(summary = "生成设备邀请（仅 Owner）")
@@ -115,6 +122,33 @@ public class ParentDeviceInviteController {
             dto.setDeviceId(decodeDeviceId(dto.getDeviceId()));
         }
         deviceInviteService.leave(parentUserId, dto);
+        return new Result<Void>().ok(null);
+    }
+
+    @GetMapping("/risk-notify-access")
+    @Operation(summary = "当前家长在某设备上是否接收/管理风险通知")
+    public Result<DeviceRiskNotifyAccessVO> riskNotifyAccess(@RequestParam("deviceId") String deviceId) {
+        Long parentUserId = requireParentUserId();
+        return new Result<DeviceRiskNotifyAccessVO>().ok(
+                deviceRiskNotifyService.getAccess(parentUserId, decodeDeviceId(deviceId)));
+    }
+
+    @GetMapping("/{deviceId}/risk-notify-subscribers")
+    @Operation(summary = "查询风险通知订阅配置（仅 Owner）")
+    public Result<DeviceRiskNotifySubscribersVO> getRiskNotifySubscribers(
+            @PathVariable("deviceId") String deviceId) {
+        Long parentUserId = requireParentUserId();
+        return new Result<DeviceRiskNotifySubscribersVO>().ok(
+                deviceRiskNotifyService.getSubscribers(parentUserId, decodeDeviceId(deviceId)));
+    }
+
+    @PutMapping("/{deviceId}/risk-notify-subscribers")
+    @Operation(summary = "更新 Member 风险通知订阅（仅 Owner）")
+    public Result<Void> updateRiskNotifySubscribers(
+            @PathVariable("deviceId") String deviceId,
+            @RequestBody @Valid DeviceRiskNotifySubscriberUpdateDTO dto) {
+        Long parentUserId = requireParentUserId();
+        deviceRiskNotifyService.updateSubscribers(parentUserId, decodeDeviceId(deviceId), dto);
         return new Result<Void>().ok(null);
     }
 

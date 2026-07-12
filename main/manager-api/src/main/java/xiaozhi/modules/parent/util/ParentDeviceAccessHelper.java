@@ -202,4 +202,31 @@ public final class ParentDeviceAccessHelper {
                                 .or().apply("REPLACE(LOWER(device_id), ':', '_') = {0}", normalized))
                         .last("LIMIT 1"));
     }
+
+    /** 新建/恢复绑定时写入风险通知默认值：Owner=1，Member=0 */
+    public static void applyRiskNotifyDefaults(ParentDeviceBindingEntity binding) {
+        if (binding == null) {
+            return;
+        }
+        if (isOwner(binding)) {
+            binding.setReceiveRiskNotify(1);
+        } else if (binding.getReceiveRiskNotify() == null) {
+            binding.setReceiveRiskNotify(0);
+        }
+    }
+
+    /** outbox 投递：Owner 始终接收；Member 看 receive_risk_notify */
+    public static boolean shouldReceiveRiskNotify(ParentDeviceBindingEntity binding) {
+        if (binding == null) {
+            return false;
+        }
+        if (isOwner(binding)) {
+            return true;
+        }
+        return binding.getReceiveRiskNotify() != null && binding.getReceiveRiskNotify() == 1;
+    }
+
+    public static boolean isReceiveRiskNotifyEnabled(ParentDeviceBindingEntity binding) {
+        return shouldReceiveRiskNotify(binding);
+    }
 }

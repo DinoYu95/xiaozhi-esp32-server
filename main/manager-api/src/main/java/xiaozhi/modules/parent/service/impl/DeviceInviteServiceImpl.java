@@ -183,6 +183,7 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
             anyBinding.setBindTime(now);
             anyBinding.setBindSource("invite");
             anyBinding.setUpdatedAt(now);
+            ParentDeviceAccessHelper.applyRiskNotifyDefaults(anyBinding);
             parentDeviceBindingDao.updateById(anyBinding);
         } else {
             ParentDeviceBindingEntity binding = new ParentDeviceBindingEntity();
@@ -196,6 +197,7 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
             binding.setStatus(ParentDeviceBindingEntity.STATUS_ACTIVE);
             binding.setCreateTime(now);
             binding.setUpdatedAt(now);
+            ParentDeviceAccessHelper.applyRiskNotifyDefaults(binding);
             parentDeviceBindingDao.insert(binding);
         }
 
@@ -243,6 +245,9 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
             item.setIsPrimary(b.getIsPrimary() != null && b.getIsPrimary() == 1);
             item.setInvitedBy(b.getInvitedBy());
             item.setJoinedAt(b.getBindTime());
+            boolean owner = ParentDeviceAccessHelper.isOwner(b);
+            item.setReceiveRiskNotify(ParentDeviceAccessHelper.isReceiveRiskNotifyEnabled(b));
+            item.setCanEdit(!owner);
             result.add(item);
         }
         return result;

@@ -271,5 +271,6 @@ public interface ErrorCode {
     int PARENT_INVITE_EXHAUSTED = 20023; // 邀请已用完
     int PARENT_DEVICE_MEMBER_READONLY = 20024; // Member 只读无写权限
     int PARENT_DEVICE_CANNOT_REMOVE = 20025; // 无法移除该成员
+    int PARENT_RISK_NOTIFY_MEMBER_INVALID = 20026; // 非该设备 Member，无法配置风险通知
 
 }

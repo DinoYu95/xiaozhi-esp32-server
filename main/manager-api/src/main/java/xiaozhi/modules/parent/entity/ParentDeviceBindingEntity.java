@@ -27,6 +27,8 @@ public class ParentDeviceBindingEntity {
     private Integer isPrimary;
     private Long invitedBy;
     private String status;
+    /** 是否接收该设备儿童风险提示；Owner 恒为 1，Member 由 Owner 配置 */
+    private Integer receiveRiskNotify;
     private Date createTime;
     private Date updatedAt;
 }

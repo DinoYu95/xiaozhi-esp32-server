@@ -189,6 +189,7 @@ public class AgentParentBindingServiceImpl implements AgentParentBindingService 
             existingActive.setBindTime(now);
             existingActive.setBindSource(replaceExisting ? "admin_replace" : "admin");
             existingActive.setUpdatedAt(now);
+            ParentDeviceAccessHelper.applyRiskNotifyDefaults(existingActive);
             parentDeviceBindingDao.updateById(existingActive);
             return;
         }
@@ -203,6 +204,7 @@ public class AgentParentBindingServiceImpl implements AgentParentBindingService 
             anyBinding.setBindTime(now);
             anyBinding.setBindSource(replaceExisting ? "admin_replace" : "admin");
             anyBinding.setUpdatedAt(now);
+            ParentDeviceAccessHelper.applyRiskNotifyDefaults(anyBinding);
             parentDeviceBindingDao.updateById(anyBinding);
         } else {
             ParentDeviceBindingEntity binding = new ParentDeviceBindingEntity();
@@ -215,6 +217,7 @@ public class AgentParentBindingServiceImpl implements AgentParentBindingService 
             binding.setStatus(ParentDeviceBindingEntity.STATUS_ACTIVE);
             binding.setCreateTime(now);
             binding.setUpdatedAt(now);
+            ParentDeviceAccessHelper.applyRiskNotifyDefaults(binding);
             parentDeviceBindingDao.insert(binding);
         }
     }

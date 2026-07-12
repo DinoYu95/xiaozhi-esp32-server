@@ -788,6 +788,9 @@ public class ChildRiskServiceImpl implements ChildRiskService {
                 };
         Date now = new Date();
         for (ParentDeviceBindingEntity b : binds) {
+            if (!ParentDeviceAccessHelper.shouldReceiveRiskNotify(b)) {
+                continue;
+            }
             ParentRiskNotificationEntity n = new ParentRiskNotificationEntity();
             n.setParentUserId(b.getParentUserId());
             n.setChildId(ev.getChildId());

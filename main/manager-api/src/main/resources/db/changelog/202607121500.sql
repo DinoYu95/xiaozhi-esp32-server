@@ -75,7 +75,7 @@ WHERE NOT EXISTS (SELECT 1 FROM `sys_params` s WHERE s.param_code = 'parent.cons
 INSERT INTO `sys_params` (id, param_code, param_value, value_type, param_type, remark)
 SELECT (SELECT IFNULL(MAX(m.id), 0) + 1 FROM `sys_params` m),
        'consent_blocked.prompt',
-       '请先由主账号家长在小程序中阅读并同意儿童隐私保护说明，同意后设备即可正常使用。',
+       '请先由主账号家长在小程序中阅读并同意儿童隐私保护说明。同意后设备才能继续使用，本次对话即将结束。',
        'string',
        1,
        '主账号未同意协议时设备 TTS 播报文案（xiaozhi-server 通过 getConfig 拉取）。'

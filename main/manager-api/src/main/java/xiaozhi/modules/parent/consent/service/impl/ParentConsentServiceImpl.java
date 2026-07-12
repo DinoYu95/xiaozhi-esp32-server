@@ -54,7 +54,7 @@ public class ParentConsentServiceImpl implements ParentConsentService {
     private static final String MODE_OWNER_ONLY = "owner_only";
     private static final String MODE_ALL_MEMBERS = "all_members";
     private static final String DEFAULT_DEVICE_BLOCKED_PROMPT =
-            "请先由主账号家长在小程序中阅读并同意儿童隐私保护说明，同意后设备即可正常使用。";
+            "请先由主账号家长在小程序中阅读并同意儿童隐私保护说明。同意后设备才能继续使用，本次对话即将结束。";
 
     private final ParentConsentDocumentDao parentConsentDocumentDao;
     private final ParentConsentRecordDao parentConsentRecordDao;

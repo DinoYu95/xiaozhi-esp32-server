@@ -307,14 +307,35 @@ class ConnectionHandler:
                     f"保存记忆后关闭连接失败: {close_error}"
                 )
 
-    async def _discard_message_with_consent_prompt(self):
-        """丢弃消息并检查是否需要播放隐私协议提示"""
+    async def _discard_message_with_consent_prompt(self, message=None):
+        """用户尝试对话时：播报协议提示并结束会话（短 debounce）。"""
+        if not self._is_consent_user_interaction(message):
+            return
         current_time = time.time()
-        if current_time - self.last_consent_prompt_time >= self.bind_prompt_interval:
-            self.last_consent_prompt_time = current_time
-            from core.handle.receiveAudioHandle import check_consent_device
+        debounce = 8
+        if current_time - self.last_consent_prompt_time < debounce:
+            return
+        self.last_consent_prompt_time = current_time
+        from core.handle.receiveAudioHandle import check_consent_device
 
-            asyncio.create_task(check_consent_device(self))
+        asyncio.create_task(check_consent_device(self, exit_session=True))
+
+    @staticmethod
+    def _is_consent_user_interaction(message) -> bool:
+        """唤醒/说话/聆听态切换视为「尝试使用」，需拦截。"""
+        if isinstance(message, bytes):
+            return True
+        if not isinstance(message, str):
+            return False
+        try:
+            msg_json = json.loads(message)
+        except json.JSONDecodeError:
+            return False
+        if not isinstance(msg_json, dict):
+            return False
+        if msg_json.get("type") == "listen":
+            return msg_json.get("state") in ("detect", "start", "stop")
+        return msg_json.get("type") in ("abort",)
 
     async def _discard_message_with_bind_prompt(self):
         """丢弃消息并检查是否需要播放绑定提示"""
@@ -360,7 +381,7 @@ class ConnectionHandler:
             return
 
         if self.need_consent:
-            await self._discard_message_with_consent_prompt()
+            await self._discard_message_with_consent_prompt(message)
             return
 
         # 不需要绑定，继续处理消息
@@ -621,7 +642,7 @@ class ConnectionHandler:
             await asyncio.sleep(0.1)
         from core.handle.receiveAudioHandle import check_consent_device
 
-        await check_consent_device(self)
+        await check_consent_device(self, exit_session=False)
 
     def _initialize_asr(self):
         """初始化ASR"""

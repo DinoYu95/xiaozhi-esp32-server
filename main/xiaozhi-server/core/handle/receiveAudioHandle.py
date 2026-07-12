@@ -24,7 +24,8 @@ TAG = __name__
 
 DEFAULT_DEVICE_BIND_PROMPT = "请打开智伴未来微信小程序扫码绑定设备"
 DEFAULT_CONSENT_BLOCKED_PROMPT = (
-    "请先由主账号家长在小程序中阅读并同意儿童隐私保护说明，同意后设备即可正常使用。"
+    "请先由主账号家长在小程序中阅读并同意儿童隐私保护说明。"
+    "同意后设备才能继续使用，本次对话即将结束。"
 )
 
 
@@ -285,11 +286,39 @@ async def check_bind_device(conn):
         conn.tts.tts_audio_queue.put((SentenceType.LAST, opus_packets, text))
 
 
-async def check_consent_device(conn):
+async def check_consent_device(conn, *, exit_session: bool = True):
+    """主账号未同意隐私协议：播报提示；exit_session=True 时播完后结束会话。"""
     if conn.tts is None:
         conn.logger.bind(tag=TAG).warning("协议提示跳过: TTS 尚未初始化")
         return
-    text = get_consent_blocked_prompt(conn)
-    conn.logger.bind(tag=TAG).info(f"播放隐私协议未同意提示: {text}")
-    await send_stt_message(conn, text)
-    speak_one_sentence(conn, text)
+    if getattr(conn, "_consent_prompt_playing", False):
+        return
+    conn._consent_prompt_playing = True
+    try:
+        text = get_consent_blocked_prompt(conn)
+        conn.logger.bind(tag=TAG).info(f"播放隐私协议未同意提示: {text}")
+        conn.client_abort = True
+        await send_stt_message(conn, text)
+        speak_one_sentence(conn, text)
+        if exit_session:
+            conn.close_after_chat = True
+            asyncio.create_task(_exit_session_after_consent_prompt(conn))
+    finally:
+        conn._consent_prompt_playing = False
+
+
+async def _exit_session_after_consent_prompt(conn):
+    """等待 TTS 播完后断开，避免儿童继续对话。"""
+    await asyncio.sleep(8)
+    if not getattr(conn, "need_consent", False):
+        return
+    conn.logger.bind(tag=TAG).info("主账号未同意隐私协议，结束设备会话")
+    try:
+        from core.handle.sendAudioHandle import send_tts_message
+
+        await send_tts_message(conn, "stop", None)
+    except Exception:
+        pass
+    conn.client_is_speaking = False
+    if conn.websocket and not conn.stop_event.is_set():
+        await conn.close(conn.websocket)

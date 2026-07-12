@@ -142,16 +142,12 @@ public class ConfigServiceImpl implements ConfigService {
             throw new RenException(ErrorCode.OTA_DEVICE_NOT_FOUND);
         }
 
-        if (!parentConsentService.isDeviceConsentOk(device.getId(), device.getMacAddress())) {
-            throw new RenException(ErrorCode.OTA_DEVICE_NEED_CONSENT, parentConsentService.getDeviceBlockedPrompt());
-        }
-
         // 获取智能体信息
         AgentEntity agent = agentService.getAgentById(device.getAgentId());
         if (agent == null) {
             throw new RenException(ErrorCode.AGENT_NOT_FOUND);
         }
-        // 获取音色信息
+        // 获取音色信息（未同意协议时仍需 TTS 播报提示）
         String voice = null;
         String referenceAudio = null;
         String referenceText = null;
@@ -166,6 +162,31 @@ public class ConfigServiceImpl implements ConfigService {
                 voice = voice_print.getVoiceId();
             }
         }
+
+        if (!parentConsentService.isDeviceConsentOk(device.getId(), device.getMacAddress())) {
+            Map<String, Object> result = new HashMap<>();
+            buildModuleConfig(
+                    null,
+                    null,
+                    null,
+                    voice,
+                    referenceAudio,
+                    referenceText,
+                    null,
+                    null,
+                    null,
+                    null,
+                    agent.getTtsModelId(),
+                    null,
+                    null,
+                    null,
+                    result,
+                    true);
+            result.put("need_consent", true);
+            result.put("consent_blocked_prompt", parentConsentService.getDeviceBlockedPrompt());
+            return result;
+        }
+
         // 构建返回数据
         Map<String, Object> result = new HashMap<>();
         // 获取单台设备每天最多输出字数

@@ -608,11 +608,14 @@ class ConnectionHandler:
             self.logger.bind(tag=TAG).info("TTS上报线程已启动")
 
     def _initialize_tts(self):
-        """初始化TTS（未绑定设备也需真实 TTS 播绑定提示）"""
-        tts = initialize_tts(self.config)
-        if tts is None:
-            tts = DefaultTTS(self.config, delete_audio_file=True)
-        return tts
+        """初始化 TTS（未绑定/未同意协议时也需播提示音）"""
+        try:
+            tts = initialize_tts(self.config)
+            if tts is not None:
+                return tts
+        except Exception as e:
+            self.logger.bind(tag=TAG).warning(f"初始化 TTS 失败，使用 DefaultTTS: {e}")
+        return DefaultTTS(self.config, delete_audio_file=True)
 
     async def _activate_need_bind(self):
         """未绑定：打开 TTS 通道后播绑定提示"""
@@ -704,8 +707,16 @@ class ConnectionHandler:
             self.logger.bind(tag=TAG).info(
                 f"{time.time() - begin_time} 秒，异步获取差异化配置成功: {json.dumps(filter_sensitive_info(private_config), ensure_ascii=False)}"
             )
-            self.need_bind = False
-            self.need_consent = False
+            if private_config.get("need_consent"):
+                self.need_consent = True
+                self.need_bind = False
+                prompt = private_config.get("consent_blocked_prompt") or ""
+                self.consent_prompt = prompt
+                if prompt:
+                    self.config.setdefault("consent_blocked", {})["prompt"] = prompt
+            else:
+                self.need_consent = False
+                self.need_bind = False
             self.bind_completed_event.set()
         except DeviceNotFoundException as e:
             self.need_bind = True

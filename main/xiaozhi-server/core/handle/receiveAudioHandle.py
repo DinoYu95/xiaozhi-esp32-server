@@ -288,6 +288,9 @@ async def check_bind_device(conn):
 
 async def check_consent_device(conn, *, exit_session: bool = True):
     """主账号未同意隐私协议：播报提示；exit_session=True 时播完后结束会话。"""
+    if hasattr(conn, "try_refresh_consent_from_api"):
+        if await conn.try_refresh_consent_from_api():
+            return
     if conn.tts is None:
         conn.logger.bind(tag=TAG).warning("协议提示跳过: TTS 尚未初始化")
         return

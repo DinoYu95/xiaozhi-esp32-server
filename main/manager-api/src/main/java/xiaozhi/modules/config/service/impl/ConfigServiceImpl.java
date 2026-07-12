@@ -163,7 +163,11 @@ public class ConfigServiceImpl implements ConfigService {
             }
         }
 
-        if (!parentConsentService.isDeviceConsentOk(device.getId(), device.getMacAddress())) {
+        if (!parentConsentService.isDeviceConsentOk(macAddress, device.getMacAddress())) {
+            log.info(
+                    "设备隐私协议未通过，返回最小配置: requestMac={}, deviceMac={}",
+                    macAddress,
+                    device.getMacAddress());
             Map<String, Object> result = new HashMap<>();
             buildModuleConfig(
                     null,

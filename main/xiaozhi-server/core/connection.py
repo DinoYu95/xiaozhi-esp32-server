@@ -307,9 +307,48 @@ class ConnectionHandler:
                     f"保存记忆后关闭连接失败: {close_error}"
                 )
 
+    async def try_refresh_consent_from_api(self) -> bool:
+        """重新拉取配置。若家长已同意则清除 need_consent 并断开连接以便下次唤醒加载完整配置。
+
+        Returns:
+            True: 不再拦截（已同意或无需协议）
+            False: 仍需拦截
+        """
+        if not getattr(self, "need_consent", False):
+            return True
+        if not self.read_config_from_api:
+            return True
+        try:
+            from config.config_loader import get_private_config_from_api
+
+            private_config = await get_private_config_from_api(
+                self.config,
+                self.headers.get("device-id"),
+                self.headers.get("client-id", self.headers.get("device-id")),
+            )
+        except Exception as e:
+            self.logger.bind(tag=TAG).warning(f"刷新隐私协议状态失败: {e}")
+            return False
+        if private_config.get("need_consent"):
+            prompt = private_config.get("consent_blocked_prompt") or ""
+            if prompt:
+                self.consent_prompt = prompt
+                self.config.setdefault("consent_blocked", {})["prompt"] = prompt
+            return False
+        self.logger.bind(tag=TAG).info(
+            "检测到家长已同意隐私协议，断开连接以重新加载完整配置"
+        )
+        self.need_consent = False
+        self.consent_prompt = ""
+        if self.websocket and not self.stop_event.is_set():
+            await self.close(self.websocket)
+        return True
+
     async def _discard_message_with_consent_prompt(self, message=None):
-        """用户尝试对话时：播报协议提示并结束会话（短 debounce）。"""
+        """用户尝试对话时：先刷新协议状态；仍拦截则播报并结束会话。"""
         if not self._is_consent_user_interaction(message):
+            return
+        if await self.try_refresh_consent_from_api():
             return
         current_time = time.time()
         debounce = 8

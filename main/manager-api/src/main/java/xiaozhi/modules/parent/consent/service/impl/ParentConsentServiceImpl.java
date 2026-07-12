@@ -179,10 +179,20 @@ public class ParentConsentServiceImpl implements ParentConsentService {
             return true;
         }
         ParentDeviceBindingEntity owner = findPrimaryOwnerForBindings(bindings, deviceId, macAddress);
-        if (owner == null || owner.getParentUserId() == null) {
-            return false;
+        if (owner != null && owner.getParentUserId() != null
+                && findAgreedRecord(owner.getParentUserId(), currentVersion) != null) {
+            return true;
         }
-        return findAgreedRecord(owner.getParentUserId(), currentVersion) != null;
+        // 兼容 is_primary 未正确设置：任一 Owner 角色已同意即视为通过
+        for (ParentDeviceBindingEntity binding : bindings) {
+            if (!ParentDeviceAccessHelper.isOwner(binding) || binding.getParentUserId() == null) {
+                continue;
+            }
+            if (findAgreedRecord(binding.getParentUserId(), currentVersion) != null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

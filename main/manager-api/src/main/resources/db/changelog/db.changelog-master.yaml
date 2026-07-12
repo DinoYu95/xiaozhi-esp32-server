@@ -729,7 +729,15 @@ databaseChangeLog:
   - changeSet:
       id: 202607121500
       author: xiaozhi
+      validCheckSum: 8:4db3158279d31c405a4f1696db651901
       changes:
         - sqlFile:
             encoding: utf8
             path: classpath:db/changelog/202607121500.sql
+  - changeSet:
+      id: 202607121600
+      author: xiaozhi
+      changes:
+        - sqlFile:
+            encoding: utf8
+            path: classpath:db/changelog/202607121600.sql

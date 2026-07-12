@@ -55,6 +55,7 @@ public interface ErrorCode {
 
     int OTA_DEVICE_NOT_FOUND = 10041;
     int OTA_DEVICE_NEED_BIND = 10042;
+    int OTA_DEVICE_NEED_CONSENT = 10043;
 
     // 新增错误编码
     int DELETE_DATA_FAILED = 10043;
@@ -272,5 +273,7 @@ public interface ErrorCode {
     int PARENT_DEVICE_MEMBER_READONLY = 20024; // Member 只读无写权限
     int PARENT_DEVICE_CANNOT_REMOVE = 20025; // 无法移除该成员
     int PARENT_RISK_NOTIFY_MEMBER_INVALID = 20026; // 非该设备 Member，无法配置风险通知
+    int PARENT_CONSENT_REQUIRED = 20027; // 须先同意儿童隐私协议
+    int PARENT_CONSENT_VERSION_INVALID = 20028; // 协议版本无效或已过期，请刷新后重试
 
 }

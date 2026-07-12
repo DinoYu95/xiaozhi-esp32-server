@@ -101,7 +101,7 @@ def opus_to_wav(conn, opus_data):
 
 
 def enqueue_tts_report(conn, text, opus_data):
-    if not conn.read_config_from_api or conn.need_bind or not conn.report_tts_enable:
+    if not conn.read_config_from_api or conn.need_bind or getattr(conn, "need_consent", False) or not conn.report_tts_enable:
         conn.logger.bind(tag=TAG).info(
             "TTS上报跳过: device_id=%s read_config_from_api=%s need_bind=%s report_tts_enable=%s",
             conn.device_id, conn.read_config_from_api, conn.need_bind, conn.report_tts_enable,
@@ -137,7 +137,7 @@ def enqueue_tts_report(conn, text, opus_data):
 
 
 def enqueue_asr_report(conn, text, opus_data):
-    if not conn.read_config_from_api or conn.need_bind or not conn.report_asr_enable:
+    if not conn.read_config_from_api or conn.need_bind or getattr(conn, "need_consent", False) or not conn.report_asr_enable:
         conn.logger.bind(tag=TAG).info(
             "ASR上报跳过: device_id=%s read_config_from_api=%s need_bind=%s report_asr_enable=%s",
             conn.device_id, conn.read_config_from_api, conn.need_bind, conn.report_asr_enable,

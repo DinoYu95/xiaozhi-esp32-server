@@ -143,6 +143,17 @@ const routes = [
     }
   },
   {
+    path: '/parent-consent-management',
+    name: 'ParentConsentManagement',
+    component: function () {
+      return import('../views/ParentConsentManagement.vue')
+    },
+    meta: {
+      requiresAuth: true,
+      title: '儿童隐私协议'
+    }
+  },
+  {
     path: '/knowledge-file-upload',
     name: 'KnowledgeFileUpload',
     component: function () {

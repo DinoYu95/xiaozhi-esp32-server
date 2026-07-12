@@ -17,6 +17,12 @@ class DeviceBindException(Exception):
         super().__init__(f"设备绑定异常，绑定码: {bind_code}")
 
 
+class DeviceConsentException(Exception):
+    def __init__(self, prompt):
+        self.prompt = prompt or ""
+        super().__init__(f"设备协议未同意: {prompt}")
+
+
 class ManageApiClient:
     _instance = None
     _async_clients = {}  # 为每个事件循环存储独立的客户端
@@ -101,6 +107,8 @@ class ManageApiClient:
                 raise DeviceNotFoundException(result.get("msg"))
             elif result.get("code") == 10042:
                 raise DeviceBindException(result.get("msg"))
+            elif result.get("code") == 10043:
+                raise DeviceConsentException(result.get("msg"))
             elif result.get("code") != 0:
                 raise Exception(f"API返回错误: {result.get('msg', '未知错误')}")
 

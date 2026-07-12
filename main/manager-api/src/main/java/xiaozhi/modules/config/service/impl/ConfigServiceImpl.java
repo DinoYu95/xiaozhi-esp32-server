@@ -42,6 +42,7 @@ import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.device.service.DeviceService;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
+import xiaozhi.modules.parent.consent.service.ParentConsentService;
 import xiaozhi.modules.parent.service.ParentDeviceRuleService;
 import xiaozhi.modules.model.entity.ModelConfigEntity;
 import xiaozhi.modules.model.service.ModelConfigService;
@@ -72,6 +73,7 @@ public class ConfigServiceImpl implements ConfigService {
     private final AgentSkillService agentSkillService;
     private final DeviceChildDao deviceChildDao;
     private final ParentDeviceRuleService parentDeviceRuleService;
+    private final ParentConsentService parentConsentService;
 
     @Override
     public Object getConfig(Boolean isCache) {
@@ -138,6 +140,10 @@ public class ConfigServiceImpl implements ConfigService {
                 throw new RenException(ErrorCode.OTA_DEVICE_NEED_BIND, cachedCode);
             }
             throw new RenException(ErrorCode.OTA_DEVICE_NOT_FOUND);
+        }
+
+        if (!parentConsentService.isDeviceConsentOk(device.getId(), device.getMacAddress())) {
+            throw new RenException(ErrorCode.OTA_DEVICE_NEED_CONSENT, parentConsentService.getDeviceBlockedPrompt());
         }
 
         // 获取智能体信息

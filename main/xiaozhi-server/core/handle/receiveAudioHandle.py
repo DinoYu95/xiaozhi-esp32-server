@@ -23,6 +23,9 @@ from core.utils.owner_dialogue_guard import (
 TAG = __name__
 
 DEFAULT_DEVICE_BIND_PROMPT = "请打开智伴未来微信小程序扫码绑定设备"
+DEFAULT_CONSENT_BLOCKED_PROMPT = (
+    "请先由主账号家长在小程序中阅读并同意儿童隐私保护说明，同意后设备即可正常使用。"
+)
 
 
 def speak_one_sentence(conn, text: str):
@@ -55,6 +58,18 @@ def get_device_bind_prompt(conn) -> str:
         if prompt is not None and str(prompt).strip():
             return str(prompt).strip()
     return DEFAULT_DEVICE_BIND_PROMPT
+
+
+def get_consent_blocked_prompt(conn) -> str:
+    """主账号未同意协议 TTS 文案"""
+    if getattr(conn, "consent_prompt", None) and str(conn.consent_prompt).strip():
+        return str(conn.consent_prompt).strip()
+    consent_cfg = conn.config.get("consent_blocked") or {}
+    if isinstance(consent_cfg, dict):
+        prompt = consent_cfg.get("prompt")
+        if prompt is not None and str(prompt).strip():
+            return str(prompt).strip()
+    return DEFAULT_CONSENT_BLOCKED_PROMPT
 
 
 def _set_current_round_speaker_type(conn):
@@ -172,6 +187,10 @@ async def startToChat(conn, text):
         await check_bind_device(conn)
         return
 
+    if getattr(conn, "need_consent", False):
+        await check_consent_device(conn)
+        return
+
     # 如果当日的输出字数大于限定的字数
     if conn.max_output_size > 0:
         if check_device_output_limit(
@@ -264,3 +283,13 @@ async def check_bind_device(conn):
         music_path = "config/assets/bind_not_found.wav"
         opus_packets = await audio_to_data(music_path)
         conn.tts.tts_audio_queue.put((SentenceType.LAST, opus_packets, text))
+
+
+async def check_consent_device(conn):
+    if conn.tts is None:
+        conn.logger.bind(tag=TAG).warning("协议提示跳过: TTS 尚未初始化")
+        return
+    text = get_consent_blocked_prompt(conn)
+    conn.logger.bind(tag=TAG).info(f"播放隐私协议未同意提示: {text}")
+    await send_stt_message(conn, text)
+    speak_one_sentence(conn, text)

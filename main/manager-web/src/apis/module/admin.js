@@ -546,4 +546,80 @@ export default {
             }).send()
     },
 
+    getParentConsentOverview(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-consent/overview`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getParentConsentOverview(callback)
+                })
+            }).send()
+    },
+    saveParentConsentSettings(data, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-consent/settings`)
+            .method('PUT')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.saveParentConsentSettings(data, callback)
+                })
+            }).send()
+    },
+    publishParentConsent(data, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-consent/publish`)
+            .method('POST')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.publishParentConsent(data, callback)
+                })
+            }).send()
+    },
+    getParentConsentHistory(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-consent/history`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getParentConsentHistory(callback)
+                })
+            }).send()
+    },
+    getParentConsentPendingUsers(params, callback) {
+        const q = new URLSearchParams()
+        if (params.page) q.set('page', params.page)
+        if (params.limit) q.set('limit', params.limit)
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-consent/pending-users?${q.toString()}`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getParentConsentPendingUsers(params, callback)
+                })
+            }).send()
+    },
+
 }

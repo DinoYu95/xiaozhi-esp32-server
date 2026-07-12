@@ -41,6 +41,7 @@ from config.logger import setup_logging, build_module_string, create_connection_
 from config.manage_api_client import (
     DeviceNotFoundException,
     DeviceBindException,
+    DeviceConsentException,
     fetch_active_shadow_missions_sync,
 )
 from core.zhibanAgent.zhiban_agent_client import ZHIBAN_META_KEY
@@ -77,10 +78,13 @@ class ConnectionHandler:
         self.server = server  # 保存server实例的引用
 
         self.need_bind = False  # 是否需要绑定设备
+        self.need_consent = False  # 是否需要主账号同意隐私协议
+        self.consent_prompt = ""
         self.bind_completed_event = asyncio.Event()
         self.bind_code = None  # 绑定设备的验证码
         self.last_bind_prompt_time = 0  # 上次播放绑定提示的时间戳(秒)
-        self.bind_prompt_interval = 60  # 绑定提示播放间隔(秒)
+        self.last_consent_prompt_time = 0
+        self.bind_prompt_interval = 60  # 绑定/协议提示播放间隔(秒)
 
         self.read_config_from_api = self.config.get("read_config_from_api", False)
 
@@ -303,6 +307,15 @@ class ConnectionHandler:
                     f"保存记忆后关闭连接失败: {close_error}"
                 )
 
+    async def _discard_message_with_consent_prompt(self):
+        """丢弃消息并检查是否需要播放隐私协议提示"""
+        current_time = time.time()
+        if current_time - self.last_consent_prompt_time >= self.bind_prompt_interval:
+            self.last_consent_prompt_time = current_time
+            from core.handle.receiveAudioHandle import check_consent_device
+
+            asyncio.create_task(check_consent_device(self))
+
     async def _discard_message_with_bind_prompt(self):
         """丢弃消息并检查是否需要播放绑定提示"""
         current_time = time.time()
@@ -344,6 +357,10 @@ class ConnectionHandler:
         if self.need_bind:
             # 需要绑定，丢弃消息
             await self._discard_message_with_bind_prompt()
+            return
+
+        if self.need_consent:
+            await self._discard_message_with_consent_prompt()
             return
 
         # 不需要绑定，继续处理消息
@@ -491,6 +508,12 @@ class ConnectionHandler:
                     self._activate_need_bind(), self.loop
                 )
                 return
+            if self.need_consent:
+                self.bind_completed_event.set()
+                asyncio.run_coroutine_threadsafe(
+                    self._activate_need_consent(), self.loop
+                )
+                return
             # 打开语音合成通道
             asyncio.run_coroutine_threadsafe(
                 self.tts.open_audio_channels(self), self.loop
@@ -552,7 +575,7 @@ class ConnectionHandler:
 
     def _init_report_threads(self):
         """初始化ASR和TTS上报线程"""
-        if not self.read_config_from_api or self.need_bind:
+        if not self.read_config_from_api or self.need_bind or self.need_consent:
             return
         if self.chat_history_conf == 0:
             return
@@ -584,6 +607,21 @@ class ConnectionHandler:
         from core.handle.receiveAudioHandle import check_bind_device
 
         await check_bind_device(self)
+
+    async def _activate_need_consent(self):
+        """主账号未同意协议：打开 TTS 通道后播提示"""
+        await self.tts.open_audio_channels(self)
+        start_time = time.time()
+        while time.time() - start_time < 3:
+            if (
+                hasattr(self.tts, "tts_priority_thread")
+                and self.tts.tts_priority_thread.is_alive()
+            ):
+                break
+            await asyncio.sleep(0.1)
+        from core.handle.receiveAudioHandle import check_consent_device
+
+        await check_consent_device(self)
 
     def _initialize_asr(self):
         """初始化ASR"""
@@ -646,16 +684,26 @@ class ConnectionHandler:
                 f"{time.time() - begin_time} 秒，异步获取差异化配置成功: {json.dumps(filter_sensitive_info(private_config), ensure_ascii=False)}"
             )
             self.need_bind = False
+            self.need_consent = False
             self.bind_completed_event.set()
         except DeviceNotFoundException as e:
             self.need_bind = True
+            self.need_consent = False
             private_config = {}
         except DeviceBindException as e:
             self.need_bind = True
+            self.need_consent = False
             self.bind_code = e.bind_code
+            private_config = {}
+        except DeviceConsentException as e:
+            self.need_bind = False
+            self.need_consent = True
+            self.consent_prompt = e.prompt or ""
+            self.bind_completed_event.set()
             private_config = {}
         except Exception as e:
             self.need_bind = True
+            self.need_consent = False
             self.logger.bind(tag=TAG).error(f"异步获取差异化配置失败: {e}")
             private_config = {}
 
@@ -1633,7 +1681,7 @@ class ConnectionHandler:
         try:
             while not self.stop_event.is_set():
                 last_activity_time = self.last_activity_time
-                if self.need_bind:
+                if self.need_bind or self.need_consent:
                     last_activity_time = self.first_activity_time
 
                 # 检查是否超时（只有在时间戳已初始化的情况下）

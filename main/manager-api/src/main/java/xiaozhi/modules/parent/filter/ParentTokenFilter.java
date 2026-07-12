@@ -71,7 +71,8 @@ public class ParentTokenFilter extends jakarta.servlet.http.HttpFilter {
                 || uri.contains("/parent-api/auth/avatar/file/")
                 || uri.contains("/parent-api/feedback/image/file/")
                 || uri.contains("/parent-api/device/child/voiceprint/play/")
-                || uri.contains("/parent-api/chat/play/");
+                || uri.contains("/parent-api/chat/play/")
+                || uri.contains("/parent-api/consent/document");
     }
 
     private static String getRequestToken(HttpServletRequest request) {

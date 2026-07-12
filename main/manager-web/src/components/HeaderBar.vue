@@ -154,6 +154,9 @@
             <el-dropdown-item @click.native="goBetaMissionManagement">
               {{ $t("header.betaMissionManagement") }}
             </el-dropdown-item>
+            <el-dropdown-item @click.native="goParentConsentManagement">
+              {{ $t("header.parentConsentManagement") }}
+            </el-dropdown-item>
           </el-dropdown-menu>
         </el-dropdown>
       </div>
@@ -410,6 +413,9 @@ export default {
     },
     goBetaMissionManagement() {
       this.$router.push("/beta-mission-management");
+    },
+    goParentConsentManagement() {
+      this.$router.push("/parent-consent-management");
     },
     // 加载功能状态
     async loadFeatureStatus() {

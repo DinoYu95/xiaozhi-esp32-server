@@ -79,6 +79,7 @@ class XiaozhiToolClient:
         session_id: Optional[str] = None,
         timeout: int = 30,
     ) -> Dict[str, Any]:
+        """调用设备 MCP。拍照返图请传 arguments={"mode": "image_only"}，响应 action=IMAGE 时读 image_base64。"""
         return self._post(
             "/internal/zhiban/device/mcp/call",
             {

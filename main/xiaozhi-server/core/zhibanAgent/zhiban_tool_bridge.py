@@ -14,6 +14,11 @@ from plugins_func.register import Action, ActionResponse
 from core.providers.tools.device_mcp.mcp_executor import DeviceMCPExecutor
 from core.providers.tools.device_mcp.mcp_handler import send_mcp_tool_call
 from core.providers.tools.server_plugins.plugin_executor import ServerPluginExecutor
+from core.zhibanAgent.device_mcp_payload import (
+    device_mcp_call_ok,
+    flatten_device_mcp_response,
+    image_payload_log_summary,
+)
 
 TAG = __name__
 logger = setup_logging()
@@ -137,7 +142,13 @@ async def execute_device_mcp(
             timeout=timeout,
         )
         payload = action_response_to_dict(response)
-        payload["ok"] = payload.get("action") != "ERROR"
+        payload = flatten_device_mcp_response(payload)
+        payload["ok"] = device_mcp_call_ok(payload)
+        if payload.get("action") == "IMAGE":
+            logger.bind(tag=TAG).info(
+                "execute_device_mcp 返图: %s",
+                image_payload_log_summary(payload),
+            )
         return payload
     except asyncio.TimeoutError:
         return {

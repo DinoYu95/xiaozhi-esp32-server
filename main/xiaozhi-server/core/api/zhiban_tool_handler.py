@@ -13,6 +13,7 @@ from aiohttp import web
 from config.logger import setup_logging
 from core.zhibanAgent.connection_registry import resolve
 from core.zhibanAgent import zhiban_tool_bridge
+from core.zhibanAgent.device_mcp_payload import image_payload_log_summary
 
 TAG = __name__
 logger = setup_logging()
@@ -152,6 +153,12 @@ class ZhibanToolHandler:
                 ),
                 timeout=loop_timeout,
             )
+            if result.get("action") == "IMAGE":
+                self.logger.bind(tag=TAG).info(
+                    "device_mcp/call 返图: tool=%s %s",
+                    tool_name,
+                    image_payload_log_summary(result),
+                )
             return web.json_response(
                 {
                     "device_id": getattr(conn, "device_id", None),

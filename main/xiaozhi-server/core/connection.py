@@ -185,6 +185,13 @@ class ConnectionHandler:
         self.load_function_plugin = False
         self.intent_type = "nointent"
 
+        # 作业辅导模式（会话级，WebSocket 连接期间有效）
+        self.active_mode = None
+        self.homework_mode_entered_at = None
+        self.homework_mode_just_expired = False
+        self.homework_photo_pending = False
+        self.homework_photo_capture_now = False
+
         self.timeout_seconds = (
             int(self.config.get("close_connection_no_voice_time", 120)) + 60
         )  # 在原来第一道关闭的基础上加60秒，进行二道关闭
@@ -1123,8 +1130,10 @@ class ConnectionHandler:
             from core.zhibanAgent.zhiban_connection_hooks import (
                 attach_tool_context_to_environment,
             )
+            from core.zhibanAgent.homework_tutor_mode import attach_to_environment_context
 
             attach_tool_context_to_environment(self, ctx)
+            attach_to_environment_context(self, ctx)
         return ctx
 
     def _maybe_attach_shadow_mission(self, ctx: Dict[str, Any]) -> None:

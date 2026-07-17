@@ -44,15 +44,24 @@ class DeviceMCPExecutor(ToolExecutor):
                 except Exception as e:
                     pass
 
-            # 视觉大模型不经过二次LLM处理
+            # 设备 MCP 结构化结果：RESPONSE 直接播报；IMAGE 返图给上游；ERROR 等透传
             if (
                 resultJson is not None
                 and isinstance(resultJson, dict)
                 and "action" in resultJson
             ):
+                action_name = resultJson["action"]
+                try:
+                    action = Action[action_name]
+                except KeyError:
+                    return ActionResponse(
+                        action=Action.REQLLM,
+                        result=json.dumps(resultJson, ensure_ascii=False),
+                    )
                 return ActionResponse(
-                    action=Action[resultJson["action"]],
+                    action=action,
                     response=resultJson.get("response", ""),
+                    result=resultJson.get("result"),
                 )
 
             return ActionResponse(action=Action.REQLLM, result=str(result))

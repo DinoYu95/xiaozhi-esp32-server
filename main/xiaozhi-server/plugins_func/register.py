@@ -28,6 +28,7 @@ class Action(Enum):
     NONE = (1, "啥也不干")
     RESPONSE = (2, "直接回复")
     REQLLM = (3, "调用函数后再请求llm生成回复")
+    IMAGE = (4, "返回图片供上游多模态模型处理")
 
     def __init__(self, code, message):
         self.code = code

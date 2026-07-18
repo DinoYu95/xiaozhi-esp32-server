@@ -5,6 +5,8 @@ from __future__ import annotations
 import threading
 from typing import Any, Optional
 
+from core.zhibanAgent.device_id_normalize import device_id_lookup_keys
+
 _lock = threading.RLock()
 _by_device: dict[str, Any] = {}
 _by_session: dict[str, Any] = {}
@@ -15,8 +17,8 @@ def register(conn) -> None:
     device_id = getattr(conn, "device_id", None) or ""
     session_id = getattr(conn, "session_id", None) or ""
     with _lock:
-        if device_id:
-            _by_device[device_id] = conn
+        for key in device_id_lookup_keys(device_id):
+            _by_device[key] = conn
         if session_id:
             _by_session[session_id] = conn
 
@@ -26,8 +28,9 @@ def unregister(conn) -> None:
     device_id = getattr(conn, "device_id", None) or ""
     session_id = getattr(conn, "session_id", None) or ""
     with _lock:
-        if device_id and _by_device.get(device_id) is conn:
-            _by_device.pop(device_id, None)
+        for key in device_id_lookup_keys(device_id):
+            if _by_device.get(key) is conn:
+                _by_device.pop(key, None)
         if session_id and _by_session.get(session_id) is conn:
             _by_session.pop(session_id, None)
 
@@ -41,5 +44,8 @@ def resolve(
             if conn is not None:
                 return conn
         if device_id:
-            return _by_device.get(device_id)
+            for key in device_id_lookup_keys(device_id):
+                conn = _by_device.get(key)
+                if conn is not None:
+                    return conn
     return None

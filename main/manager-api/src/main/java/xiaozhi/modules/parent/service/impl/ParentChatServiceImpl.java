@@ -245,6 +245,7 @@ public class ParentChatServiceImpl implements ParentChatService {
             Map<String, Object> childContext = new HashMap<>();
             childContext.put("parent_user_id", parentUserId);  // 供 zhiban 调用 add_parent_rule 时使用
             childContext.put("parent_nickname", parentNickname);
+            childContext.put("device_id", deviceId);
             // 孩子姓名：优先 device_child.name，为空时回退到 ai_agent_voice_print.source_name
             if (child != null) {
                 childContext.put("child_id", child.getId());
@@ -265,10 +266,11 @@ public class ParentChatServiceImpl implements ParentChatService {
                 childContext.put("child_school", child.getSchool());
             }
             // 供 zhiban-agent 按需拉取：传 agent_id、mac_address，由 zhiban-agent 在家长问「你们最近聊了什么」时主动调用 manager-api /config/parent/child-chat-history
-            if (StringUtils.isNotBlank(device.getMacAddress())) {
-                childContext.put("mac_address", device.getMacAddress().trim());
-                childContext.put("agent_id", agentId);
-            }
+            String macForEnv = StringUtils.isNotBlank(device.getMacAddress())
+                    ? device.getMacAddress().trim()
+                    : deviceId;
+            childContext.put("mac_address", macForEnv);
+            childContext.put("agent_id", agentId);
             // 家长规则：供智伴在家长聊天时也能遵守（如家长问「你跟孩子说话时要遵守哪些规则」）
             List<String> parentRulesList = parentDeviceRuleService.getRuleTextsByDeviceId(device.getId());
             if (parentRulesList == null || parentRulesList.isEmpty()) {
@@ -324,7 +326,7 @@ public class ParentChatServiceImpl implements ParentChatService {
                     new ParameterizedTypeReference<Map<String, Object>>() {});
             if (resp.getBody() != null && resp.getBody().containsKey("reply")) {
                 Object r = resp.getBody().get("reply");
-                String replyStr = r != null ? r.toString() : null;
+                String replyStr = extractReplyText(r);
                 if (StringUtils.isBlank(replyStr)) {
                     log.warn("xiaozhi-server 返回 reply 为空, 完整响应: {}", resp.getBody());
                 }
@@ -407,6 +409,21 @@ public class ParentChatServiceImpl implements ParentChatService {
         if (binding == null) {
             throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
         }
+    }
+
+    /** 兼容 xiaozhi 误把 (reply, meta) 序列化成 JSON 数组的情况。 */
+    private String extractReplyText(Object replyObj) {
+        if (replyObj == null) {
+            return null;
+        }
+        if (replyObj instanceof String s) {
+            return s;
+        }
+        if (replyObj instanceof List<?> list && !list.isEmpty()) {
+            Object first = list.get(0);
+            return first != null ? String.valueOf(first) : null;
+        }
+        return String.valueOf(replyObj);
     }
 
     private ParentChatMessageVO toVO(ParentChatHistoryEntity e) {

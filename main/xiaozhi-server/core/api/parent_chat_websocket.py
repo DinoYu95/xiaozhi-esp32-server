@@ -79,18 +79,21 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
                             else "家长",
                             "is_owner_child": False,
                         }
+                        dev_id = (mem_ctx.get("deviceId") or "").strip()
+                        mac_addr = (mem_ctx.get("macAddress") or "").strip()
+                        if not dev_id and mac_addr:
+                            dev_id = mac_addr
                         environment_context = {
                             "agent_id": mem_ctx.get("agentId") or "",
-                            "mac_address": (mem_ctx.get("macAddress") or "").strip(),
+                            "mac_address": mac_addr or dev_id,
+                            "device_id": dev_id,
                             "device_child_profile_for_parent": (
                                 mem_ctx.get("deviceChildProfile") or ""
                             ).strip(),
                             "parent_user_id": parent_user_id,
                             "child_id": child_id,
                         }
-                        dev_id = (mem_ctx.get("deviceId") or "").strip()
                         if dev_id:
-                            environment_context["device_id"] = dev_id
                             environment_context["shadow_missions"] = (
                                 fetch_active_shadow_missions_sync(dev_id, child_id)
                             )

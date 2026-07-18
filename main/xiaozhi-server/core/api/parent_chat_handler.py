@@ -98,6 +98,8 @@ class ParentChatHandler:
             "若家长要设置**长期规则**（如不要讲鬼故事），请调用 add_parent_rule；"
             "若要安排**接下来一段时间引导孩子做事**（限时影子任务），请调用 upsert_shadow_mission（title、instructions、duration_minutes）；"
             "取消影子任务请调用 cancel_shadow_mission。"
+            "若家长要看孩子现在在做什么、远程看画面，**必须**调用 fetch_child_device_snapshot；"
+            "device_id 已在 environment_context，不要编造「设备未绑定」。"
             "若任务描述模糊（如「提醒完成学习任务」），先与家长多轮追问：具体科目或作业项、校内作业还是家庭任务、截止时间或完成标准，再 upsert；信息不足时不要调用 upsert_shadow_mission。"
             "parent_user_id、child_id、mac_address 已在 environment_context 中，勿编造。\n\n家长问："
         )
@@ -147,6 +149,12 @@ class ParentChatHandler:
         speaker_context = body.get("speaker_context")
         skill_ids = body.get("skill_ids")
         environment_context = body.get("environment_context")
+        if isinstance(environment_context, dict):
+            env = dict(environment_context)
+            root_device_id = (body.get("device_id") or body.get("deviceId") or "").strip()
+            if root_device_id and not env.get("device_id"):
+                env["device_id"] = root_device_id
+            environment_context = env
 
         # 诊断日志：确认收到的 parent_nickname 和 environment_context
         env = environment_context if isinstance(environment_context, dict) else {}
@@ -187,7 +195,7 @@ class ParentChatHandler:
         )
 
         client = ZhibanAgentClient(self._zhiban_config)
-        reply = client.chat(
+        reply, meta = client.chat(
             text=text_to_send,
             session_id=session_id,
             user_id=user_id or None,
@@ -197,6 +205,8 @@ class ParentChatHandler:
             messages=zhiban_messages,
         )
         result = {"reply": reply or ""}
+        if meta:
+            result["meta"] = meta
         return web.json_response(result)
 
     async def handle_post_stream(self, request: web.Request) -> web.StreamResponse:
@@ -216,6 +226,12 @@ class ParentChatHandler:
         speaker_context = body.get("speaker_context") if isinstance(body.get("speaker_context"), dict) else None
         skill_ids = body.get("skill_ids") if isinstance(body.get("skill_ids"), list) else None
         environment_context = body.get("environment_context") if isinstance(body.get("environment_context"), dict) else None
+        if isinstance(environment_context, dict):
+            env = dict(environment_context)
+            root_device_id = (body.get("device_id") or body.get("deviceId") or "").strip()
+            if root_device_id and not env.get("device_id"):
+                env["device_id"] = root_device_id
+            environment_context = env
 
         if not text:
             return web.json_response({"detail": "text 不能为空"}, status=400)
@@ -242,7 +258,7 @@ class ParentChatHandler:
 
         def run_stream():
             try:
-                for chunk in client.stream(
+                for frame in client.stream(
                     text=text_to_send,
                     session_id=session_id,
                     user_id=user_id or None,
@@ -251,7 +267,7 @@ class ParentChatHandler:
                     environment_context=environment_context,
                     messages=zhiban_messages,
                 ):
-                    asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
+                    asyncio.run_coroutine_threadsafe(queue.put(frame), loop)
                 asyncio.run_coroutine_threadsafe(queue.put(None), loop)
             except Exception as e:
                 self.logger.bind(tag=TAG).exception("流式调用异常: %s", e)
@@ -261,9 +277,14 @@ class ParentChatHandler:
 
         try:
             while True:
-                chunk = await asyncio.wait_for(queue.get(), timeout=60.0)
-                if chunk is None:
+                item = await asyncio.wait_for(queue.get(), timeout=60.0)
+                if item is None:
                     break
+                if getattr(item, "kind", None) == "meta":
+                    continue
+                chunk = item.payload if hasattr(item, "payload") else item
+                if not chunk or not isinstance(chunk, str):
+                    continue
                 line = "data: " + chunk.replace("\r", "").replace("\n", " ") + "\n\n"
                 await response.write(line.encode("utf-8"))
         except asyncio.TimeoutError:

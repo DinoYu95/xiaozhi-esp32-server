@@ -214,24 +214,25 @@ async def startToChat(conn, text):
 
     from core.zhibanAgent.zhiban_connection_hooks import is_zhiban_connection
     from core.zhibanAgent.homework_tutor_mode import (
+        PHOTO_CAPTURE_START_REPLY,
         try_resolve_homework_photo_phrase,
         try_resolve_mode_phrase,
     )
 
+    will_photo_capture = False
     if is_zhiban_connection(conn):
         handled, mode_reply = try_resolve_mode_phrase(conn, actual_text)
         if handled and mode_reply:
             await send_stt_message(conn, actual_text)
             speak_one_sentence(conn, mode_reply)
             return
-        handled, photo_reply = try_resolve_homework_photo_phrase(conn, actual_text)
-        if handled and photo_reply:
-            await send_stt_message(conn, actual_text)
-            speak_one_sentence(conn, photo_reply)
-            return
+        try_resolve_homework_photo_phrase(conn, actual_text)
+        will_photo_capture = bool(getattr(conn, "homework_photo_capture_now", False))
 
     # 意图未被处理，继续常规聊天流程，使用实际文本内容
     await send_stt_message(conn, actual_text)
+    if is_zhiban_connection(conn) and will_photo_capture:
+        speak_one_sentence(conn, PHOTO_CAPTURE_START_REPLY)
     conn.executor.submit(conn.chat, actual_text)
 
 

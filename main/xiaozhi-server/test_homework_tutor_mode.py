@@ -39,6 +39,7 @@ match_enter = _mod.match_enter
 match_exit = _mod.match_exit
 try_resolve_mode_phrase = _mod.try_resolve_mode_phrase
 try_resolve_homework_photo_phrase = _mod.try_resolve_homework_photo_phrase
+apply_zhiban_homework_meta = _mod.apply_zhiban_homework_meta
 enter_mode = _mod.enter_mode
 exit_mode = _mod.exit_mode
 MODE_ID = _mod.MODE_ID
@@ -98,23 +99,25 @@ class HomeworkTutorModeTest(unittest.TestCase):
         self.assertIn("退出辅导模式", reply)
         self.assertIsNone(conn.active_mode)
 
-    def test_photo_guide_then_ready(self):
+    def test_zhiban_meta_sets_photo_pending(self):
         conn = self._conn(active_mode=MODE_ID)
-        handled, reply = try_resolve_homework_photo_phrase(conn, "帮我看看这道题")
-        self.assertTrue(handled)
-        self.assertIn("摄像头", reply)
+        apply_zhiban_homework_meta(conn, {"homework_action": "photo_guide"})
         self.assertTrue(conn.homework_photo_pending)
 
+    def test_photo_ready_after_pending(self):
+        conn = self._conn(active_mode=MODE_ID, homework_photo_pending=True)
         handled, reply = try_resolve_homework_photo_phrase(conn, "好了")
         self.assertFalse(handled)
         self.assertIsNone(reply)
         self.assertFalse(conn.homework_photo_pending)
         self.assertTrue(conn.homework_photo_capture_now)
 
-    def test_photo_guide_not_on_immediate_photo(self):
+    def test_question_does_not_local_guide(self):
+        """摆拍引导改由 zhiban knowledge_qa 意图下发，xiaozhi 不再靠关键词拦截。"""
         conn = self._conn(active_mode=MODE_ID)
-        handled, _ = try_resolve_homework_photo_phrase(conn, "拍一张照片")
+        handled, reply = try_resolve_homework_photo_phrase(conn, "这道题怎么做")
         self.assertFalse(handled)
+        self.assertIsNone(reply)
         self.assertFalse(conn.homework_photo_pending)
 
 

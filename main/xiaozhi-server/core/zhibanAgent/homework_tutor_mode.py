@@ -35,7 +35,7 @@ EXIT_PHRASES = (
 
 ENTER_REPLY = (
     "好的，我们进入作业辅导模式啦！有不会的题目可以问我，"
-    "需要看题目的时候跟我说「帮我看看这道题」。"
+    "也可以说「这道题怎么做」，我会先帮你看题目。"
     "辅导结束后记得说「退出作业辅导」哦。"
 )
 
@@ -47,15 +47,8 @@ NOT_IN_MODE_REPLY = "我们现在不在作业辅导模式哦，想说「进入�
 
 TIMEOUT_REPLY = "作业辅导已经有一段时间啦，我先退出辅导模式。下次需要再说「进入作业辅导」哦。"
 
-PHOTO_GUIDE_REPLY = (
-    "好，把不会的那道题举到摄像头前面，对准中间，离镜头大概一个手掌远。"
-    "准备好了吗？说「好了」或者「帮我拍照」，我就开始看啦。"
-)
-
-PHOTO_GUIDE_AGAIN_REPLY = (
-    "先把题目对准摄像头中间哦，离镜头大概一个手掌远。"
-    "准备好了就说「好了」或「帮我拍照」。"
-)
+# 孩子说「好了」后、设备拍照前短暂反馈
+PHOTO_CAPTURE_START_REPLY = "好，我来拍啦，稍等一下哦。"
 
 # 孩子说这些才真的拍照
 PHOTO_READY_PHRASES = (
@@ -68,19 +61,6 @@ PHOTO_READY_PHRASES = (
     "开始拍",
     "开始拍照",
     "拍一下",
-)
-
-# 表达「需要看题」但尚未摆好 —— 应先引导，不立刻拍
-HOMEWORK_NEED_PHOTO_PHRASES = (
-    "看看这道题",
-    "看这题",
-    "看题目",
-    "看看题目",
-    "这道题不会",
-    "这题不会",
-    "不会做",
-    "看不懂题",
-    "帮我看看题",
 )
 
 # 明确要拍照，作业模式下也直接拍（跳过引导）
@@ -140,21 +120,6 @@ def looks_like_immediate_photo(text: str) -> bool:
     if not norm:
         return False
     return any(p in norm for p in IMMEDIATE_PHOTO_PHRASES)
-
-
-def looks_like_homework_need_photo(text: str) -> bool:
-    """需要看题审题，应先引导孩子摆好题目。"""
-    norm = normalize_utterance(text)
-    if not norm:
-        return False
-    if match_photo_ready(norm) or looks_like_immediate_photo(norm):
-        return False
-    if any(p in norm for p in HOMEWORK_NEED_PHOTO_PHRASES):
-        return True
-    if "这道题" in norm or "这题" in norm:
-        if any(w in norm for w in ("不会", "看不懂", "帮我", "看看", "讲解", "辅导")):
-            return True
-    return False
 
 
 def clear_photo_flow(conn) -> None:
@@ -266,27 +231,25 @@ def try_resolve_mode_phrase(conn, text: str) -> Tuple[bool, Optional[str]]:
     return False, None
 
 
+def apply_zhiban_homework_meta(conn, meta: dict) -> None:
+    """应用 zhiban 下发的作业辅导会话控制（如 photo_guide 进入摆拍等待）。"""
+    if not isinstance(meta, dict):
+        return
+    action = (meta.get("homework_action") or "").strip()
+    if action == "photo_guide" and is_active(conn):
+        conn.homework_photo_pending = True
+
+
 def try_resolve_homework_photo_phrase(conn, text: str) -> Tuple[bool, Optional[str]]:
     """
-    作业辅导模式下「看题」两步流程：
-    1. 孩子说「帮我看看这道题」→ 引导摆题，进入 photo_pending
-    2. 孩子说「好了」「帮我拍照」→ 本轮回合 photo_capture_now，交给 zhiban 拍照
+    作业辅导模式下仅处理「好了」→ photo_capture_now。
+    摆拍引导由 zhiban router 识别 knowledge_qa 后下发。
     """
     if not is_active(conn):
         return False, None
 
-    if is_photo_pending(conn):
-        if match_photo_ready(text):
-            conn.homework_photo_pending = False
-            conn.homework_photo_capture_now = True
-            return False, None
-        if looks_like_homework_need_photo(text):
-            return True, PHOTO_GUIDE_AGAIN_REPLY
+    if is_photo_pending(conn) and match_photo_ready(text):
         conn.homework_photo_pending = False
-        return False, None
-
-    if looks_like_homework_need_photo(text):
-        conn.homework_photo_pending = True
-        return True, PHOTO_GUIDE_REPLY
+        conn.homework_photo_capture_now = True
 
     return False, None

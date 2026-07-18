@@ -1197,6 +1197,9 @@ class ConnectionHandler:
             self.logger.bind(tag=TAG).info(
                 "zhiban 退出意图：跳过 xiaozhi 侧 memory 持久化"
             )
+        from core.zhibanAgent.homework_tutor_mode import apply_zhiban_homework_meta
+
+        apply_zhiban_homework_meta(self, meta)
 
     def chat(self, query, depth=0):
         entered_inflight = False

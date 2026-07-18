@@ -16,6 +16,7 @@ from config.manage_api_client import (
     fetch_parent_zhiban_memory_context,
 )
 from core.api.parent_chat_handler import ParentChatHandler
+from core.api.parent_snapshot_finalize import finalize_parent_snapshot_on_ws
 from core.zhibanAgent import ZhibanAgentClient
 
 TAG = __name__
@@ -30,7 +31,6 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
-    # 从 query 获取 token
     parsed = parse_qs(request.rel_url.query_string)
     tokens = parsed.get("token", [])
     token = tokens[0] if tokens else ""
@@ -90,6 +90,7 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
                         }
                         dev_id = (mem_ctx.get("deviceId") or "").strip()
                         if dev_id:
+                            environment_context["device_id"] = dev_id
                             environment_context["shadow_missions"] = (
                                 fetch_active_shadow_missions_sync(dev_id, child_id)
                             )
@@ -123,7 +124,7 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
 
                     def _run_stream():
                         try:
-                            for chunk in client.stream(
+                            for frame in client.stream(
                                 text=text_for_zhiban,
                                 session_id=session_id,
                                 user_id=user_id,
@@ -133,7 +134,9 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
                                 else None,
                                 persist_memory=False,
                             ):
-                                asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
+                                asyncio.run_coroutine_threadsafe(
+                                    queue.put(frame), loop
+                                )
                             asyncio.run_coroutine_threadsafe(queue.put(None), loop)
                         except Exception as e:
                             logger.bind(tag=TAG).exception("流式调用异常: %s", e)
@@ -141,24 +144,65 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
 
                     loop.run_in_executor(None, _run_stream)
                     full_reply = []
+                    pending_snapshot = None
                     while True:
-                        chunk = await asyncio.wait_for(queue.get(), timeout=90.0)
-                        if chunk is None:
+                        item = await asyncio.wait_for(queue.get(), timeout=120.0)
+                        if item is None:
                             break
+                        if getattr(item, "kind", None) == "meta" and isinstance(
+                            item.payload, dict
+                        ):
+                            ps = item.payload.get("parent_snapshot")
+                            if isinstance(ps, dict) and ps.get("requestId"):
+                                pending_snapshot = ps
+                                await ws.send_str(
+                                    json.dumps(
+                                        {
+                                            "type": "snapshot_pending",
+                                            "requestId": ps.get("requestId"),
+                                            "message": ps.get("message")
+                                            or "正在获取孩子现在的画面…",
+                                        },
+                                        ensure_ascii=False,
+                                    )
+                                )
+                            continue
+                        chunk = item.payload if hasattr(item, "payload") else item
+                        if not chunk:
+                            continue
                         full_reply.append(chunk)
                         await ws.send_str(
-                            json.dumps({"type": "chunk", "chunk": chunk}, ensure_ascii=False)
+                            json.dumps(
+                                {"type": "chunk", "chunk": chunk}, ensure_ascii=False
+                            )
                         )
                     reply_text = "".join(full_reply) if full_reply else "抱歉，小助手暂时无法回复。"
                     await ws.send_str(json.dumps({"type": "done"}))
-                    await save_parent_chat(
+                    save_result = await save_parent_chat(
                         parent_user_id,
                         child_id,
                         content,
                         reply_text,
                         audio_id,
+                        snapshot_request_id=(
+                            pending_snapshot.get("requestId")
+                            if pending_snapshot
+                            else None
+                        ),
                     )
-                except json.JSONDecodeError as e:
+                    if pending_snapshot and save_result:
+                        assistant_id = save_result.get("assistantMessageId")
+                        if assistant_id:
+                            asyncio.create_task(
+                                finalize_parent_snapshot_on_ws(
+                                    ws,
+                                    parent_user_id,
+                                    child_id,
+                                    pending_snapshot.get("requestId"),
+                                    int(assistant_id),
+                                )
+                            )
+                except json.JSONDecodeError:
                     await ws.send_str(json.dumps({"type": "error", "message": "无效 JSON"}))
                 except Exception as e:
                     logger.bind(tag=TAG).exception("处理消息失败: %s", e)

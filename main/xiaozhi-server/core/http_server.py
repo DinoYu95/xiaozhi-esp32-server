@@ -5,6 +5,7 @@ from core.api.ota_handler import OTAHandler
 from core.api.vision_handler import VisionHandler
 from core.api.parent_chat_handler import ParentChatHandler
 from core.api.parent_chat_websocket import handle_parent_chat_ws
+from core.api.parent_snapshot_handler import ParentSnapshotHandler
 from core.api.zhiban_tool_handler import ZhibanToolHandler
 
 TAG = __name__
@@ -18,6 +19,7 @@ class SimpleHttpServer:
         self.vision_handler = VisionHandler(config)
         self.parent_chat_handler = ParentChatHandler(config)
         self.zhiban_tool_handler = ZhibanToolHandler(config)
+        self.parent_snapshot_handler = ParentSnapshotHandler(config)
 
     def _get_websocket_url(self, local_ip: str, port: int) -> str:
         """获取websocket地址
@@ -97,6 +99,14 @@ class SimpleHttpServer:
                         ),
                         # 家长端聊天 WebSocket（小程序直连，与设备 8000 端口完全独立）
                         web.get("/parent/chat/ws", handle_parent_chat_ws),
+                        web.post(
+                            "/internal/parent/device-snapshot",
+                            self.parent_snapshot_handler.handle_capture,
+                        ),
+                        web.options(
+                            "/internal/parent/device-snapshot",
+                            self.parent_snapshot_handler.handle_options,
+                        ),
                         # Zhiban 工具桥接（zhiban-agent 内部调用，Bearer 鉴权）
                         web.get(
                             "/internal/zhiban/device/mcp/status",

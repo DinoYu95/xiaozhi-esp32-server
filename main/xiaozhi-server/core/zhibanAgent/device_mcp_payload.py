@@ -34,6 +34,21 @@ def device_mcp_call_ok(payload: Dict[str, Any]) -> bool:
     return action not in ("ERROR", "NOTFOUND", None)
 
 
+def extract_image_payload(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """从 MCP 响应提取 image_base64 及元数据。"""
+    flat = flatten_device_mcp_response(payload if isinstance(payload, dict) else {})
+    result = flat.get("result") if isinstance(flat.get("result"), dict) else {}
+    b64 = flat.get("image_base64") or result.get("image_base64")
+    if not b64:
+        return None
+    return {
+        "image_base64": b64,
+        "mime_type": flat.get("mime_type") or result.get("mime_type") or "image/jpeg",
+        "width": flat.get("width") or result.get("width"),
+        "height": flat.get("height") or result.get("height"),
+    }
+
+
 def image_payload_log_summary(payload: Dict[str, Any]) -> Dict[str, Optional[Any]]:
     """供日志使用，不含 base64 正文。"""
     result = payload.get("result") if isinstance(payload.get("result"), dict) else {}

@@ -68,7 +68,9 @@ def _parse_meta_payload(raw: str) -> Optional[Dict[str, Any]]:
     except json.JSONDecodeError:
         return None
     if isinstance(obj, dict) and (
-        obj.get("session_action") or obj.get("intent") == "exit"
+        obj.get("session_action")
+        or obj.get("intent") == "exit"
+        or obj.get("parent_snapshot")
     ):
         return obj
     return None

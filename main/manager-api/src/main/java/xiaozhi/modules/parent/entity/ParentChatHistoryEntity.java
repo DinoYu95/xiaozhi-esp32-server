@@ -42,6 +42,15 @@ public class ParentChatHistoryEntity {
     /** 语音消息对应的音频 id（parent_chat_audio.id），空表示纯文本 */
     private String audioId;
 
+    /** 聊天图片 OSS objectKey（远程看娃等） */
+    private String imageObjectKey;
+
+    /** text / snapshot / text_with_snapshot */
+    private String messageKind;
+
+    /** 远程看娃请求 id */
+    private String snapshotRequestId;
+
     /** 创建时间 */
     private Date createTime;
 }

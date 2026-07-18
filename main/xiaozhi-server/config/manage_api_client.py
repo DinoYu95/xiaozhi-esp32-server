@@ -281,10 +281,11 @@ async def save_parent_chat(
     content: str,
     reply: str,
     audio_id: Optional[str] = None,
-) -> bool:
-    """保存家长聊天记录到 manager-api。"""
+    snapshot_request_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """保存家长聊天记录到 manager-api，返回 userMessageId / assistantMessageId。"""
     if not ManageApiClient._instance:
-        return False
+        return None
     try:
         payload = {
             "parentUserId": parent_user_id,
@@ -294,15 +295,51 @@ async def save_parent_chat(
         }
         if audio_id:
             payload["audioId"] = audio_id
-        await ManageApiClient._instance._execute_async_request(
+        if snapshot_request_id:
+            payload["snapshotRequestId"] = snapshot_request_id
+        data = await ManageApiClient._async_request(
             "POST",
             "config/parent/chat/save",
             json=payload,
         )
-        return True
+        return data if isinstance(data, dict) else None
     except Exception as e:
         print(f"save_parent_chat 失败: {e}")
-        return False
+        return None
+
+
+async def upload_parent_chat_snapshot(
+    parent_user_id: int,
+    child_id: int,
+    assistant_message_id: int,
+    image_base64: str,
+    *,
+    snapshot_request_id: Optional[str] = None,
+    mime_type: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """远程看娃：上传快照到 OSS 并绑定聊天记录。"""
+    if not ManageApiClient._instance:
+        return None
+    try:
+        payload: Dict[str, Any] = {
+            "parentUserId": parent_user_id,
+            "childId": child_id,
+            "assistantMessageId": assistant_message_id,
+            "imageBase64": image_base64,
+        }
+        if snapshot_request_id:
+            payload["snapshotRequestId"] = snapshot_request_id
+        if mime_type:
+            payload["mimeType"] = mime_type
+        data = await ManageApiClient._async_request(
+            "POST",
+            "config/parent/chat/snapshot/upload",
+            json=payload,
+        )
+        return data if isinstance(data, dict) else None
+    except Exception as e:
+        print(f"upload_parent_chat_snapshot 失败: {e}")
+        return None
 
 
 async def report_device_telemetry(

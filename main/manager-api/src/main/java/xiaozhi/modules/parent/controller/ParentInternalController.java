@@ -3,6 +3,8 @@ package xiaozhi.modules.parent.controller;
 import java.util.Date;
 import java.util.List;
 
+import java.util.Base64;
+
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,6 +28,10 @@ import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dao.ParentUserTokenDao;
 import xiaozhi.modules.parent.service.ParentDeviceRuleService;
 import xiaozhi.modules.parent.service.ParentShadowMissionService;
+import xiaozhi.modules.parent.storage.ParentStorageCategory;
+import xiaozhi.modules.parent.storage.ParentStorageService;
+import xiaozhi.modules.parent.vo.ParentChatSaveResultVO;
+import xiaozhi.modules.parent.vo.ParentChatSnapshotUploadResultVO;
 import xiaozhi.modules.parent.vo.ParentShadowMissionActiveVO;
 import xiaozhi.modules.parent.vo.ParentShadowMissionUpsertResultVO;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
@@ -54,6 +60,7 @@ public class ParentInternalController {
     private final AgentChatHistoryService agentChatHistoryService;
     private final ParentDeviceRuleService parentDeviceRuleService;
     private final ParentShadowMissionService parentShadowMissionService;
+    private final ParentStorageService parentStorageService;
 
     /**
      * 获取孩子与助手的近期对话记录（格式化为「孩子：xxx\n助手：yyy」）。
@@ -178,22 +185,22 @@ public class ParentInternalController {
      * @param body { parentUserId, childId, content, audioId?, reply }
      */
     @PostMapping("/chat/save")
-    public Result<Void> saveChat(@RequestBody ParentChatSaveRequest body) {
+    public Result<ParentChatSaveResultVO> saveChat(@RequestBody ParentChatSaveRequest body) {
         if (body.getParentUserId() == null || body.getChildId() == null
                 || StringUtils.isBlank(body.getContent()) || StringUtils.isBlank(body.getReply())) {
-            return new Result<Void>().error(ErrorCode.PARAMS_GET_ERROR);
+            return new Result<ParentChatSaveResultVO>().error(ErrorCode.PARAMS_GET_ERROR);
         }
         DeviceChildEntity child = deviceChildDao.selectById(body.getChildId());
         if (child == null) {
-            return new Result<Void>().error(ErrorCode.PARAMS_GET_ERROR, "孩子不存在");
+            return new Result<ParentChatSaveResultVO>().error(ErrorCode.PARAMS_GET_ERROR, "孩子不存在");
         }
         String deviceId = child.getDeviceId();
         if (StringUtils.isBlank(deviceId)) {
-            return new Result<Void>().error(ErrorCode.AGENT_NOT_FOUND);
+            return new Result<ParentChatSaveResultVO>().error(ErrorCode.AGENT_NOT_FOUND);
         }
         DeviceEntity device = deviceDao.selectById(deviceId);
         if (device == null || StringUtils.isBlank(device.getAgentId())) {
-            return new Result<Void>().error(ErrorCode.AGENT_NOT_FOUND);
+            return new Result<ParentChatSaveResultVO>().error(ErrorCode.AGENT_NOT_FOUND);
         }
         String agentId = device.getAgentId();
         String normalized = deviceId.replace(":", "_").toLowerCase();
@@ -203,7 +210,7 @@ public class ParentInternalController {
                         .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
                                 .or().eq(ParentDeviceBindingEntity::getDeviceId, normalized)));
         if (binding == null) {
-            return new Result<Void>().error(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+            return new Result<ParentChatSaveResultVO>().error(ErrorCode.PARENT_DEVICE_NOT_BOUND);
         }
         String sessionId = "parent_" + body.getParentUserId() + "_" + child.getId();
         Date now = new Date();
@@ -217,6 +224,7 @@ public class ParentInternalController {
         userMsg.setChatType(CHAT_TYPE_PARENT);
         userMsg.setContent(body.getContent());
         userMsg.setAudioId(StringUtils.isNotBlank(body.getAudioId()) ? body.getAudioId() : null);
+        userMsg.setMessageKind("text");
         userMsg.setCreateTime(now);
         parentChatHistoryDao.insert(userMsg);
 
@@ -229,9 +237,67 @@ public class ParentInternalController {
         assistantMsg.setChatType(CHAT_TYPE_ASSISTANT);
         assistantMsg.setContent(body.getReply());
         assistantMsg.setAudioId(null);
+        if (StringUtils.isNotBlank(body.getSnapshotRequestId())) {
+            assistantMsg.setSnapshotRequestId(body.getSnapshotRequestId().trim());
+            assistantMsg.setMessageKind("text_with_snapshot");
+        } else {
+            assistantMsg.setMessageKind("text");
+        }
         assistantMsg.setCreateTime(now);
         parentChatHistoryDao.insert(assistantMsg);
-        return new Result<Void>().ok(null);
+        return new Result<ParentChatSaveResultVO>().ok(
+                new ParentChatSaveResultVO(userMsg.getId(), assistantMsg.getId()));
+    }
+
+    /**
+     * 远程看娃：将设备拍照 base64 上传 OSS 并绑定到助手消息。
+     */
+    @PostMapping("/chat/snapshot/upload")
+    public Result<ParentChatSnapshotUploadResultVO> uploadChatSnapshot(
+            @RequestBody ParentChatSnapshotUploadRequest body) {
+        if (body == null || body.getParentUserId() == null || body.getChildId() == null
+                || body.getAssistantMessageId() == null || StringUtils.isBlank(body.getImageBase64())) {
+            return new Result<ParentChatSnapshotUploadResultVO>().error(ErrorCode.PARAMS_GET_ERROR);
+        }
+        ParentChatHistoryEntity msg = parentChatHistoryDao.selectById(body.getAssistantMessageId());
+        if (msg == null || !body.getParentUserId().equals(msg.getParentUserId())
+                || !body.getChildId().equals(msg.getChildId())
+                || msg.getChatType() == null || msg.getChatType() != CHAT_TYPE_ASSISTANT) {
+            return new Result<ParentChatSnapshotUploadResultVO>().error(ErrorCode.PARAMS_GET_ERROR, "消息不存在");
+        }
+        if (StringUtils.isNotBlank(body.getSnapshotRequestId())
+                && StringUtils.isNotBlank(msg.getSnapshotRequestId())
+                && !body.getSnapshotRequestId().trim().equals(msg.getSnapshotRequestId())) {
+            return new Result<ParentChatSnapshotUploadResultVO>().error(ErrorCode.PARAMS_GET_ERROR, "requestId 不匹配");
+        }
+        String b64 = body.getImageBase64().trim();
+        if (b64.contains(",")) {
+            b64 = b64.substring(b64.indexOf(',') + 1);
+        }
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(b64);
+        } catch (IllegalArgumentException e) {
+            return new Result<ParentChatSnapshotUploadResultVO>().error(ErrorCode.PARAMS_GET_ERROR, "图片数据无效");
+        }
+        String mime = StringUtils.defaultIfBlank(body.getMimeType(), "image/jpeg");
+        String ext = "jpg";
+        if (mime.contains("png")) {
+            ext = "png";
+        } else if (mime.contains("webp")) {
+            ext = "webp";
+        } else if (mime.contains("gif")) {
+            ext = "gif";
+        }
+        var upload = parentStorageService.uploadBase64(
+                ParentStorageCategory.CHAT_SNAPSHOT, body.getParentUserId(), bytes, mime, ext);
+        msg.setImageObjectKey(upload.getObjectKey());
+        if (StringUtils.isBlank(msg.getMessageKind()) || "text".equals(msg.getMessageKind())) {
+            msg.setMessageKind("text_with_snapshot");
+        }
+        parentChatHistoryDao.updateById(msg);
+        return new Result<ParentChatSnapshotUploadResultVO>().ok(
+                new ParentChatSnapshotUploadResultVO(msg.getId(), upload.getObjectKey(), upload.getAccessUrl()));
     }
 
     /**
@@ -375,5 +441,17 @@ public class ParentInternalController {
         private String content;
         private String audioId;
         private String reply;
+        /** 远程看娃请求 id，可选 */
+        private String snapshotRequestId;
+    }
+
+    @lombok.Data
+    public static class ParentChatSnapshotUploadRequest {
+        private Long parentUserId;
+        private Long childId;
+        private Long assistantMessageId;
+        private String snapshotRequestId;
+        private String imageBase64;
+        private String mimeType;
     }
 }

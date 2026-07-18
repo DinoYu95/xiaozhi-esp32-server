@@ -34,4 +34,10 @@ public interface ParentStorageService {
     String normalizeAndValidate(Long parentUserId, ParentStorageCategory category, String objectKeyOrUrl);
 
     byte[] readLocalFile(ParentStorageCategory category, String filename);
+
+    /**
+     * 服务端内部：将 base64 图片上传到 OSS/本地，返回 objectKey 与 accessUrl。
+     */
+    ParentStorageUploadVO uploadBase64(ParentStorageCategory category, Long parentUserId, byte[] bytes,
+            String contentType, String fileExt);
 }

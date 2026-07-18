@@ -23,6 +23,8 @@ import xiaozhi.common.utils.Result;
 import xiaozhi.modules.parent.context.ParentContext;
 import xiaozhi.modules.parent.dto.ParentChatSendDTO;
 import xiaozhi.modules.parent.service.ParentChatService;
+import xiaozhi.modules.parent.storage.ParentStorageCategory;
+import xiaozhi.modules.parent.storage.ParentStorageService;
 import xiaozhi.modules.parent.vo.ParentChatHistoryPageVO;
 import xiaozhi.modules.parent.vo.ParentChatMessageVO;
 
@@ -36,6 +38,7 @@ import xiaozhi.modules.parent.vo.ParentChatMessageVO;
 public class ParentChatController {
 
     private final ParentChatService parentChatService;
+    private final ParentStorageService parentStorageService;
 
     @PostMapping("/upload-audio")
     @Operation(summary = "上传语音消息音频，返回 audioId 供发送时引用")
@@ -105,5 +108,18 @@ public class ParentChatController {
                 .contentType(MediaType.parseMediaType("audio/wav"))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"chat-audio.wav\"")
                 .body(audio);
+    }
+
+    @GetMapping("/snapshot/file/{filename}")
+    @Operation(summary = "本地模式：读取远程看娃快照文件")
+    public ResponseEntity<byte[]> snapshotFile(@PathVariable String filename) {
+        byte[] bytes = parentStorageService.readLocalFile(ParentStorageCategory.CHAT_SNAPSHOT, filename);
+        if (bytes == null || bytes.length == 0) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_JPEG)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                .body(bytes);
     }
 }

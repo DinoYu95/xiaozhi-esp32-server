@@ -28,6 +28,12 @@ public class ParentChatMessageVO {
     @Schema(description = "语音消息的 audioId，非空表示可播放")
     private String audioId;
 
+    @Schema(description = "消息形态：text/snapshot/text_with_snapshot")
+    private String messageKind;
+
+    @Schema(description = "聊天图片可访问 URL（远程看娃快照等）")
+    private String imageUrl;
+
     @Schema(description = "创建时间")
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "GMT+8")
     private Date createTime;

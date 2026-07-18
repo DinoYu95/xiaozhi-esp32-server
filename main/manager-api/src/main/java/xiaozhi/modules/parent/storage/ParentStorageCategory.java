@@ -11,7 +11,8 @@ import xiaozhi.common.exception.RenException;
 public enum ParentStorageCategory {
 
     AVATAR("avatar", "parent/avatar", 2 * 1024 * 1024),
-    FEEDBACK("feedback", "parent/feedback", 5 * 1024 * 1024);
+    FEEDBACK("feedback", "parent/feedback", 5 * 1024 * 1024),
+    CHAT_SNAPSHOT("chat_snapshot", "parent/chat_snapshot", 2 * 1024 * 1024);
 
     private final String code;
     private final String pathSegment;

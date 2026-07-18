@@ -52,6 +52,8 @@ import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.service.ParentChatService;
 import xiaozhi.modules.parent.service.ParentDeviceRuleService;
 import xiaozhi.modules.parent.service.ParentShadowMissionService;
+import xiaozhi.modules.parent.storage.ParentStorageCategory;
+import xiaozhi.modules.parent.storage.ParentStorageService;
 import xiaozhi.modules.sys.service.SysParamsService;
 import xiaozhi.modules.parent.vo.ParentChatHistoryPageVO;
 import xiaozhi.modules.parent.vo.ParentChatMessageVO;
@@ -82,6 +84,7 @@ public class ParentChatServiceImpl implements ParentChatService {
     private final ParentUserDao parentUserDao;
     private final ParentDeviceRuleService parentDeviceRuleService;
     private final ParentShadowMissionService parentShadowMissionService;
+    private final ParentStorageService parentStorageService;
     private final RedisUtils redisUtils;
     private final RestTemplate restTemplate;
     private final SysParamsService sysParamsService;
@@ -412,6 +415,11 @@ public class ParentChatServiceImpl implements ParentChatService {
         vo.setChatType(e.getChatType());
         vo.setContent(e.getContent());
         vo.setAudioId(e.getAudioId());
+        vo.setMessageKind(StringUtils.defaultIfBlank(e.getMessageKind(), "text"));
+        if (StringUtils.isNotBlank(e.getImageObjectKey())) {
+            vo.setImageUrl(parentStorageService.resolveAccessUrl(
+                    ParentStorageCategory.CHAT_SNAPSHOT, e.getImageObjectKey()));
+        }
         vo.setCreateTime(e.getCreateTime());
         return vo;
     }

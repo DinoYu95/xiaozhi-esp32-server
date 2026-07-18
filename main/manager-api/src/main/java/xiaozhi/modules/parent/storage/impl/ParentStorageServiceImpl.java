@@ -129,10 +129,7 @@ public class ParentStorageServiceImpl implements ParentStorageService {
             if (StringUtils.isBlank(base)) {
                 return null;
             }
-            String path = category == ParentStorageCategory.FEEDBACK
-                    ? "/parent-api/feedback/image/file/" + ref
-                    : "/parent-api/auth/avatar/file/" + ref;
-            return base + path;
+            return base + localAccessPath(category, ref);
         }
         return ref;
     }
@@ -176,7 +173,7 @@ public class ParentStorageServiceImpl implements ParentStorageService {
         if (!LOCAL_FILENAME_PATTERN.matcher(filename).matches()) {
             return null;
         }
-        String subDir = category == ParentStorageCategory.FEEDBACK ? "parent-feedback" : "parent-avatar";
+        String subDir = localSubDir(category);
         Path dirAbs = Paths.get("uploadfile", subDir).toAbsolutePath().normalize();
         Path file = dirAbs.resolve(filename).normalize();
         if (!file.startsWith(dirAbs) || !Files.isRegularFile(file)) {
@@ -188,6 +185,109 @@ public class ParentStorageServiceImpl implements ParentStorageService {
             log.warn("读取本地文件失败: {}", filename, e);
             return null;
         }
+    }
+
+    @Override
+    public ParentStorageUploadVO uploadBase64(ParentStorageCategory category, Long parentUserId, byte[] bytes,
+            String contentType, String fileExt) {
+        if (bytes == null || bytes.length == 0) {
+            throw new RenException(ErrorCode.UPLOAD_FILE_EMPTY);
+        }
+        if (bytes.length > category.getMaxBytes()) {
+            throw new RenException("图片不能超过 " + (category.getMaxBytes() / 1024 / 1024) + "MB");
+        }
+        String ext = normalizeImageExt(fileExt, contentType);
+        if (ext == null) {
+            throw new RenException("仅支持 jpg、jpeg、png、gif、webp 图片");
+        }
+        OssConfig cfg = loadOssConfig();
+        if (cfg.enabled) {
+            return uploadBytesToOss(category, parentUserId, bytes, ext, contentType, cfg);
+        }
+        return uploadBytesToLocal(category, parentUserId, bytes, ext, trimSlash(parentPublicBaseUrlFromConfig));
+    }
+
+    private ParentStorageUploadVO uploadBytesToOss(ParentStorageCategory category, Long parentUserId, byte[] bytes,
+            String ext, String contentType, OssConfig cfg) {
+        validateOssConfig(cfg);
+        String objectKey = buildObjectKey(category, parentUserId, ext, cfg);
+        OSS client = null;
+        try (InputStream in = new java.io.ByteArrayInputStream(bytes)) {
+            client = new OSSClientBuilder().build(cfg.endpoint, cfg.accessKeyId, cfg.accessKeySecret);
+            ObjectMetadata meta = new ObjectMetadata();
+            meta.setContentLength(bytes.length);
+            if (StringUtils.isNotBlank(contentType)) {
+                meta.setContentType(contentType);
+            }
+            client.putObject(cfg.bucket, objectKey, in, meta);
+        } catch (Exception e) {
+            throw new RenException(ErrorCode.OSS_UPLOAD_FILE_ERROR, e);
+        } finally {
+            if (client != null) {
+                client.shutdown();
+            }
+        }
+        ParentStorageUploadVO vo = new ParentStorageUploadVO();
+        vo.setCategory(category.getCode());
+        vo.setObjectKey(objectKey);
+        vo.setAccessUrl(buildOssAccessUrl(objectKey, cfg));
+        vo.setOss(true);
+        return vo;
+    }
+
+    private ParentStorageUploadVO uploadBytesToLocal(ParentStorageCategory category, Long parentUserId, byte[] bytes,
+            String ext, String publicBaseUrl) {
+        String storedName = UUID.randomUUID().toString().toLowerCase(Locale.ROOT) + "." + ext;
+        String subDir = localSubDir(category);
+        Path dirAbs = Paths.get("uploadfile", subDir).toAbsolutePath().normalize();
+        try {
+            Files.createDirectories(dirAbs);
+            Path target = dirAbs.resolve(storedName).normalize();
+            if (!target.startsWith(dirAbs)) {
+                throw new RenException(ErrorCode.UPLOAD_FILE_ERROR);
+            }
+            Files.write(target, bytes);
+        } catch (IOException e) {
+            throw new RenException(ErrorCode.UPLOAD_FILE_ERROR, e);
+        }
+        String accessPath = localAccessPath(category, storedName);
+        String base = trimSlash(publicBaseUrl);
+        ParentStorageUploadVO vo = new ParentStorageUploadVO();
+        vo.setCategory(category.getCode());
+        vo.setObjectKey(storedName);
+        vo.setAccessUrl(StringUtils.isNotBlank(base) ? base + accessPath : accessPath);
+        vo.setOss(false);
+        return vo;
+    }
+
+    private static String localSubDir(ParentStorageCategory category) {
+        if (category == ParentStorageCategory.FEEDBACK) {
+            return "parent-feedback";
+        }
+        if (category == ParentStorageCategory.CHAT_SNAPSHOT) {
+            return "parent-chat-snapshot";
+        }
+        return "parent-avatar";
+    }
+
+    private static String localAccessPath(ParentStorageCategory category, String storedName) {
+        if (category == ParentStorageCategory.FEEDBACK) {
+            return "/parent-api/feedback/image/file/" + storedName;
+        }
+        if (category == ParentStorageCategory.CHAT_SNAPSHOT) {
+            return "/parent-api/chat/snapshot/file/" + storedName;
+        }
+        return "/parent-api/auth/avatar/file/" + storedName;
+    }
+
+    private static String normalizeImageExt(String fileExt, String contentType) {
+        if (StringUtils.isNotBlank(fileExt)) {
+            String ext = fileExt.toLowerCase(Locale.ROOT).replace(".", "");
+            if (IMAGE_EXT.contains(ext)) {
+                return ext;
+            }
+        }
+        return resolveImageExtensionFromContentType(contentType);
     }
 
     private ParentStorageUploadVO uploadToOss(ParentStorageCategory category, Long parentUserId, MultipartFile file,
@@ -223,7 +323,7 @@ public class ParentStorageServiceImpl implements ParentStorageService {
     private ParentStorageUploadVO uploadToLocal(ParentStorageCategory category, Long parentUserId, MultipartFile file,
             String ext, String publicBaseUrl) {
         String storedName = UUID.randomUUID().toString().toLowerCase(Locale.ROOT) + "." + ext;
-        String subDir = category == ParentStorageCategory.FEEDBACK ? "parent-feedback" : "parent-avatar";
+        String subDir = localSubDir(category);
         Path dirAbs = Paths.get("uploadfile", subDir).toAbsolutePath().normalize();
         try {
             Files.createDirectories(dirAbs);
@@ -235,9 +335,7 @@ public class ParentStorageServiceImpl implements ParentStorageService {
         } catch (IOException e) {
             throw new RenException(ErrorCode.UPLOAD_FILE_ERROR, e);
         }
-        String accessPath = category == ParentStorageCategory.FEEDBACK
-                ? "/parent-api/feedback/image/file/" + storedName
-                : "/parent-api/auth/avatar/file/" + storedName;
+        String accessPath = localAccessPath(category, storedName);
         String base = trimSlash(publicBaseUrl);
         ParentStorageUploadVO vo = new ParentStorageUploadVO();
         vo.setCategory(category.getCode());

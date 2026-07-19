@@ -27,5 +27,7 @@ manager-api:
   url: http://127.0.0.1:8002/xiaozhi
   # 你的manager-api的token，就是刚才复制出来的server.secret
   secret: 你的server.secret值
+  # ESP32 远程看娃 HTTP 上传地址（须设备能解析，填公网 IP 或局域网 IP，不要用 web）
+  # device_upload_base_url: http://你的IP:8002/xiaozhi
 # 默认系统提示词模板文件
 prompt_template: agent-base-prompt.txt

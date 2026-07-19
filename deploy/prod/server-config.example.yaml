@@ -15,6 +15,8 @@ manager-api:
   url: http://web:8002/xiaozhi
   # 【必填】首次部署 web 后，智控台 → 参数管理 → server.secret
   secret: 【必填:从智控台复制server.secret】
+  # 【必填-看娃】ESP32 HTTP 上传用，填公网 IP（与浏览器打开智控台一致），不要用 web
+  # device_upload_base_url: http://【必填:公网IP或域名】:8002/xiaozhi
 
 prompt_template: agent-base-prompt.txt
 

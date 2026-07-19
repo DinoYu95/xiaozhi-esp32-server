@@ -68,10 +68,22 @@ async def get_config_from_api_async(config):
         raise Exception("Failed to fetch server config from API")
 
     config_data["read_config_from_api"] = True
-    config_data["manager-api"] = {
-        "url": config["manager-api"].get("url", ""),
-        "secret": config["manager-api"].get("secret", ""),
+    local_ma = config.get("manager-api") or {}
+    merged_ma = {
+        "url": local_ma.get("url", ""),
+        "secret": local_ma.get("secret", ""),
     }
+    # 设备 HTTP 回传地址须 ESP32 可达，与容器内 manager-api.url 分离，以本地 .config.yaml 为准
+    for key in (
+        "device_upload_base_url",
+        "deviceUploadBaseUrl",
+        "public_base_url",
+        "publicBaseUrl",
+    ):
+        val = local_ma.get(key)
+        if val is not None and str(val).strip() != "":
+            merged_ma[key] = val
+    config_data["manager-api"] = merged_ma
     auth_enabled = config_data.get("server", {}).get("auth", {}).get("enabled", False)
     # server 网络相关字段以本地 data/.config.yaml 为准（vision_explain 必须写公网/LAN IP）
     local_server = config.get("server") or {}

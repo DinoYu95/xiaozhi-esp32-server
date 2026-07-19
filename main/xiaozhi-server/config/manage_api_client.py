@@ -350,12 +350,24 @@ def _manager_api_public_base(config: Optional[Dict] = None) -> str:
     return (ma.get("url") or "").strip().rstrip("/")
 
 
+def _manager_api_section(config: Optional[Dict] = None) -> Dict[str, Any]:
+    """合并运行时 config 与 init_service 时载入的本地 manager-api（后者补 device_upload 等字段）。"""
+    cfg = config or {}
+    ma = dict(cfg.get("manager-api") or {})
+    inst = ManageApiClient._instance
+    if inst and inst.config:
+        local = inst.config or {}
+        for key, val in local.items():
+            if val is None or str(val).strip() == "":
+                continue
+            if key not in ma or not str(ma.get(key) or "").strip():
+                ma[key] = val
+    return ma
+
+
 def _device_snapshot_upload_base(config: Optional[Dict] = None) -> str:
     """设备 HTTP 回传用的 manager-api 根地址，须 ESP32 能解析（不能用 Docker 服务名 web）。"""
-    cfg = config or {}
-    ma = cfg.get("manager-api") or {}
-    if ManageApiClient._instance and not ma.get("url"):
-        ma = ManageApiClient._instance.config or {}
+    ma = _manager_api_section(config)
     for key in ("device_upload_base_url", "deviceUploadBaseUrl", "public_base_url", "publicBaseUrl"):
         val = (ma.get(key) or "").strip().rstrip("/")
         if val:

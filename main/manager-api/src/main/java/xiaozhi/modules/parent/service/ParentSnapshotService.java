@@ -18,3 +18,4 @@ public interface ParentSnapshotService {
 
     /** 设备已上传且聊天记录已写入时，尝试把 OSS objectKey 绑定到助手消息。 */
     void tryBindAssistantMessage(Long assistantMessageId, String requestId);
+}

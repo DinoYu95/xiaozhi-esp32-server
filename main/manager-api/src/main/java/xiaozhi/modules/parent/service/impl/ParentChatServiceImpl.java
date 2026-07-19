@@ -52,6 +52,7 @@ import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.service.ParentChatService;
 import xiaozhi.modules.parent.service.ParentDeviceRuleService;
 import xiaozhi.modules.parent.service.ParentShadowMissionService;
+import xiaozhi.modules.parent.service.ParentSnapshotService;
 import xiaozhi.modules.parent.storage.ParentStorageCategory;
 import xiaozhi.modules.parent.storage.ParentStorageService;
 import xiaozhi.modules.sys.service.SysParamsService;
@@ -84,6 +85,7 @@ public class ParentChatServiceImpl implements ParentChatService {
     private final ParentUserDao parentUserDao;
     private final ParentDeviceRuleService parentDeviceRuleService;
     private final ParentShadowMissionService parentShadowMissionService;
+    private final ParentSnapshotService parentSnapshotService;
     private final ParentStorageService parentStorageService;
     private final RedisUtils redisUtils;
     private final RestTemplate restTemplate;
@@ -138,11 +140,13 @@ public class ParentChatServiceImpl implements ParentChatService {
         String sessionId = "parent_" + parentUserId + "_" + child.getId();
         String userId = "parent_" + parentUserId;
 
-        // 1. 调用 xiaozhi-server 获取助手回复（传入 device 以便拉取孩子与助手的对话记录）
-        String reply = callXiaozhiServerForChat(parentUserId, content, sessionId, userId, device, child);
+        // 1. 调用 xiaozhi-server 获取助手回复（看娃时 meta 内带 parent_snapshot.requestId）
+        ParentChatInvokeResult invoke = callXiaozhiServerForChat(parentUserId, content, sessionId, userId, device, child);
+        String reply = invoke.reply;
         if (StringUtils.isBlank(reply)) {
             reply = "抱歉，小助手暂时无法回复，请稍后再试。";
         }
+        String snapshotRequestId = invoke.snapshotRequestId;
 
         // 2. 保存家长消息
         ParentChatHistoryEntity userMsg = new ParentChatHistoryEntity();
@@ -167,10 +171,29 @@ public class ParentChatServiceImpl implements ParentChatService {
         assistantMsg.setChatType(CHAT_TYPE_ASSISTANT);
         assistantMsg.setContent(reply);
         assistantMsg.setAudioId(null);
+        if (StringUtils.isNotBlank(snapshotRequestId)) {
+            assistantMsg.setSnapshotRequestId(snapshotRequestId.trim());
+            assistantMsg.setMessageKind("text_with_snapshot");
+            log.info("家长聊天看娃 requestId={} 将写入聊天记录", snapshotRequestId);
+        } else {
+            assistantMsg.setMessageKind("text");
+        }
         assistantMsg.setCreateTime(new Date());
         parentChatHistoryDao.insert(assistantMsg);
+        if (StringUtils.isNotBlank(snapshotRequestId)) {
+            parentSnapshotService.tryBindAssistantMessage(assistantMsg.getId(), snapshotRequestId.trim());
+            ParentChatHistoryEntity bound = parentChatHistoryDao.selectById(assistantMsg.getId());
+            if (bound != null) {
+                assistantMsg = bound;
+            }
+        }
 
         return toVO(assistantMsg);
+    }
+
+    private static final class ParentChatInvokeResult {
+        private String reply;
+        private String snapshotRequestId;
     }
 
     /**
@@ -210,14 +233,15 @@ public class ParentChatServiceImpl implements ParentChatService {
         return out;
     }
 
-    private String callXiaozhiServerForChat(Long parentUserId, String text, String sessionId, String userId,
+    private ParentChatInvokeResult callXiaozhiServerForChat(Long parentUserId, String text, String sessionId, String userId,
             DeviceEntity device, DeviceChildEntity child) {
+        ParentChatInvokeResult result = new ParentChatInvokeResult();
         String deviceId = device.getId();
         String agentId = device.getAgentId();
         String xiaozhiServerUrl = sysParamsService.getValue(PARAM_XIAOZHI_SERVER_URL, true);
         if (StringUtils.isBlank(xiaozhiServerUrl) || "null".equals(xiaozhiServerUrl) || xiaozhiServerUrl.contains("你的")) {
             log.warn("xiaozhi.server.url 未配置，跳过智伴调用");
-            return null;
+            return result;
         }
         String url = xiaozhiServerUrl.replaceAll("/+$", "") + "/internal/parent/chat";
         log.info("家长聊天调用 xiaozhi-server: url={}", url);
@@ -327,10 +351,14 @@ public class ParentChatServiceImpl implements ParentChatService {
             if (resp.getBody() != null && resp.getBody().containsKey("reply")) {
                 Object r = resp.getBody().get("reply");
                 String replyStr = extractReplyText(r);
+                result.reply = replyStr;
+                result.snapshotRequestId = extractSnapshotRequestId(resp.getBody());
                 if (StringUtils.isBlank(replyStr)) {
                     log.warn("xiaozhi-server 返回 reply 为空, 完整响应: {}", resp.getBody());
+                } else if (StringUtils.isNotBlank(result.snapshotRequestId)) {
+                    log.info("xiaozhi-server 返回看娃 meta requestId={}", result.snapshotRequestId);
                 }
-                return replyStr;
+                return result;
             }
             log.warn("xiaozhi-server 响应无 reply 字段, 完整响应: {}", resp.getBody());
         } catch (HttpStatusCodeException e) {
@@ -338,7 +366,28 @@ public class ParentChatServiceImpl implements ParentChatService {
         } catch (Exception e) {
             log.error("调用 xiaozhi-server 家长聊天失败: {}", e.getMessage(), e);
         }
-        return null;
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private String extractSnapshotRequestId(Map<String, Object> body) {
+        if (body == null) {
+            return null;
+        }
+        Object metaObj = body.get("meta");
+        if (!(metaObj instanceof Map<?, ?> meta)) {
+            return null;
+        }
+        Object psObj = meta.get("parent_snapshot");
+        if (!(psObj instanceof Map<?, ?> ps)) {
+            return null;
+        }
+        Object requestId = ps.get("requestId");
+        if (requestId == null) {
+            return null;
+        }
+        String rid = String.valueOf(requestId).trim();
+        return StringUtils.isNotBlank(rid) ? rid : null;
     }
 
     @Override

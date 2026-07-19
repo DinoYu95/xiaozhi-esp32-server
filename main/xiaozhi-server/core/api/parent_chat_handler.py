@@ -224,6 +224,13 @@ class ParentChatHandler:
         result = {"reply": reply or ""}
         if meta:
             result["meta"] = meta
+            ps = meta.get("parent_snapshot") if isinstance(meta, dict) else None
+            if isinstance(ps, dict) and ps.get("requestId"):
+                self.logger.bind(tag=TAG).info(
+                    "家长聊天看娃 meta requestId={} code={}",
+                    ps.get("requestId"),
+                    ps.get("code"),
+                )
         return web.json_response(result)
 
     async def handle_post_stream(self, request: web.Request) -> web.StreamResponse:

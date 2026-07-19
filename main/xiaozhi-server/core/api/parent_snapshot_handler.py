@@ -47,7 +47,7 @@ class ParentSnapshotHandler:
             self.config, device_id, request_id=request_id, photo_timeout=timeout
         )
         self.logger.bind(tag=TAG).info(
-            "parent/device-snapshot device=%s code=%s requestId=%s",
+            "parent/device-snapshot device={} code={} requestId={}",
             device_id,
             result.code,
             result.request_id,

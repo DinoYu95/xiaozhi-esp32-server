@@ -15,7 +15,7 @@ from core.api.device_notify_protocol import (
     TASK_TYPE_PARENT_SNAPSHOT,
     build_parent_snapshot_notify_payload,
 )
-from core.api.mqtt_gateway_client import is_device_mqtt_online, send_device_notify
+from core.api.mqtt_gateway_client import check_device_mqtt_online, send_device_notify
 from core.zhibanAgent.connection_registry import resolve
 
 TAG = __name__
@@ -135,15 +135,51 @@ async def capture_child_snapshot(
             request_id=rid,
         )
 
-    if not await is_device_mqtt_online(config, client_id):
+    logger.bind(tag=TAG).info(
+        "看娃 prepare 成功 device={} requestId={} clientId={} taskType={} uploadUrl={}",
+        device_id,
+        rid,
+        client_id,
+        prepare.get("taskType") or TASK_TYPE_PARENT_SNAPSHOT,
+        upload_url[:80] + "..." if len(upload_url) > 80 else upload_url,
+    )
+
+    online_check = await check_device_mqtt_online(
+        config,
+        client_id,
+        log_context=f"snapshot requestId={rid} device={device_id}",
+    )
+    if not online_check.online:
+        if online_check.reason in (
+            "mqtt_manager_api_not_configured",
+            "gateway_status_unavailable",
+        ):
+            code = "GATEWAY_UNAVAILABLE"
+            message = "暂时无法连接设备网关，请稍后再试。"
+        else:
+            code = "DEVICE_OFFLINE"
+            message = "设备离线中，暂时看不到画面。请确认设备已开机并联网。"
+        logger.bind(tag=TAG).warning(
+            "看娃在线检查未通过 device={} requestId={} code={} check={}",
+            device_id,
+            rid,
+            code,
+            online_check.summary(),
+        )
         return SnapshotCaptureResult(
             ok=False,
-            code="DEVICE_OFFLINE",
-            message="设备离线中，暂时看不到画面。请确认设备已开机并联网。",
+            code=code,
+            message=message,
             request_id=rid,
         )
 
     if is_device_session_busy(device_id):
+        logger.bind(tag=TAG).warning(
+            "看娃设备忙 device={} requestId={} clientId={}",
+            device_id,
+            rid,
+            client_id,
+        )
         return SnapshotCaptureResult(
             ok=False,
             code="DEVICE_BUSY",
@@ -164,7 +200,7 @@ async def capture_child_snapshot(
     except Exception as e:
         _clear_inflight(device_id, rid)
         logger.bind(tag=TAG).exception(
-            "notify 下发失败 device=%s action=%s: %s",
+            "notify 下发失败 device={} action={} err={}",
             device_id,
             ACTION_CAMERA_CAPTURE_AND_UPLOAD,
             e,
@@ -186,7 +222,7 @@ async def capture_child_snapshot(
         )
 
     logger.bind(tag=TAG).info(
-        "notify 已下发 device=%s clientId=%s action=%s taskType=%s requestId=%s",
+        "notify 已下发 device={} clientId={} action={} taskType={} requestId={}",
         device_id,
         client_id,
         ACTION_CAMERA_CAPTURE_AND_UPLOAD,

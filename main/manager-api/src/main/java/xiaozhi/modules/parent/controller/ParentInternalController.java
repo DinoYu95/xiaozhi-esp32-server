@@ -254,7 +254,7 @@ public class ParentInternalController {
     }
 
     /**
-     * 远程看娃 Phase B：准备 MQTT 下发 + 设备 HTTP 回传（生成 uploadToken / uploadUrl）。
+     * 远程看娃 Phase B：prepare（notify + HTTP 回传，taskType=parent_snapshot）。
      */
     @PostMapping("/chat/snapshot/prepare")
     public Result<ParentSnapshotPrepareVO> prepareChatSnapshot(@RequestBody ParentSnapshotPrepareRequest body) {

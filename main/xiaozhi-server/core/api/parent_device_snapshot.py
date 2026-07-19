@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""家长远程看娃：MQTT parent_snapshot + 设备 HTTP 回传。"""
+"""家长远程看娃：通用 notify + 设备 HTTP 回传。"""
 from __future__ import annotations
 
 import threading
@@ -10,7 +10,12 @@ from typing import Any, Dict, Optional
 
 from config.logger import setup_logging
 from config.manage_api_client import prepare_parent_chat_snapshot
-from core.api.mqtt_gateway_client import is_device_mqtt_online, send_parent_snapshot_command
+from core.api.device_notify_protocol import (
+    ACTION_CAMERA_CAPTURE_AND_UPLOAD,
+    TASK_TYPE_PARENT_SNAPSHOT,
+    build_parent_snapshot_notify_payload,
+)
+from core.api.mqtt_gateway_client import is_device_mqtt_online, send_device_notify
 from core.zhibanAgent.connection_registry import resolve
 
 TAG = __name__
@@ -98,7 +103,7 @@ async def capture_child_snapshot(
     request_id: Optional[str] = None,
     photo_timeout: int = 20,
 ) -> SnapshotCaptureResult:
-    """Phase B：MQTT 在线检查 → prepare upload → 下发 parent_snapshot。"""
+    """MQTT 在线检查 → prepare → notify(camera.capture_and_upload)。"""
     _purge_inflight()
     rid = (request_id or "").strip() or ("snap_%s" % uuid.uuid4().hex[:16])
     device_id = (device_id or "").strip()
@@ -146,23 +151,27 @@ async def capture_child_snapshot(
             request_id=rid,
         )
 
+    notify_payload = build_parent_snapshot_notify_payload(
+        request_id=rid,
+        upload_url=upload_url,
+        upload_token=upload_token,
+        max_width=640,
+        jpeg_quality=80,
+    )
     _mark_inflight(device_id, rid)
     try:
-        ok = await send_parent_snapshot_command(
-            config,
-            client_id,
-            request_id=rid,
-            upload_url=upload_url,
-            upload_token=upload_token,
-            max_width=640,
-            jpeg_quality=80,
-        )
+        ok = await send_device_notify(config, client_id, notify_payload)
     except Exception as e:
         _clear_inflight(device_id, rid)
-        logger.bind(tag=TAG).exception("parent_snapshot 下发失败 device=%s: %s", device_id, e)
+        logger.bind(tag=TAG).exception(
+            "notify 下发失败 device=%s action=%s: %s",
+            device_id,
+            ACTION_CAMERA_CAPTURE_AND_UPLOAD,
+            e,
+        )
         return SnapshotCaptureResult(
             ok=False,
-            code="MQTT_COMMAND_FAILED",
+            code="NOTIFY_FAILED",
             message="暂时无法远程看画面，请稍后再试。",
             request_id=rid,
         )
@@ -171,17 +180,18 @@ async def capture_child_snapshot(
         _clear_inflight(device_id, rid)
         return SnapshotCaptureResult(
             ok=False,
-            code="MQTT_COMMAND_FAILED",
+            code="NOTIFY_FAILED",
             message="暂时无法远程看画面，请稍后再试。",
             request_id=rid,
         )
 
     logger.bind(tag=TAG).info(
-        "parent_snapshot 已下发 device=%s clientId=%s requestId=%s timeout=%s",
+        "notify 已下发 device=%s clientId=%s action=%s taskType=%s requestId=%s",
         device_id,
         client_id,
+        ACTION_CAMERA_CAPTURE_AND_UPLOAD,
+        TASK_TYPE_PARENT_SNAPSHOT,
         rid,
-        photo_timeout,
     )
     return SnapshotCaptureResult(
         ok=True,

@@ -362,6 +362,7 @@ async def prepare_parent_chat_snapshot(
         payload = {
             "deviceId": device_id,
             "requestId": request_id,
+            "taskType": "parent_snapshot",
             "uploadBaseUrl": _manager_api_public_base(config),
         }
         data = await ManageApiClient._async_request(

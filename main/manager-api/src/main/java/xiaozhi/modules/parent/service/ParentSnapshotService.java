@@ -9,7 +9,7 @@ public interface ParentSnapshotService {
     ParentSnapshotPrepareVO prepare(String deviceId, String requestId, String uploadBaseUrl);
 
     void deviceUpload(String requestId, String uploadToken, byte[] bytes, String mimeType, Integer width,
-            Integer height);
+            Integer height, String taskType);
 
     ParentSnapshotStatusVO getStatus(String requestId);
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""MQTT Gateway 管理 API 客户端（在线状态、下发 parent_snapshot）。"""
+"""MQTT Gateway 管理 API 客户端（在线状态、通用 notify 下行）。"""
 from __future__ import annotations
 
 import hashlib
@@ -9,14 +9,10 @@ from typing import Any, Dict, Optional, Set
 import httpx
 
 from config.logger import setup_logging
+from core.api.device_notify_protocol import NOTIFY_MESSAGE_TYPE
 
 TAG = __name__
 logger = setup_logging()
-
-
-def _manager_api_base(config: dict) -> str:
-    ma = (config or {}).get("manager-api") or {}
-    return (ma.get("url") or "").strip().rstrip("/")
 
 
 def _mqtt_manager_api(config: dict) -> str:
@@ -107,45 +103,46 @@ async def is_device_mqtt_online(config: dict, client_id: str) -> bool:
     return is_mqtt_client_online(status_map.get(client_id))
 
 
-async def send_parent_snapshot_command(
+async def send_device_notify(
     config: dict,
     client_id: str,
-    *,
-    request_id: str,
-    upload_url: str,
-    upload_token: str,
-    max_width: int = 640,
-    jpeg_quality: int = 80,
+    notify_payload: Dict[str, Any],
 ) -> bool:
-    """经 mqtt-gateway 下发 parent_snapshot 命令。"""
+    """经 mqtt-gateway 下发 type=notify，payload 原样推到设备。"""
     base = _gateway_base(config)
     if not base:
-        logger.bind(tag=TAG).warning("未配置 server.mqtt_manager_api，无法下发 parent_snapshot")
+        logger.bind(tag=TAG).warning("未配置 server.mqtt_manager_api，无法下发 notify")
+        return False
+    action = (notify_payload or {}).get("action")
+    request_id = (notify_payload or {}).get("requestId")
+    if not action or not request_id:
+        logger.bind(tag=TAG).warning("notify payload 缺少 action 或 requestId")
         return False
     url = f"{base}/api/commands/{client_id}"
-    payload = {
-        "type": "parent_snapshot",
-        "payload": {
-            "requestId": request_id,
-            "uploadUrl": upload_url,
-            "uploadToken": upload_token,
-            "maxWidth": max_width,
-            "jpegQuality": jpeg_quality,
-        },
+    body = {
+        "type": NOTIFY_MESSAGE_TYPE,
+        "payload": notify_payload,
     }
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(url, headers=_gateway_headers(config), json=payload)
+            resp = await client.post(url, headers=_gateway_headers(config), json=body)
             resp.raise_for_status()
-            body = resp.json()
-            if isinstance(body, dict) and body.get("success") is False:
+            result = resp.json()
+            if isinstance(result, dict) and result.get("success") is False:
                 logger.bind(tag=TAG).warning(
-                    "parent_snapshot 下发失败 clientId=%s body=%s", client_id, body
+                    "notify 下发失败 clientId=%s action=%s body=%s",
+                    client_id,
+                    action,
+                    result,
                 )
                 return False
             return True
     except Exception as e:
         logger.bind(tag=TAG).warning(
-            "parent_snapshot 下发异常 clientId=%s requestId=%s: %s", client_id, request_id, e
+            "notify 下发异常 clientId=%s action=%s requestId=%s: %s",
+            client_id,
+            action,
+            request_id,
+            e,
         )
         return False

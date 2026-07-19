@@ -35,6 +35,7 @@ public class ParentSnapshotServiceImpl implements ParentSnapshotService {
     private static final long PENDING_TTL_SECONDS = 300L;
     private static final byte CHAT_TYPE_ASSISTANT = 2;
     private static final long PENDING_PARENT_USER_ID = 0L;
+    public static final String TASK_TYPE_PARENT_SNAPSHOT = "parent_snapshot";
 
     private final DeviceDao deviceDao;
     private final ParentChatHistoryDao parentChatHistoryDao;
@@ -61,15 +62,22 @@ public class ParentSnapshotServiceImpl implements ParentSnapshotService {
         pending.setDeviceId(device.getId());
         pending.setClientId(clientId);
         pending.setUploadToken(uploadToken);
+        pending.setTaskType(TASK_TYPE_PARENT_SNAPSHOT);
         pending.setStatus("waiting");
         savePending(pending);
         redisUtils.set(RedisKeys.getParentSnapshotTokenKey(uploadToken), pending.getRequestId(), PENDING_TTL_SECONDS);
-        return new ParentSnapshotPrepareVO(pending.getRequestId(), clientId, uploadToken, uploadUrl);
+        ParentSnapshotPrepareVO vo = new ParentSnapshotPrepareVO();
+        vo.setRequestId(pending.getRequestId());
+        vo.setClientId(clientId);
+        vo.setUploadToken(uploadToken);
+        vo.setUploadUrl(uploadUrl);
+        vo.setTaskType(TASK_TYPE_PARENT_SNAPSHOT);
+        return vo;
     }
 
     @Override
     public void deviceUpload(String requestId, String uploadToken, byte[] bytes, String mimeType, Integer width,
-            Integer height) {
+            Integer height, String taskType) {
         if (StringUtils.isBlank(requestId) || StringUtils.isBlank(uploadToken) || bytes == null || bytes.length == 0) {
             throw new RenException(ErrorCode.PARAMS_GET_ERROR);
         }
@@ -82,6 +90,11 @@ public class ParentSnapshotServiceImpl implements ParentSnapshotService {
         }
         if ("uploaded".equals(pending.getStatus())) {
             return;
+        }
+        if (StringUtils.isNotBlank(taskType)
+                && StringUtils.isNotBlank(pending.getTaskType())
+                && !taskType.trim().equals(pending.getTaskType())) {
+            throw new RenException(ErrorCode.PARAMS_GET_ERROR, "taskType 不匹配");
         }
         String mime = StringUtils.defaultIfBlank(mimeType, "image/jpeg");
         String ext = "jpg";

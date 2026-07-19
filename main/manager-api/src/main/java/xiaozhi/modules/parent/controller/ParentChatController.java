@@ -184,8 +184,12 @@ public class ParentChatController {
         if (bytes == null || bytes.length == 0) {
             return new Result<Void>().error(ErrorCode.UPLOAD_FILE_EMPTY);
         }
+        String taskType = null;
+        if (body != null && StringUtils.isNotBlank(body.getTaskType())) {
+            taskType = body.getTaskType().trim();
+        }
         try {
-            parentSnapshotService.deviceUpload(rid, token, bytes, mime, width, height);
+            parentSnapshotService.deviceUpload(rid, token, bytes, mime, width, height, taskType);
             return new Result<Void>().ok(null);
         } catch (Exception e) {
             return new Result<Void>().error(ErrorCode.PARAMS_GET_ERROR, e.getMessage());
@@ -200,5 +204,7 @@ public class ParentChatController {
         private String mimeType;
         private Integer width;
         private Integer height;
+        /** 与 prepare 一致，如 parent_snapshot */
+        private String taskType;
     }
 }

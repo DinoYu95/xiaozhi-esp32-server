@@ -12,6 +12,8 @@ public class ParentSnapshotPendingDTO implements Serializable {
     private String deviceId;
     private String clientId;
     private String uploadToken;
+    /** 业务任务类型，如 parent_snapshot */
+    private String taskType;
     private String status;
     private String objectKey;
     private String accessUrl;

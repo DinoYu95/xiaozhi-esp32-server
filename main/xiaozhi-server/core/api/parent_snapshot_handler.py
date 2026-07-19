@@ -43,7 +43,9 @@ class ParentSnapshotHandler:
         request_id = (body.get("request_id") or body.get("requestId") or "").strip() or None
         timeout = int(body.get("timeout") or 20)
 
-        result = await capture_child_snapshot(device_id, request_id=request_id, photo_timeout=timeout)
+        result = await capture_child_snapshot(
+            self.config, device_id, request_id=request_id, photo_timeout=timeout
+        )
         self.logger.bind(tag=TAG).info(
             "parent/device-snapshot device=%s code=%s requestId=%s",
             device_id,

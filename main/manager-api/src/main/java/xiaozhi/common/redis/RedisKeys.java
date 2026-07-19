@@ -223,4 +223,14 @@ public class RedisKeys {
     public static String getDeviceInviteRateLimitKey(String deviceId) {
         return "parent:device:invite:rate:" + normalizeDeviceId(deviceId);
     }
+
+    /** 远程看娃 pending 快照（requestId -> PendingSnapshot） */
+    public static String getParentSnapshotPendingKey(String requestId) {
+        return "parent:snapshot:pending:" + requestId;
+    }
+
+    /** 远程看娃 uploadToken -> requestId */
+    public static String getParentSnapshotTokenKey(String uploadToken) {
+        return "parent:snapshot:token:" + uploadToken;
+    }
 }

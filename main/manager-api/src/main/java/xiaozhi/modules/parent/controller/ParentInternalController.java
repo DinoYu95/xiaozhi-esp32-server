@@ -28,10 +28,13 @@ import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dao.ParentUserTokenDao;
 import xiaozhi.modules.parent.service.ParentDeviceRuleService;
 import xiaozhi.modules.parent.service.ParentShadowMissionService;
+import xiaozhi.modules.parent.service.ParentSnapshotService;
 import xiaozhi.modules.parent.storage.ParentStorageCategory;
 import xiaozhi.modules.parent.storage.ParentStorageService;
 import xiaozhi.modules.parent.vo.ParentChatSaveResultVO;
 import xiaozhi.modules.parent.vo.ParentChatSnapshotUploadResultVO;
+import xiaozhi.modules.parent.vo.ParentSnapshotPrepareVO;
+import xiaozhi.modules.parent.vo.ParentSnapshotStatusVO;
 import xiaozhi.modules.parent.vo.ParentShadowMissionActiveVO;
 import xiaozhi.modules.parent.vo.ParentShadowMissionUpsertResultVO;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
@@ -61,6 +64,7 @@ public class ParentInternalController {
     private final ParentDeviceRuleService parentDeviceRuleService;
     private final ParentShadowMissionService parentShadowMissionService;
     private final ParentStorageService parentStorageService;
+    private final ParentSnapshotService parentSnapshotService;
 
     /**
      * 获取孩子与助手的近期对话记录（格式化为「孩子：xxx\n助手：yyy」）。
@@ -247,6 +251,60 @@ public class ParentInternalController {
         parentChatHistoryDao.insert(assistantMsg);
         return new Result<ParentChatSaveResultVO>().ok(
                 new ParentChatSaveResultVO(userMsg.getId(), assistantMsg.getId()));
+    }
+
+    /**
+     * 远程看娃 Phase B：准备 MQTT 下发 + 设备 HTTP 回传（生成 uploadToken / uploadUrl）。
+     */
+    @PostMapping("/chat/snapshot/prepare")
+    public Result<ParentSnapshotPrepareVO> prepareChatSnapshot(@RequestBody ParentSnapshotPrepareRequest body) {
+        if (body == null || StringUtils.isBlank(body.getDeviceId()) || StringUtils.isBlank(body.getRequestId())) {
+            return new Result<ParentSnapshotPrepareVO>().error(ErrorCode.PARAMS_GET_ERROR);
+        }
+        try {
+            ParentSnapshotPrepareVO vo = parentSnapshotService.prepare(
+                    body.getDeviceId().trim(),
+                    body.getRequestId().trim(),
+                    StringUtils.trimToNull(body.getUploadBaseUrl()));
+            return new Result<ParentSnapshotPrepareVO>().ok(vo);
+        } catch (Exception e) {
+            log.warn("远程看娃 prepare 失败: {}", e.getMessage());
+            return new Result<ParentSnapshotPrepareVO>().error(ErrorCode.PARAMS_GET_ERROR, e.getMessage());
+        }
+    }
+
+    /**
+     * 远程看娃：查询设备是否已 HTTP 上传画面。
+     */
+    @GetMapping("/chat/snapshot/status")
+    public Result<ParentSnapshotStatusVO> getChatSnapshotStatus(@RequestParam String requestId) {
+        if (StringUtils.isBlank(requestId)) {
+            return new Result<ParentSnapshotStatusVO>().error(ErrorCode.PARAMS_GET_ERROR);
+        }
+        return new Result<ParentSnapshotStatusVO>().ok(parentSnapshotService.getStatus(requestId.trim()));
+    }
+
+    /**
+     * 远程看娃 Phase B：设备已上传后，绑定到助手消息。
+     */
+    @PostMapping("/chat/snapshot/finalize")
+    public Result<ParentChatSnapshotUploadResultVO> finalizeChatSnapshot(
+            @RequestBody ParentSnapshotFinalizeRequest body) {
+        if (body == null || StringUtils.isBlank(body.getRequestId()) || body.getParentUserId() == null
+                || body.getChildId() == null || body.getAssistantMessageId() == null) {
+            return new Result<ParentChatSnapshotUploadResultVO>().error(ErrorCode.PARAMS_GET_ERROR);
+        }
+        try {
+            ParentChatSnapshotUploadResultVO vo = parentSnapshotService.finalizeSnapshot(
+                    body.getRequestId().trim(),
+                    body.getParentUserId(),
+                    body.getChildId(),
+                    body.getAssistantMessageId());
+            return new Result<ParentChatSnapshotUploadResultVO>().ok(vo);
+        } catch (Exception e) {
+            log.warn("远程看娃 finalize 失败 requestId={}: {}", body.getRequestId(), e.getMessage());
+            return new Result<ParentChatSnapshotUploadResultVO>().error(ErrorCode.PARAMS_GET_ERROR, e.getMessage());
+        }
     }
 
     /**
@@ -453,5 +511,21 @@ public class ParentInternalController {
         private String snapshotRequestId;
         private String imageBase64;
         private String mimeType;
+    }
+
+    @lombok.Data
+    public static class ParentSnapshotPrepareRequest {
+        private String deviceId;
+        private String requestId;
+        /** manager-api 公网根地址，用于拼 uploadUrl；缺省用 xiaozhi.parent.public-base-url */
+        private String uploadBaseUrl;
+    }
+
+    @lombok.Data
+    public static class ParentSnapshotFinalizeRequest {
+        private String requestId;
+        private Long parentUserId;
+        private Long childId;
+        private Long assistantMessageId;
     }
 }

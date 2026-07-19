@@ -1,5 +1,8 @@
 package xiaozhi.modules.parent.controller;
 
+import java.util.Base64;
+
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -8,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -23,6 +27,7 @@ import xiaozhi.common.utils.Result;
 import xiaozhi.modules.parent.context.ParentContext;
 import xiaozhi.modules.parent.dto.ParentChatSendDTO;
 import xiaozhi.modules.parent.service.ParentChatService;
+import xiaozhi.modules.parent.service.ParentSnapshotService;
 import xiaozhi.modules.parent.storage.ParentStorageCategory;
 import xiaozhi.modules.parent.storage.ParentStorageService;
 import xiaozhi.modules.parent.vo.ParentChatHistoryPageVO;
@@ -39,6 +44,7 @@ public class ParentChatController {
 
     private final ParentChatService parentChatService;
     private final ParentStorageService parentStorageService;
+    private final ParentSnapshotService parentSnapshotService;
 
     @PostMapping("/upload-audio")
     @Operation(summary = "上传语音消息音频，返回 audioId 供发送时引用")
@@ -121,5 +127,78 @@ public class ParentChatController {
                 .contentType(MediaType.IMAGE_JPEG)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
                 .body(bytes);
+    }
+
+    /**
+     * 远程看娃 Phase B：设备 HTTP 回传快照（uploadToken 鉴权，无需家长登录）。
+     */
+    @PostMapping("/snapshot/device-upload")
+    @Operation(summary = "设备远程看娃快照上传")
+    public Result<Void> deviceSnapshotUpload(
+            @RequestHeader(value = "X-Snapshot-Token", required = false) String snapshotToken,
+            @RequestParam(required = false) String requestId,
+            @RequestParam(required = false) String uploadToken,
+            @RequestParam(required = false) MultipartFile file,
+            @RequestParam(required = false) Integer width,
+            @RequestParam(required = false) Integer height,
+            @RequestBody(required = false) DeviceSnapshotUploadBody body) {
+        String token = StringUtils.isNotBlank(snapshotToken) ? snapshotToken.trim()
+                : (body != null && StringUtils.isNotBlank(body.getUploadToken()) ? body.getUploadToken().trim()
+                        : StringUtils.trimToNull(uploadToken));
+        String rid = body != null && StringUtils.isNotBlank(body.getRequestId()) ? body.getRequestId().trim()
+                : StringUtils.trimToNull(requestId);
+        if (StringUtils.isBlank(token) || StringUtils.isBlank(rid)) {
+            return new Result<Void>().error(ErrorCode.PARAMS_GET_ERROR, "requestId 与 uploadToken 必填");
+        }
+        byte[] bytes = null;
+        String mime = "image/jpeg";
+        if (file != null && !file.isEmpty()) {
+            try {
+                bytes = file.getBytes();
+                if (StringUtils.isNotBlank(file.getContentType())) {
+                    mime = file.getContentType();
+                }
+            } catch (Exception e) {
+                return new Result<Void>().error(ErrorCode.UPLOAD_FILE_ERROR);
+            }
+        } else if (body != null && StringUtils.isNotBlank(body.getImageBase64())) {
+            String b64 = body.getImageBase64().trim();
+            if (b64.contains(",")) {
+                b64 = b64.substring(b64.indexOf(',') + 1);
+            }
+            try {
+                bytes = Base64.getDecoder().decode(b64);
+            } catch (IllegalArgumentException e) {
+                return new Result<Void>().error(ErrorCode.PARAMS_GET_ERROR, "图片数据无效");
+            }
+            if (StringUtils.isNotBlank(body.getMimeType())) {
+                mime = body.getMimeType();
+            }
+            if (body.getWidth() != null) {
+                width = body.getWidth();
+            }
+            if (body.getHeight() != null) {
+                height = body.getHeight();
+            }
+        }
+        if (bytes == null || bytes.length == 0) {
+            return new Result<Void>().error(ErrorCode.UPLOAD_FILE_EMPTY);
+        }
+        try {
+            parentSnapshotService.deviceUpload(rid, token, bytes, mime, width, height);
+            return new Result<Void>().ok(null);
+        } catch (Exception e) {
+            return new Result<Void>().error(ErrorCode.PARAMS_GET_ERROR, e.getMessage());
+        }
+    }
+
+    @lombok.Data
+    public static class DeviceSnapshotUploadBody {
+        private String requestId;
+        private String uploadToken;
+        private String imageBase64;
+        private String mimeType;
+        private Integer width;
+        private Integer height;
     }
 }

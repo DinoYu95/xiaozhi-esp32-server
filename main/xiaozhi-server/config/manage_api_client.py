@@ -317,7 +317,7 @@ async def upload_parent_chat_snapshot(
     snapshot_request_id: Optional[str] = None,
     mime_type: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
-    """远程看娃：上传快照到 OSS 并绑定聊天记录。"""
+    """远程看娃（旧路径）：base64 直传。Phase B 请用 prepare/finalize。"""
     if not ManageApiClient._instance:
         return None
     try:
@@ -339,6 +339,81 @@ async def upload_parent_chat_snapshot(
         return data if isinstance(data, dict) else None
     except Exception as e:
         print(f"upload_parent_chat_snapshot 失败: {e}")
+        return None
+
+
+def _manager_api_public_base(config: Optional[Dict] = None) -> str:
+    cfg = config or {}
+    ma = cfg.get("manager-api") or {}
+    if ManageApiClient._instance and not ma.get("url"):
+        ma = ManageApiClient._instance.config or {}
+    return (ma.get("url") or "").strip().rstrip("/")
+
+
+async def prepare_parent_chat_snapshot(
+    device_id: str,
+    request_id: str,
+    config: Optional[Dict] = None,
+) -> Optional[Dict[str, Any]]:
+    """Phase B：生成 uploadToken / uploadUrl / clientId。"""
+    if not ManageApiClient._instance:
+        return None
+    try:
+        payload = {
+            "deviceId": device_id,
+            "requestId": request_id,
+            "uploadBaseUrl": _manager_api_public_base(config),
+        }
+        data = await ManageApiClient._async_request(
+            "POST",
+            "config/parent/chat/snapshot/prepare",
+            json=payload,
+        )
+        return data if isinstance(data, dict) else None
+    except Exception as e:
+        print(f"prepare_parent_chat_snapshot 失败: {e}")
+        return None
+
+
+async def get_parent_chat_snapshot_status(request_id: str) -> Optional[Dict[str, Any]]:
+    if not ManageApiClient._instance or not request_id:
+        return None
+    try:
+        data = await ManageApiClient._async_request(
+            "GET",
+            "config/parent/chat/snapshot/status",
+            params={"requestId": request_id},
+        )
+        return data if isinstance(data, dict) else None
+    except Exception as e:
+        print(f"get_parent_chat_snapshot_status 失败: {e}")
+        return None
+
+
+async def finalize_parent_chat_snapshot(
+    parent_user_id: int,
+    child_id: int,
+    assistant_message_id: int,
+    request_id: str,
+) -> Optional[Dict[str, Any]]:
+    """Phase B：设备 HTTP 上传完成后绑定聊天记录。"""
+    if not ManageApiClient._instance:
+        return None
+    try:
+        payload = {
+            "parentUserId": parent_user_id,
+            "childId": child_id,
+            "assistantMessageId": assistant_message_id,
+            "requestId": request_id,
+        }
+        data = await ManageApiClient._async_request(
+            "POST",
+            "config/parent/chat/snapshot/finalize",
+            json=payload,
+        )
+        return data if isinstance(data, dict) else None
+    except Exception as e:
+        print(f"finalize_parent_chat_snapshot 失败: {e}")
         return None
 
 

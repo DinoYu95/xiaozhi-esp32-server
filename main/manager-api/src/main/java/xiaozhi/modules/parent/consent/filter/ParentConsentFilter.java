@@ -57,7 +57,8 @@ public class ParentConsentFilter extends jakarta.servlet.http.HttpFilter {
                 || uri.contains("/parent-api/auth/info")
                 || uri.contains("/parent-api/consent/document")
                 || uri.contains("/parent-api/consent/status")
-                || uri.contains("/parent-api/consent/agree");
+                || uri.contains("/parent-api/consent/agree")
+                || uri.contains("/parent-api/chat/snapshot/device-upload");
     }
 
     private static void writeConsentRequired(HttpServletResponse response) throws IOException {

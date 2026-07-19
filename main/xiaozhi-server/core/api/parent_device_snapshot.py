@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""家长远程看娃：设备拍照、缓存、忙闲检测。"""
+"""家长远程看娃：MQTT parent_snapshot + 设备 HTTP 回传。"""
 from __future__ import annotations
 
 import threading
@@ -9,16 +9,16 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from config.logger import setup_logging
+from config.manage_api_client import prepare_parent_chat_snapshot
+from core.api.mqtt_gateway_client import is_device_mqtt_online, send_parent_snapshot_command
 from core.zhibanAgent.connection_registry import resolve
-from core.zhibanAgent.device_mcp_payload import extract_image_payload
-from core.zhibanAgent import zhiban_tool_bridge
 
 TAG = __name__
 logger = setup_logging()
 
-_CACHE_TTL_SEC = 300
-_cache_lock = threading.RLock()
-_snapshot_cache: Dict[str, Dict[str, Any]] = {}
+_INFLIGHT_TTL_SEC = 300
+_inflight_lock = threading.RLock()
+_inflight_by_device: Dict[str, Dict[str, Any]] = {}
 
 
 @dataclass
@@ -48,68 +48,97 @@ class SnapshotCaptureResult:
         return out
 
 
-def _purge_expired_cache() -> None:
+def _purge_inflight() -> None:
     now = time.time()
-    with _cache_lock:
-        expired = [k for k, v in _snapshot_cache.items() if now - float(v.get("ts", 0)) > _CACHE_TTL_SEC]
+    with _inflight_lock:
+        expired = [
+            k
+            for k, v in _inflight_by_device.items()
+            if now - float(v.get("ts", 0)) > _INFLIGHT_TTL_SEC
+        ]
         for k in expired:
-            _snapshot_cache.pop(k, None)
+            _inflight_by_device.pop(k, None)
 
 
-def pop_snapshot_image(request_id: str) -> Optional[Dict[str, Any]]:
-    _purge_expired_cache()
-    with _cache_lock:
-        item = _snapshot_cache.pop(request_id, None)
-    return item
+def _mark_inflight(device_id: str, request_id: str) -> None:
+    with _inflight_lock:
+        _inflight_by_device[device_id] = {"ts": time.time(), "request_id": request_id}
 
 
-def peek_snapshot_image(request_id: str) -> Optional[Dict[str, Any]]:
-    _purge_expired_cache()
-    with _cache_lock:
-        item = _snapshot_cache.get(request_id)
-    return dict(item) if item else None
+def _clear_inflight(device_id: str, request_id: str) -> None:
+    with _inflight_lock:
+        item = _inflight_by_device.get(device_id)
+        if item and item.get("request_id") == request_id:
+            _inflight_by_device.pop(device_id, None)
 
 
-def is_device_session_busy(conn) -> bool:
+def is_device_snapshot_inflight(device_id: str) -> bool:
+    _purge_inflight()
+    with _inflight_lock:
+        return device_id in _inflight_by_device
+
+
+def is_device_session_busy(device_id: str) -> bool:
+    """若 WS 桥仍在，则沿用会话忙标志；否则仅看本链路 in-flight。"""
+    if is_device_snapshot_inflight(device_id):
+        return True
+    conn = resolve(device_id=device_id)
+    if conn is None:
+        return False
     chat_inflight = int(getattr(conn, "_chat_inflight", 0) or 0) > 0
     speaking = bool(getattr(conn, "client_is_speaking", False))
     snapshot_busy = bool(getattr(conn, "_parent_snapshot_in_progress", False))
     return chat_inflight or speaking or snapshot_busy
 
 
-def _pick_photo_tool(conn) -> str:
-    try:
-        tools = zhiban_tool_bridge.get_device_mcp_tool_schemas(conn) or []
-    except Exception:
-        tools = []
-    for t in tools:
-        name = (t.get("name") or "").strip()
-        if not name:
-            continue
-        low = name.lower().replace(".", "_")
-        if "take_photo" in low or ("camera" in low and "photo" in low):
-            return name
-    return "self_camera_take_photo"
-
-
 async def capture_child_snapshot(
+    config: dict,
     device_id: str,
     *,
     request_id: Optional[str] = None,
     photo_timeout: int = 20,
 ) -> SnapshotCaptureResult:
-    """严格在线：设备 WS 已注册且当前不在对话/拍照中。"""
-    _purge_expired_cache()
+    """Phase B：MQTT 在线检查 → prepare upload → 下发 parent_snapshot。"""
+    _purge_inflight()
     rid = (request_id or "").strip() or ("snap_%s" % uuid.uuid4().hex[:16])
-    conn = resolve(device_id=device_id)
-    if conn is None:
+    device_id = (device_id or "").strip()
+    if not device_id:
+        return SnapshotCaptureResult(
+            ok=False,
+            code="INVALID_DEVICE",
+            message="设备信息无效，暂时无法远程看画面。",
+            request_id=rid,
+        )
+
+    prepare = await prepare_parent_chat_snapshot(device_id, rid, config)
+    if not prepare:
+        return SnapshotCaptureResult(
+            ok=False,
+            code="PREPARE_FAILED",
+            message="暂时无法发起远程看画面，请稍后再试。",
+            request_id=rid,
+        )
+
+    client_id = (prepare.get("clientId") or "").strip()
+    upload_url = (prepare.get("uploadUrl") or "").strip()
+    upload_token = (prepare.get("uploadToken") or "").strip()
+    if not client_id or not upload_url or not upload_token:
+        return SnapshotCaptureResult(
+            ok=False,
+            code="PREPARE_FAILED",
+            message="远程看画面配置异常，请稍后再试。",
+            request_id=rid,
+        )
+
+    if not await is_device_mqtt_online(config, client_id):
         return SnapshotCaptureResult(
             ok=False,
             code="DEVICE_OFFLINE",
             message="设备离线中，暂时看不到画面。请确认设备已开机并联网。",
             request_id=rid,
         )
-    if is_device_session_busy(conn):
+
+    if is_device_session_busy(device_id):
         return SnapshotCaptureResult(
             ok=False,
             code="DEVICE_BUSY",
@@ -117,65 +146,47 @@ async def capture_child_snapshot(
             request_id=rid,
         )
 
-    tool_name = _pick_photo_tool(conn)
-    args = {"mode": "image_only", "max_width": 640, "jpeg_quality": 80}
-    loop_timeout = photo_timeout + 30
-    conn._parent_snapshot_in_progress = True
+    _mark_inflight(device_id, rid)
     try:
-        result = await zhiban_tool_bridge.await_on_conn_loop(
-            conn,
-            zhiban_tool_bridge.execute_device_mcp(
-                conn,
-                tool_name,
-                args,
-                timeout=photo_timeout,
-                wait_result=True,
-            ),
-            timeout=loop_timeout,
-        )
-    except TimeoutError:
-        return SnapshotCaptureResult(
-            ok=False,
-            code="MCP_TIMEOUT",
-            message="拍照超时了，请稍后再试。",
+        ok = await send_parent_snapshot_command(
+            config,
+            client_id,
             request_id=rid,
+            upload_url=upload_url,
+            upload_token=upload_token,
+            max_width=640,
+            jpeg_quality=80,
         )
     except Exception as e:
-        logger.bind(tag=TAG).exception("远程看娃拍照失败 device=%s: %s", device_id, e)
+        _clear_inflight(device_id, rid)
+        logger.bind(tag=TAG).exception("parent_snapshot 下发失败 device=%s: %s", device_id, e)
         return SnapshotCaptureResult(
             ok=False,
-            code="MCP_FAILED",
-            message="拍照失败了，请稍后再试。",
-            request_id=rid,
-        )
-    finally:
-        conn._parent_snapshot_in_progress = False
-
-    image = extract_image_payload(result if isinstance(result, dict) else {})
-    if not image or not image.get("image_base64"):
-        return SnapshotCaptureResult(
-            ok=False,
-            code="NO_IMAGE",
-            message="这次没拍到画面，请稍后再试。",
+            code="MQTT_COMMAND_FAILED",
+            message="暂时无法远程看画面，请稍后再试。",
             request_id=rid,
         )
 
-    with _cache_lock:
-        _snapshot_cache[rid] = {
-            "ts": time.time(),
-            "device_id": device_id,
-            "image_base64": image.get("image_base64"),
-            "mime_type": image.get("mime_type") or "image/jpeg",
-            "width": image.get("width"),
-            "height": image.get("height"),
-        }
+    if not ok:
+        _clear_inflight(device_id, rid)
+        return SnapshotCaptureResult(
+            ok=False,
+            code="MQTT_COMMAND_FAILED",
+            message="暂时无法远程看画面，请稍后再试。",
+            request_id=rid,
+        )
 
+    logger.bind(tag=TAG).info(
+        "parent_snapshot 已下发 device=%s clientId=%s requestId=%s timeout=%s",
+        device_id,
+        client_id,
+        rid,
+        photo_timeout,
+    )
     return SnapshotCaptureResult(
         ok=True,
         code="SUCCESS",
         message="好的，我拍到画面啦，正在传给你。",
         request_id=rid,
-        mime_type=image.get("mime_type") or "image/jpeg",
-        width=image.get("width"),
-        height=image.get("height"),
+        mime_type="image/jpeg",
     )

@@ -122,6 +122,10 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
                     text_for_zhiban = chat_handler._inject_child_context(
                         content, environment_context
                     )
+                    snapshot_device_id = (
+                        (environment_context.get("device_id") or "")
+                        or (environment_context.get("mac_address") or "")
+                    ).strip()
                     loop = asyncio.get_event_loop()
                     queue = asyncio.Queue()
 
@@ -199,8 +203,10 @@ async def handle_parent_chat_ws(request: web.Request) -> web.WebSocketResponse:
                             asyncio.create_task(
                                 finalize_parent_snapshot_on_ws(
                                     ws,
+                                    config,
                                     parent_user_id,
                                     child_id,
+                                    snapshot_device_id,
                                     pending_snapshot.get("requestId"),
                                     int(assistant_id),
                                 )

@@ -8,6 +8,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+
 import cn.hutool.core.util.StrUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -91,6 +93,7 @@ public class ParentSnapshotServiceImpl implements ParentSnapshotService {
             throw new RenException(ErrorCode.UNAUTHORIZED, "uploadToken 无效");
         }
         if ("uploaded".equals(pending.getStatus())) {
+            tryBindLatestAssistantByRequestId(requestId.trim());
             return;
         }
         if (StringUtils.isNotBlank(taskType)
@@ -113,7 +116,26 @@ public class ParentSnapshotServiceImpl implements ParentSnapshotService {
         pending.setWidth(width);
         pending.setHeight(height);
         savePending(pending);
-        log.info("远程看娃设备上传成功 requestId={} deviceId={} bytes={}", requestId, pending.getDeviceId(), bytes.length);
+        log.info("远程看娃设备上传成功 requestId={} deviceId={} bytes={} objectKey={}",
+                requestId, pending.getDeviceId(), bytes.length, upload.getObjectKey());
+        tryBindLatestAssistantByRequestId(requestId.trim());
+    }
+
+    @Override
+    public void tryBindAssistantMessage(Long assistantMessageId, String requestId) {
+        if (assistantMessageId == null || StringUtils.isBlank(requestId)) {
+            return;
+        }
+        ParentSnapshotPendingDTO pending = loadPending(requestId.trim());
+        if (pending == null || !"uploaded".equals(pending.getStatus())) {
+            return;
+        }
+        try {
+            bindPendingToAssistantMessage(pending, assistantMessageId, null, null);
+        } catch (RenException e) {
+            log.debug("远程看娃自动绑定跳过 requestId={} assistantMessageId={}: {}",
+                    requestId, assistantMessageId, e.getMsg());
+        }
     }
 
     @Override
@@ -146,14 +168,57 @@ public class ParentSnapshotServiceImpl implements ParentSnapshotService {
         if (!"uploaded".equals(pending.getStatus())) {
             throw new RenException(ErrorCode.PARAMS_GET_ERROR, "设备尚未上传画面");
         }
+        return bindPendingToAssistantMessage(pending, assistantMessageId, parentUserId, childId);
+    }
+
+    private void tryBindLatestAssistantByRequestId(String requestId) {
+        ParentSnapshotPendingDTO pending = loadPending(requestId);
+        if (pending == null || !"uploaded".equals(pending.getStatus())) {
+            return;
+        }
+        ParentChatHistoryEntity msg = parentChatHistoryDao.selectOne(
+                new LambdaQueryWrapper<ParentChatHistoryEntity>()
+                        .eq(ParentChatHistoryEntity::getSnapshotRequestId, requestId)
+                        .eq(ParentChatHistoryEntity::getChatType, CHAT_TYPE_ASSISTANT)
+                        .orderByDesc(ParentChatHistoryEntity::getCreateTime)
+                        .last("LIMIT 1"));
+        if (msg == null) {
+            log.info("远程看娃 OSS 已就绪，聊天记录尚未写入 snapshot_request_id={}", requestId);
+            return;
+        }
+        if (StringUtils.isNotBlank(msg.getImageObjectKey())) {
+            clearPending(requestId, pending.getUploadToken());
+            return;
+        }
+        bindPendingToAssistantMessage(pending, msg.getId(), msg.getParentUserId(), msg.getChildId());
+    }
+
+    private ParentChatSnapshotUploadResultVO bindPendingToAssistantMessage(
+            ParentSnapshotPendingDTO pending,
+            Long assistantMessageId,
+            Long expectedParentUserId,
+            Long expectedChildId) {
         ParentChatHistoryEntity msg = parentChatHistoryDao.selectById(assistantMessageId);
-        if (msg == null || !parentUserId.equals(msg.getParentUserId()) || !childId.equals(msg.getChildId())
-                || msg.getChatType() == null || msg.getChatType() != CHAT_TYPE_ASSISTANT) {
+        if (msg == null || msg.getChatType() == null || msg.getChatType() != CHAT_TYPE_ASSISTANT) {
             throw new RenException(ErrorCode.PARAMS_GET_ERROR, "消息不存在");
         }
+        if (expectedParentUserId != null && !expectedParentUserId.equals(msg.getParentUserId())) {
+            throw new RenException(ErrorCode.PARAMS_GET_ERROR, "消息不存在");
+        }
+        if (expectedChildId != null && !expectedChildId.equals(msg.getChildId())) {
+            throw new RenException(ErrorCode.PARAMS_GET_ERROR, "消息不存在");
+        }
+        String requestId = pending.getRequestId();
         if (StringUtils.isNotBlank(msg.getSnapshotRequestId())
                 && !requestId.trim().equals(msg.getSnapshotRequestId())) {
             throw new RenException(ErrorCode.PARAMS_GET_ERROR, "requestId 不匹配");
+        }
+        if (StringUtils.isBlank(msg.getSnapshotRequestId())) {
+            msg.setSnapshotRequestId(requestId.trim());
+        }
+        if (StringUtils.isNotBlank(msg.getImageObjectKey())) {
+            clearPending(requestId.trim(), pending.getUploadToken());
+            return new ParentChatSnapshotUploadResultVO(msg.getId(), msg.getImageObjectKey(), pending.getAccessUrl());
         }
         msg.setImageObjectKey(pending.getObjectKey());
         if (StringUtils.isBlank(msg.getMessageKind()) || "text".equals(msg.getMessageKind())) {
@@ -161,6 +226,8 @@ public class ParentSnapshotServiceImpl implements ParentSnapshotService {
         }
         parentChatHistoryDao.updateById(msg);
         clearPending(requestId.trim(), pending.getUploadToken());
+        log.info("远程看娃已绑定聊天记录 requestId={} messageId={} objectKey={}",
+                requestId, msg.getId(), pending.getObjectKey());
         return new ParentChatSnapshotUploadResultVO(msg.getId(), pending.getObjectKey(), pending.getAccessUrl());
     }
 

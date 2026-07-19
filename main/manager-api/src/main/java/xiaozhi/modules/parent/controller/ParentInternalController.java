@@ -249,6 +249,9 @@ public class ParentInternalController {
         }
         assistantMsg.setCreateTime(now);
         parentChatHistoryDao.insert(assistantMsg);
+        if (StringUtils.isNotBlank(body.getSnapshotRequestId())) {
+            parentSnapshotService.tryBindAssistantMessage(assistantMsg.getId(), body.getSnapshotRequestId().trim());
+        }
         return new Result<ParentChatSaveResultVO>().ok(
                 new ParentChatSaveResultVO(userMsg.getId(), assistantMsg.getId()));
     }

@@ -202,7 +202,10 @@ class ParentChatHandler:
             session_id,
             len(text_to_send or ""),
         )
-        reply, meta = client.chat(
+        # 必须在 executor 中调用：client.chat 为同步 httpx，会阻塞 aiohttp 事件循环；
+        # 看娃 fast-path 会回调本机 /internal/parent/device-snapshot，同步阻塞会导致 30s 假超时。
+        reply, meta = await asyncio.to_thread(
+            client.chat,
             text=text_to_send,
             session_id=session_id,
             user_id=user_id or None,

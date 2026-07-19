@@ -1,5 +1,6 @@
 package xiaozhi.modules.parent.service.impl;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import cn.hutool.core.util.StrUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import xiaozhi.common.utils.JsonUtils;
 import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.exception.RenException;
 import xiaozhi.common.redis.RedisKeys;
@@ -56,7 +58,7 @@ public class ParentSnapshotServiceImpl implements ParentSnapshotService {
         }
         String clientId = buildMqttClientId(device);
         String uploadToken = UUID.randomUUID().toString().replace("-", "");
-        String uploadUrl = buildUploadUrl(uploadBaseUrl);
+        String uploadUrl = buildUploadUrl(uploadBaseUrl, requestId.trim());
         ParentSnapshotPendingDTO pending = new ParentSnapshotPendingDTO();
         pending.setRequestId(requestId.trim());
         pending.setDeviceId(device.getId());
@@ -168,13 +170,17 @@ public class ParentSnapshotServiceImpl implements ParentSnapshotService {
         return StrUtil.format("{}@@@{}@@@{}", groupId, macAddress, macAddress);
     }
 
-    private String buildUploadUrl(String uploadBaseUrl) {
+    private String buildUploadUrl(String uploadBaseUrl, String requestId) {
         String base = StringUtils.isNotBlank(uploadBaseUrl) ? trimSlash(uploadBaseUrl.trim())
                 : trimSlash(parentPublicBaseUrl);
         if (StringUtils.isBlank(base)) {
             throw new RenException(ErrorCode.PARAMS_GET_ERROR, "未配置 uploadBaseUrl 或 xiaozhi.parent.public-base-url");
         }
-        return base + "/parent-api/chat/snapshot/device-upload";
+        String url = base + "/parent-api/chat/snapshot/device-upload";
+        if (StringUtils.isNotBlank(requestId)) {
+            url += "?requestId=" + requestId.trim();
+        }
+        return url;
     }
 
     private static String trimSlash(String url) {
@@ -196,6 +202,9 @@ public class ParentSnapshotServiceImpl implements ParentSnapshotService {
         Object raw = redisUtils.get(RedisKeys.getParentSnapshotPendingKey(requestId));
         if (raw instanceof ParentSnapshotPendingDTO pending) {
             return pending;
+        }
+        if (raw instanceof Map<?, ?> map) {
+            return JsonUtils.parseObject(JsonUtils.toJsonString(map), ParentSnapshotPendingDTO.class);
         }
         return null;
     }

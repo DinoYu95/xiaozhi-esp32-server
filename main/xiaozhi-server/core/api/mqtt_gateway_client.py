@@ -185,8 +185,16 @@ async def query_devices_status(
         )
         return {}
 
-    data = body.get("data") if isinstance(body, dict) else body
-    if not isinstance(data, dict):
+    # gateway 直接返回 { clientId: statusInfo }；部分接口带 data 包装
+    if isinstance(body, dict):
+        wrapped = body.get("data")
+        if isinstance(wrapped, dict):
+            data = wrapped
+        else:
+            data = {k: v for k, v in body.items() if isinstance(v, dict)}
+    else:
+        data = {}
+    if not data:
         logger.bind(tag=TAG).warning(
             "MQTT 在线查询响应格式异常{}: http={} body={}",
             ctx,
@@ -195,7 +203,7 @@ async def query_devices_status(
         )
         return {}
 
-    status_map = {k: v for k, v in data.items() if isinstance(v, dict)}
+    status_map = data
     logger.bind(tag=TAG).info(
         "MQTT 在线查询完成{}: http={} status_map={}",
         ctx,

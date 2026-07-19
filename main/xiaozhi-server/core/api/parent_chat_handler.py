@@ -5,6 +5,7 @@
 """
 import asyncio
 import json
+import time
 from aiohttp import web
 
 from config.logger import setup_logging
@@ -195,6 +196,12 @@ class ParentChatHandler:
         )
 
         client = ZhibanAgentClient(self._zhiban_config)
+        t_zhiban = time.perf_counter()
+        self.logger.bind(tag=TAG).info(
+            "家长聊天调用 zhiban-agent 开始 session_id={} text_len={}",
+            session_id,
+            len(text_to_send or ""),
+        )
         reply, meta = client.chat(
             text=text_to_send,
             session_id=session_id,
@@ -203,6 +210,13 @@ class ParentChatHandler:
             skill_ids=skill_ids if isinstance(skill_ids, list) else None,
             environment_context=environment_context if isinstance(environment_context, dict) else None,
             messages=zhiban_messages,
+        )
+        self.logger.bind(tag=TAG).info(
+            "家长聊天调用 zhiban-agent 结束 session_id={} elapsed_ms={:.1f} reply_len={} has_meta={}",
+            session_id,
+            (time.perf_counter() - t_zhiban) * 1000.0,
+            len(reply or ""),
+            bool(meta),
         )
         result = {"reply": reply or ""}
         if meta:

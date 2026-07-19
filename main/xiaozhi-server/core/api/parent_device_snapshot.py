@@ -104,6 +104,7 @@ async def capture_child_snapshot(
     photo_timeout: int = 20,
 ) -> SnapshotCaptureResult:
     """MQTT 在线检查 → prepare → notify(camera.capture_and_upload)。"""
+    t_total = time.perf_counter()
     _purge_inflight()
     rid = (request_id or "").strip() or ("snap_%s" % uuid.uuid4().hex[:16])
     device_id = (device_id or "").strip()
@@ -115,7 +116,15 @@ async def capture_child_snapshot(
             request_id=rid,
         )
 
+    t0 = time.perf_counter()
     prepare = await prepare_parent_chat_snapshot(device_id, rid, config)
+    logger.bind(tag=TAG).info(
+        "看娃阶段 prepare 完成 device={} requestId={} elapsed_ms={:.1f} ok={}",
+        device_id,
+        rid,
+        (time.perf_counter() - t0) * 1000.0,
+        bool(prepare),
+    )
     if not prepare:
         return SnapshotCaptureResult(
             ok=False,
@@ -143,11 +152,27 @@ async def capture_child_snapshot(
         prepare.get("taskType") or TASK_TYPE_PARENT_SNAPSHOT,
         upload_url[:80] + "..." if len(upload_url) > 80 else upload_url,
     )
+    if "//web:" in upload_url or "://web/" in upload_url:
+        logger.bind(tag=TAG).warning(
+            "看娃 uploadUrl 含 Docker 内部主机 web，ESP32 无法 HTTP 上传 device={} requestId={} uploadUrl={}",
+            device_id,
+            rid,
+            upload_url,
+        )
 
+    t0 = time.perf_counter()
     online_check = await check_device_mqtt_online(
         config,
         client_id,
         log_context=f"snapshot requestId={rid} device={device_id}",
+    )
+    logger.bind(tag=TAG).info(
+        "看娃阶段 mqtt_online 完成 device={} requestId={} elapsed_ms={:.1f} online={} reason={}",
+        device_id,
+        rid,
+        (time.perf_counter() - t0) * 1000.0,
+        online_check.online,
+        online_check.reason,
     )
     if not online_check.online:
         if online_check.reason in (
@@ -196,7 +221,15 @@ async def capture_child_snapshot(
     )
     _mark_inflight(device_id, rid)
     try:
+        t0 = time.perf_counter()
         ok = await send_device_notify(config, client_id, notify_payload)
+        logger.bind(tag=TAG).info(
+            "看娃阶段 notify 完成 device={} requestId={} elapsed_ms={:.1f} ok={}",
+            device_id,
+            rid,
+            (time.perf_counter() - t0) * 1000.0,
+            ok,
+        )
     except Exception as e:
         _clear_inflight(device_id, rid)
         logger.bind(tag=TAG).exception(
@@ -222,12 +255,13 @@ async def capture_child_snapshot(
         )
 
     logger.bind(tag=TAG).info(
-        "notify 已下发 device={} clientId={} action={} taskType={} requestId={}",
+        "notify 已下发 device={} clientId={} action={} taskType={} requestId={} total_elapsed_ms={:.1f}",
         device_id,
         client_id,
         ACTION_CAMERA_CAPTURE_AND_UPLOAD,
         TASK_TYPE_PARENT_SNAPSHOT,
         rid,
+        (time.perf_counter() - t_total) * 1000.0,
     )
     return SnapshotCaptureResult(
         ok=True,

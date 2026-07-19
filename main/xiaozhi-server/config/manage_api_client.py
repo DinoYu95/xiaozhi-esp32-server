@@ -350,6 +350,20 @@ def _manager_api_public_base(config: Optional[Dict] = None) -> str:
     return (ma.get("url") or "").strip().rstrip("/")
 
 
+def _device_snapshot_upload_base(config: Optional[Dict] = None) -> str:
+    """设备 HTTP 回传用的 manager-api 根地址，须 ESP32 能解析（不能用 Docker 服务名 web）。"""
+    cfg = config or {}
+    ma = cfg.get("manager-api") or {}
+    if ManageApiClient._instance and not ma.get("url"):
+        ma = ManageApiClient._instance.config or {}
+    for key in ("device_upload_base_url", "deviceUploadBaseUrl", "public_base_url", "publicBaseUrl"):
+        val = (ma.get(key) or "").strip().rstrip("/")
+        if val:
+            return val
+    fallback = (ma.get("url") or "").strip().rstrip("/")
+    return fallback
+
+
 async def prepare_parent_chat_snapshot(
     device_id: str,
     request_id: str,
@@ -359,17 +373,26 @@ async def prepare_parent_chat_snapshot(
     if not ManageApiClient._instance:
         return None
     try:
+        upload_base = _device_snapshot_upload_base(config)
         payload = {
             "deviceId": device_id,
             "requestId": request_id,
             "taskType": "parent_snapshot",
-            "uploadBaseUrl": _manager_api_public_base(config),
+            "uploadBaseUrl": upload_base,
         }
         data = await ManageApiClient._async_request(
             "POST",
             "config/parent/chat/snapshot/prepare",
             json=payload,
         )
+        if isinstance(data, dict):
+            upload_url = str(data.get("uploadUrl") or "")
+            if upload_url and ("//web:" in upload_url or "://web/" in upload_url):
+                print(
+                    "prepare_parent_chat_snapshot 警告: uploadUrl 含 Docker 内部主机名 web，"
+                    "ESP32 无法访问，请在 manager-api.url 同配置下设置 "
+                    "manager-api.device_upload_base_url 为设备可达的公网/局域网地址"
+                )
         return data if isinstance(data, dict) else None
     except Exception as e:
         print(f"prepare_parent_chat_snapshot 失败: {e}")

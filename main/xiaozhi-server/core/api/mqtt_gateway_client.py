@@ -294,6 +294,16 @@ async def send_device_notify(
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(url, headers=_gateway_headers(config), json=body)
+            if resp.status_code >= 400:
+                body_text = (resp.text or "")[:500]
+                logger.bind(tag=TAG).warning(
+                    "notify 下发 HTTP 失败 clientId={} action={} requestId={} http={} body={}",
+                    client_id,
+                    action,
+                    request_id,
+                    resp.status_code,
+                    body_text,
+                )
             resp.raise_for_status()
             result = resp.json()
             if isinstance(result, dict) and result.get("success") is False:

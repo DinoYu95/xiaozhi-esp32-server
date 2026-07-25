@@ -622,4 +622,40 @@ export default {
             }).send()
     },
 
+    getParentUserPage(params, callback) {
+        const q = new URLSearchParams()
+        if (params.page) q.set('page', params.page)
+        if (params.limit) q.set('limit', params.limit)
+        if (params.keyword) q.set('keyword', params.keyword)
+        if (params.betaTester !== undefined && params.betaTester !== '') {
+            q.set('betaTester', params.betaTester)
+        }
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-user/page?${q.toString()}`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getParentUserPage(params, callback)
+                })
+            }).send()
+    },
+    getParentUserDetail(parentUserId, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-user/${parentUserId}`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getParentUserDetail(parentUserId, callback)
+                })
+            }).send()
+    },
+
 }

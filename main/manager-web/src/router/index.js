@@ -154,6 +154,17 @@ const routes = [
     }
   },
   {
+    path: '/parent-user-management',
+    name: 'ParentUserManagement',
+    component: function () {
+      return import('../views/ParentUserManagement.vue')
+    },
+    meta: {
+      requiresAuth: true,
+      title: '家长管理'
+    }
+  },
+  {
     path: '/knowledge-file-upload',
     name: 'KnowledgeFileUpload',
     component: function () {

@@ -94,7 +94,9 @@
             $route.path === '/skill-management' ||
             $route.path === '/child-risk-management' ||
             $route.path === '/beta-feedback-management' ||
-            $route.path === '/beta-mission-management',
+            $route.path === '/beta-mission-management' ||
+            $route.path === '/parent-consent-management' ||
+            $route.path === '/parent-user-management',
         }" @visible-change="handleParamDropdownVisibleChange">
           <span class="el-dropdown-link">
             <img loading="lazy" alt="" src="@/assets/header/param_management.png" :style="{
@@ -110,7 +112,9 @@
                   $route.path === '/skill-management' ||
                   $route.path === '/child-risk-management' ||
                     $route.path === '/beta-feedback-management' ||
-                    $route.path === '/beta-mission-management'
+                    $route.path === '/beta-mission-management' ||
+                    $route.path === '/parent-consent-management' ||
+                    $route.path === '/parent-user-management'
                   ? 'brightness(0) invert(1)'
                   : 'None',
             }" />
@@ -156,6 +160,9 @@
             </el-dropdown-item>
             <el-dropdown-item @click.native="goParentConsentManagement">
               {{ $t("header.parentConsentManagement") }}
+            </el-dropdown-item>
+            <el-dropdown-item @click.native="goParentUserManagement">
+              {{ $t("header.parentUserManagement") }}
             </el-dropdown-item>
           </el-dropdown-menu>
         </el-dropdown>
@@ -416,6 +423,9 @@ export default {
     },
     goParentConsentManagement() {
       this.$router.push("/parent-consent-management");
+    },
+    goParentUserManagement() {
+      this.$router.push("/parent-user-management");
     },
     // 加载功能状态
     async loadFeatureStatus() {

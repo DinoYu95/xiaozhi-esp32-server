@@ -29,6 +29,10 @@ public class ParentShadowMissionEntity {
     private String instructions;
     private Date endsAt;
     private String status;
+    /** parent | learning */
+    private String source;
+    private Long learningSessionId;
+    private String skillCode;
     /** 越小越优先 */
     private Integer priority;
     private Date createTime;

@@ -85,6 +85,10 @@ def is_device_snapshot_inflight(device_id: str) -> bool:
 
 def is_device_session_busy(device_id: str) -> bool:
     """若 WS 桥仍在，则沿用会话忙标志；否则仅看本链路 in-flight。"""
+    from core.api.parent_live_orchestrator import is_device_live_inflight
+
+    if is_device_live_inflight(device_id):
+        return True
     if is_device_snapshot_inflight(device_id):
         return True
     conn = resolve(device_id=device_id)

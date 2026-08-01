@@ -31,6 +31,19 @@ public interface ParentShadowMissionService {
             String instructions,
             int durationMinutes);
 
+    /**
+     * 学习系统内部创建回炉影子任务（Bearer secret 链路）。
+     */
+    ParentShadowMissionUpsertResultVO createLearningRemedial(
+            String deviceId,
+            Long childId,
+            Long parentUserId,
+            Long learningSessionId,
+            String skillCode,
+            String title,
+            String instructions,
+            int durationMinutes);
+
     void cancel(Long parentUserId, Long childId);
 
     /**

@@ -157,6 +157,61 @@ public class ParentShadowMissionServiceImpl implements ParentShadowMissionServic
     }
 
     @Override
+    public ParentShadowMissionUpsertResultVO createLearningRemedial(
+            String deviceId,
+            Long childId,
+            Long parentUserId,
+            Long learningSessionId,
+            String skillCode,
+            String title,
+            String instructions,
+            int durationMinutes) {
+        if (childId == null || parentUserId == null || StringUtils.isBlank(title) || StringUtils.isBlank(instructions)) {
+            throw new RenException("学习回炉任务参数不完整");
+        }
+        DeviceChildEntity child = deviceChildDao.selectById(childId);
+        if (child == null) {
+            throw new RenException("孩子不存在");
+        }
+        String resolvedDeviceId = StringUtils.isNotBlank(deviceId) ? deviceId : child.getDeviceId();
+        if (StringUtils.isBlank(resolvedDeviceId)) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        int dm = durationMinutes;
+        if (dm < DURATION_MIN) {
+            dm = DURATION_MIN;
+        }
+        if (dm > DURATION_MAX) {
+            dm = DURATION_MAX;
+        }
+        long activeCount = parentShadowMissionDao.selectCount(
+                new LambdaQueryWrapper<ParentShadowMissionEntity>()
+                        .eq(ParentShadowMissionEntity::getChildId, childId)
+                        .eq(ParentShadowMissionEntity::getStatus, ParentShadowMissionEntity.STATUS_ACTIVE));
+        if (activeCount >= MAX_ACTIVE_SHADOW) {
+            return null;
+        }
+        Date endsAt = addMinutes(new Date(), dm);
+        ParentShadowMissionEntity entity = new ParentShadowMissionEntity();
+        entity.setDeviceId(resolvedDeviceId);
+        entity.setChildId(childId);
+        entity.setParentUserId(parentUserId);
+        entity.setTitle(StringUtils.abbreviate(title.trim(), TITLE_MAX));
+        entity.setInstructions(StringUtils.abbreviate(instructions.trim(), INSTRUCTIONS_MAX));
+        entity.setEndsAt(endsAt);
+        entity.setStatus(ParentShadowMissionEntity.STATUS_ACTIVE);
+        entity.setSource("learning");
+        entity.setLearningSessionId(learningSessionId);
+        entity.setSkillCode(StringUtils.trimToNull(skillCode));
+        entity.setPriority(0);
+        Date now = new Date();
+        entity.setCreateTime(now);
+        entity.setUpdateTime(now);
+        parentShadowMissionDao.insert(entity);
+        return new ParentShadowMissionUpsertResultVO(entity.getId(), entity.getTitle());
+    }
+
+    @Override
     public void cancel(Long parentUserId, Long childId) {
         if (parentUserId == null || childId == null) {
             throw new RenException("parentUserId、childId 必填");
@@ -419,27 +474,32 @@ public class ParentShadowMissionServiceImpl implements ParentShadowMissionServic
     }
 
     private static ParentShadowMissionActiveVO toActiveVO(ParentShadowMissionEntity e) {
-        int pri = e.getPriority() != null ? e.getPriority() : 0;
-        return new ParentShadowMissionActiveVO(
-                e.getId(),
-                e.getTitle(),
-                e.getInstructions(),
-                e.getEndsAt(),
-                pri);
+        ParentShadowMissionActiveVO vo = new ParentShadowMissionActiveVO();
+        vo.setId(e.getId());
+        vo.setTitle(e.getTitle());
+        vo.setInstructions(e.getInstructions());
+        vo.setEndsAt(e.getEndsAt());
+        vo.setPriority(e.getPriority() != null ? e.getPriority() : 0);
+        vo.setSource(StringUtils.defaultIfBlank(e.getSource(), "parent"));
+        vo.setSkillCode(e.getSkillCode());
+        return vo;
     }
 
     private static ParentShadowMissionDetailVO toDetailVO(ParentShadowMissionEntity e) {
-        int pri = e.getPriority() != null ? e.getPriority() : 0;
-        return new ParentShadowMissionDetailVO(
-                e.getId(),
-                e.getDeviceId(),
-                e.getChildId(),
-                e.getTitle(),
-                e.getInstructions(),
-                e.getEndsAt(),
-                pri,
-                e.getStatus(),
-                e.getCreateTime(),
-                e.getUpdateTime());
+        ParentShadowMissionDetailVO vo = new ParentShadowMissionDetailVO();
+        vo.setId(e.getId());
+        vo.setDeviceId(e.getDeviceId());
+        vo.setChildId(e.getChildId());
+        vo.setTitle(e.getTitle());
+        vo.setInstructions(e.getInstructions());
+        vo.setEndsAt(e.getEndsAt());
+        vo.setPriority(e.getPriority() != null ? e.getPriority() : 0);
+        vo.setStatus(e.getStatus());
+        vo.setCreateTime(e.getCreateTime());
+        vo.setUpdateTime(e.getUpdateTime());
+        vo.setSource(StringUtils.defaultIfBlank(e.getSource(), "parent"));
+        vo.setSkillCode(e.getSkillCode());
+        vo.setLearningSessionId(e.getLearningSessionId());
+        return vo;
     }
 }

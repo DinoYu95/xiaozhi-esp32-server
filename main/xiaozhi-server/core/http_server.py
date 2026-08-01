@@ -6,6 +6,7 @@ from core.api.vision_handler import VisionHandler
 from core.api.parent_chat_handler import ParentChatHandler
 from core.api.parent_chat_websocket import handle_parent_chat_ws
 from core.api.parent_snapshot_handler import ParentSnapshotHandler
+from core.api.parent_live_handler import ParentLiveHandler
 from core.api.zhiban_tool_handler import ZhibanToolHandler
 
 TAG = __name__
@@ -20,6 +21,7 @@ class SimpleHttpServer:
         self.parent_chat_handler = ParentChatHandler(config)
         self.zhiban_tool_handler = ZhibanToolHandler(config)
         self.parent_snapshot_handler = ParentSnapshotHandler(config)
+        self.parent_live_handler = ParentLiveHandler(config)
 
     def _get_websocket_url(self, local_ip: str, port: int) -> str:
         """获取websocket地址
@@ -106,6 +108,22 @@ class SimpleHttpServer:
                         web.options(
                             "/internal/parent/device-snapshot",
                             self.parent_snapshot_handler.handle_options,
+                        ),
+                        web.post(
+                            "/internal/parent/live/start",
+                            self.parent_live_handler.handle_start,
+                        ),
+                        web.post(
+                            "/internal/parent/live/stop",
+                            self.parent_live_handler.handle_stop,
+                        ),
+                        web.options(
+                            "/internal/parent/live/start",
+                            self.parent_live_handler.handle_options,
+                        ),
+                        web.options(
+                            "/internal/parent/live/stop",
+                            self.parent_live_handler.handle_options,
                         ),
                         # Zhiban 工具桥接（zhiban-agent 内部调用，Bearer 鉴权）
                         web.get(

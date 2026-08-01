@@ -233,4 +233,9 @@ public class RedisKeys {
     public static String getParentSnapshotTokenKey(String uploadToken) {
         return "parent:snapshot:token:" + uploadToken;
     }
+
+    /** 远程监控：设备当前 active sessionId */
+    public static String getParentLiveDeviceKey(String deviceId) {
+        return "parent:live:device:" + normalizeDeviceId(deviceId);
+    }
 }

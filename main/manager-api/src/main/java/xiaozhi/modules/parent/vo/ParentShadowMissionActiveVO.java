@@ -23,4 +23,8 @@ public class ParentShadowMissionActiveVO {
     private Date endsAt;
     @Schema(description = "优先级，越小越优先")
     private Integer priority;
+    @Schema(description = "来源：parent|learning")
+    private String source;
+    @Schema(description = "学习回炉 skill code")
+    private String skillCode;
 }

@@ -55,6 +55,15 @@ public class DeviceChildEntity {
     @Schema(description = "学校/幼儿园")
     private String school;
 
+    @Schema(description = "当前年级1-6")
+    private Integer currentGrade;
+
+    @Schema(description = "教材系列")
+    private String textbookSeries;
+
+    @Schema(description = "启用学科JSON")
+    private String subjectsEnabled;
+
     @Schema(description = "创建时间")
     private Date createTime;
 

@@ -93,6 +93,9 @@ public class DeviceChildServiceImpl implements DeviceChildService {
         entity.setFavoriteStories(dto.getFavoriteStories());
         entity.setPersonalityNote(dto.getPersonalityNote());
         entity.setSchool(dto.getSchool());
+        entity.setCurrentGrade(dto.getCurrentGrade());
+        entity.setTextbookSeries(dto.getTextbookSeries());
+        entity.setSubjectsEnabled(dto.getSubjectsEnabled());
     }
 
     private void copyUpdateDtoToEntity(DeviceChildUpdateDTO dto, DeviceChildEntity entity) {
@@ -106,5 +109,8 @@ public class DeviceChildServiceImpl implements DeviceChildService {
         if (dto.getFavoriteStories() != null) entity.setFavoriteStories(dto.getFavoriteStories());
         if (dto.getPersonalityNote() != null) entity.setPersonalityNote(dto.getPersonalityNote());
         if (dto.getSchool() != null) entity.setSchool(dto.getSchool());
+        if (dto.getCurrentGrade() != null) entity.setCurrentGrade(dto.getCurrentGrade());
+        if (dto.getTextbookSeries() != null) entity.setTextbookSeries(dto.getTextbookSeries());
+        if (dto.getSubjectsEnabled() != null) entity.setSubjectsEnabled(dto.getSubjectsEnabled());
     }
 }

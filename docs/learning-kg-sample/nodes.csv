@@ -1,0 +1,9 @@
+code,node_type,name,description,grade
+MATH.G1.NUM.DECOMP_WITHIN_10,SKILL,10以内数的分解,把一个10以内的数分成两部分,1
+MATH.G1.SUB.TAKE_AWAY_MEANING,SKILL,减法的去掉意义,理解减法表示拿走变少而不是相加,1
+MATH.G1.SUB.WITHIN_10,SKILL,10以内减法计算,在理解意义基础上熟练计算10以内减法,1
+MATH.G1.MIS.ADD_INSTEAD_OF_SUB,MISCONCEPTION,看见两个数就相加,把减法题当成加法计算,1
+MATH.G1.PROBE.MORE_OR_LESS,DIAGNOSTIC_PROBE,判断变多还是变少,口述情境问数量是变多还是变少,1
+MATH.G1.INT.DOT_COVER,INTERVENTION,圆点遮挡练习,用盖住几个圆点体会拿走几个,1
+MATH.G1.INT.ORAL_TAKE_AWAY,INTERVENTION,口头拿走练习,家长或智伴口述5拿走2让孩子答还剩几并解释,1
+MATH.G2.MUL.TWO_DIGIT,SKILL,两位数乘法,两位数乘一位数或两位数的口算与竖式入门,2

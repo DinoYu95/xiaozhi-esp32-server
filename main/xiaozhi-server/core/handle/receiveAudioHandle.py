@@ -228,11 +228,21 @@ async def startToChat(conn, text):
             return
         try_resolve_homework_photo_phrase(conn, actual_text)
         will_photo_capture = bool(getattr(conn, "homework_photo_capture_now", False))
+        from core.zhibanAgent.homework_tutor_mode import is_active as homework_active
+
+        if homework_active(conn) and not handled:
+            try:
+                from core.learning.learning_api_client import on_user_turn
+
+                on_user_turn(conn, actual_text)
+            except Exception:
+                pass
 
     # 意图未被处理，继续常规聊天流程，使用实际文本内容
     await send_stt_message(conn, actual_text)
     if is_zhiban_connection(conn) and will_photo_capture:
         speak_one_sentence(conn, PHOTO_CAPTURE_START_REPLY)
+        conn._learning_pending_photo_user_text = actual_text
     conn.executor.submit(conn.chat, actual_text)
 
 

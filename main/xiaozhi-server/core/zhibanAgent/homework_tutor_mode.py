@@ -155,6 +155,12 @@ def maybe_expire_mode(conn) -> bool:
         return False
     if time.time() - float(entered) <= get_idle_timeout_sec(conn):
         return False
+    try:
+        from core.learning.learning_api_client import on_homework_exit
+
+        on_homework_exit(conn, "idle_timeout")
+    except Exception:
+        pass
     conn.active_mode = None
     conn.homework_mode_entered_at = None
     conn.homework_mode_just_expired = True
@@ -166,9 +172,21 @@ def enter_mode(conn) -> None:
     conn.homework_mode_entered_at = time.time()
     conn.homework_mode_just_expired = False
     clear_photo_flow(conn)
+    try:
+        from core.learning.learning_api_client import on_homework_enter
+
+        on_homework_enter(conn)
+    except Exception:
+        pass
 
 
 def exit_mode(conn) -> None:
+    try:
+        from core.learning.learning_api_client import on_homework_exit
+
+        on_homework_exit(conn, "manual")
+    except Exception:
+        pass
     conn.active_mode = None
     conn.homework_mode_entered_at = None
     conn.homework_mode_just_expired = False

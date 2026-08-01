@@ -191,6 +191,12 @@ class ConnectionHandler:
         self.homework_mode_just_expired = False
         self.homework_photo_pending = False
         self.homework_photo_capture_now = False
+        self.learning_session_uuid = None
+        self.learning_user_turn_count = 0
+        self.learning_photo_count = 0
+        self.learning_last_turn_ts = None
+        self.learning_longest_silence = 0
+        self._learning_pending_photo_user_text = None
 
         self.timeout_seconds = (
             int(self.config.get("close_connection_no_voice_time", 120)) + 60
@@ -1173,6 +1179,23 @@ class ConnectionHandler:
         self._shadow_mission_cache_val = data
         return data
 
+    def _maybe_report_learning_photo(self, user_text: str, response_parts: list) -> None:
+        if not getattr(self, "_learning_pending_photo_user_text", None):
+            return
+        self._learning_pending_photo_user_text = None
+        try:
+            from core.learning.learning_api_client import on_photo_result
+
+            assistant = "".join(response_parts or [])[:4000]
+            on_photo_result(
+                self,
+                vision_text=assistant,
+                user_text=user_text or "",
+                assistant_reply=assistant,
+            )
+        except Exception as e:
+            self.logger.bind(tag=TAG).warning(f"learning photo report failed: {e}")
+
     def _is_zhiban_llm(self):
         """判断当前 LLM 是否为 ZhibanAgent，用于跳过 xiaozhi 侧的 memory/functions 以降低首响延迟。"""
         if self.llm is None:
@@ -1402,6 +1425,7 @@ class ConnectionHandler:
                     time.monotonic() - t_llm,
                     time.monotonic() - t0_chat,
                 )
+                self._maybe_report_learning_photo(query, response_message)
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"LLM stream processing error: {e}")
             self.tts.tts_text_queue.put(

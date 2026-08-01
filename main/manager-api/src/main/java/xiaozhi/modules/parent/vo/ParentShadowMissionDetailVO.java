@@ -33,4 +33,10 @@ public class ParentShadowMissionDetailVO {
     private Date createTime;
     @Schema(description = "更新时间")
     private Date updateTime;
+    @Schema(description = "来源：parent|learning")
+    private String source;
+    @Schema(description = "学习回炉关联 skill code")
+    private String skillCode;
+    @Schema(description = "关联 learning_homework_session.id")
+    private Long learningSessionId;
 }

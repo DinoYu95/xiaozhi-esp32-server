@@ -14,5 +14,7 @@ Redis 5.0+
 Vue 3.x
 
 # 接口文档
-启动后打开：http://localhost:8002/xiaozhi/doc.html
+- **本地开发**（`spring.profiles.active=dev` 且 `XIAOZHI_OPENAPI_ENABLED=true`）：http://localhost:8002/xiaozhi/doc.html  
+  默认启用 Knife4j Basic（见 `application-dev.yml`），接口清单另需在文档里 **Authorize** 填智控台登录 Token。
+- **生产/公网**：默认 **关闭** doc（`application-prod.yml` 或 `XIAOZHI_OPENAPI_ENABLED=false`），勿对公网暴露 Swagger。
 

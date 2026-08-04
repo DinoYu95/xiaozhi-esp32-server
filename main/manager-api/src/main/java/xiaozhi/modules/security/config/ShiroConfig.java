@@ -82,8 +82,11 @@ public class ShiroConfig {
         filterMap.put("/otaMag/download/**", "anon");
         filterMap.put("/webjars/**", "anon");
         filterMap.put("/druid/**", "anon");
-        filterMap.put("/v3/api-docs/**", "anon");
+        // OpenAPI：接口清单禁止匿名下载；doc 页面由 Knife4j Basic（可选）+ 文档内 Authorize 填 JWT
+        filterMap.put("/v3/api-docs/**", "oauth2");
         filterMap.put("/doc.html", "anon");
+        filterMap.put("/swagger-ui/**", "anon");
+        filterMap.put("/swagger-ui.html", "anon");
         filterMap.put("/favicon.ico", "anon");
         filterMap.put("/user/captcha", "anon");
         filterMap.put("/user/smsVerification", "anon");

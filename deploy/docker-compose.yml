@@ -73,6 +73,8 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       SPRING_DATA_REDIS_PORT: "6379"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      XIAOZHI_OPENAPI_ENABLED: ${XIAOZHI_OPENAPI_ENABLED:-false}
     ports:
       - "${WEB_PORT:-8002}:8002"
     # 参数保存时 manager-api 会校验 server.voice_print（GET 该 URL）；Linux 需 host.docker.internal 才能访问宿主机上的声纹服务

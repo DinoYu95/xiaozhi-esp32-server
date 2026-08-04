@@ -1,0 +1,14 @@
+# 生产环境：默认不暴露 Swagger / doc.html
+xiaozhi:
+  openapi:
+    enabled: false
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+knife4j:
+  enable: false
+  production: true

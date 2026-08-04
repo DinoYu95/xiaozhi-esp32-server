@@ -1,10 +1,21 @@
+xiaozhi:
+  openapi:
+    enabled: true
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
 knife4j:
   production: false
   enable: true
   basic:
-    enable: false
-    username: renren
-    password: 2ZABCDEUgF
+    # 本地/内网也建议开启，避免 doc 裸奔；密码用环境变量覆盖
+    enable: ${KNIFE4J_BASIC_ENABLE:true}
+    username: ${KNIFE4J_BASIC_USERNAME:doc}
+    password: ${KNIFE4J_BASIC_PASSWORD:dev-openapi-change-me}
   setting:
     enableFooter: false
 spring:

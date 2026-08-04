@@ -14,8 +14,12 @@ import lombok.RequiredArgsConstructor;
 import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.exception.RenException;
 import xiaozhi.common.utils.Result;
+import xiaozhi.modules.learning.service.LearningMasteryService;
 import xiaozhi.modules.learning.service.LearningSessionService;
+import xiaozhi.modules.learning.vo.LearningMasteryMapVO;
+import xiaozhi.modules.learning.vo.LearningModulePathVO;
 import xiaozhi.modules.learning.vo.LearningOverviewVO;
+import xiaozhi.modules.learning.vo.LearningSkillDetailVO;
 import xiaozhi.modules.learning.vo.LearningSessionDetailVO;
 import xiaozhi.modules.learning.vo.LearningSessionPageVO;
 import xiaozhi.modules.learning.vo.LearningWeeklyDigestVO;
@@ -28,6 +32,7 @@ import xiaozhi.modules.parent.context.ParentContext;
 public class LearningParentController {
 
     private final LearningSessionService learningSessionService;
+    private final LearningMasteryService learningMasteryService;
 
     private static Long requireParentUserId() {
         Long id = ParentContext.getParentUserId();
@@ -74,5 +79,36 @@ public class LearningParentController {
             @PathVariable("sessionId") Long sessionId) {
         return new Result<LearningSessionDetailVO>().ok(
                 learningSessionService.getSessionDetail(requireParentUserId(), sessionId));
+    }
+
+    @GetMapping("/mastery-map")
+    @Operation(summary = "掌握地图（按年级模块聚合 SKILL + 掌握度）")
+    public Result<LearningMasteryMapVO> masteryMap(
+            @Parameter(description = "device_child.id", required = true) @RequestParam Long childId,
+            @Parameter(description = "学科，默认 math") @RequestParam(required = false) String subject,
+            @Parameter(description = "年级 1-6，默认孩子档案 currentGrade，未填则 1") @RequestParam(required = false) Integer grade) {
+        return new Result<LearningMasteryMapVO>().ok(
+                learningMasteryService.masteryMap(requireParentUserId(), childId, subject, grade));
+    }
+
+    @GetMapping("/skills/{code}")
+    @Operation(summary = "知识点详情（掌握度、前后置、易错点）")
+    public Result<LearningSkillDetailVO> skillDetail(
+            @PathVariable("code") String code,
+            @Parameter(description = "device_child.id", required = true) @RequestParam Long childId) {
+        return new Result<LearningSkillDetailVO>().ok(
+                learningMasteryService.skillDetail(requireParentUserId(), childId, code));
+    }
+
+    @GetMapping("/mastery-map/module-path")
+    @Operation(summary = "模块内学习顺序（PREREQUISITE_OF 拓扑序）")
+    public Result<LearningModulePathVO> modulePath(
+            @Parameter(description = "device_child.id", required = true) @RequestParam Long childId,
+            @Parameter(description = "模块键，如 ADD、SUB", required = true) @RequestParam String moduleKey,
+            @Parameter(description = "学科，默认 math") @RequestParam(required = false) String subject,
+            @Parameter(description = "年级，默认档案或 1") @RequestParam(required = false) Integer grade) {
+        return new Result<LearningModulePathVO>().ok(
+                learningMasteryService.modulePath(
+                        requireParentUserId(), childId, subject, grade, moduleKey));
     }
 }

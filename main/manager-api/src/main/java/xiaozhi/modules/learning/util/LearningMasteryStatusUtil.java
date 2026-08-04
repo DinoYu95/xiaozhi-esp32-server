@@ -1,0 +1,51 @@
+package xiaozhi.modules.learning.util;
+
+import org.apache.commons.lang3.StringUtils;
+
+/**
+ * 掌握度展示 status 枚举（与小程序约定）。
+ */
+public final class LearningMasteryStatusUtil {
+
+    public static final String UNOBSERVED = "unobserved";
+    public static final String NEED_CONSOLIDATE = "need_consolidate";
+    public static final String PRACTICING = "practicing";
+    public static final String STABLE = "stable";
+
+    private LearningMasteryStatusUtil() {
+    }
+
+    public static String resolveStatus(Integer evidenceCount, java.math.BigDecimal pMastery) {
+        if (evidenceCount == null || evidenceCount <= 0) {
+            return UNOBSERVED;
+        }
+        java.math.BigDecimal p = pMastery != null ? pMastery : new java.math.BigDecimal("0.50");
+        if (p.compareTo(new java.math.BigDecimal("0.45")) < 0) {
+            return NEED_CONSOLIDATE;
+        }
+        if (p.compareTo(new java.math.BigDecimal("0.75")) < 0) {
+            return PRACTICING;
+        }
+        return STABLE;
+    }
+
+    public static String moduleKeyFromSkillCode(String code) {
+        if (StringUtils.isBlank(code)) {
+            return "OTHER";
+        }
+        String[] parts = code.split("\\.");
+        if (parts.length >= 3) {
+            return parts[2].trim().toUpperCase();
+        }
+        return "OTHER";
+    }
+
+    public static String subjectLabel(String subject) {
+        return switch (StringUtils.defaultIfBlank(subject, "math").toLowerCase()) {
+            case "math" -> "数学";
+            case "chinese" -> "语文";
+            case "english" -> "英语";
+            default -> subject;
+        };
+    }
+}

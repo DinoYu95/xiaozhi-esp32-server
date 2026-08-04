@@ -1,6 +1,6 @@
 # 作业辅导模式
 
-会话级专注模式：孩子通过唤醒词进入后，仅处理作业/学习相关问题；说「退出作业辅导」退出。
+会话级专注模式：孩子通过唤醒词进入后，优先辅导作业/学习；其它话题尽量简短回应。说「退出作业辅导」退出。
 
 ## 唤醒词
 
@@ -15,7 +15,7 @@
 孩子说「进入作业辅导」
   → xiaozhi-server 识别唤醒词，设置 conn.active_mode=homework_tutor，TTS 确认
   → 后续对话 environment_context.active_mode 传给 zhiban-agent
-  → zhiban 注入作业辅导 system prompt，拒绝无关话题
+  → zhiban 注入作业辅导 system prompt，学习题口头引导；非学习话题不硬性拒答
   → 需要看题时走拍照返图 + 多模态 LLM（homework purpose）
 孩子说「退出作业辅导」
   → xiaozhi 清除 active_mode，TTS 告别，不走 LLM

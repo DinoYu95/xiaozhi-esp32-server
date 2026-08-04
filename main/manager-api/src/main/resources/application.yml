@@ -27,12 +27,24 @@ spring:
   main:
     allow-bean-definition-overriding: true
 
+# 公网部署务必关闭 OpenAPI（prod 配置或 XIAOZHI_OPENAPI_ENABLED=false）
+xiaozhi:
+  openapi:
+    enabled: ${XIAOZHI_OPENAPI_ENABLED:false}
+
+springdoc:
+  api-docs:
+    enabled: ${xiaozhi.openapi.enabled:false}
+  swagger-ui:
+    enabled: ${xiaozhi.openapi.enabled:false}
+
 knife4j:
-  enable: true
+  enable: ${xiaozhi.openapi.enabled:false}
+  production: ${KNIFE4J_PRODUCTION:true}
   basic:
-    enable: false
-    username: admin
-    password: admin
+    enable: ${KNIFE4J_BASIC_ENABLE:false}
+    username: ${KNIFE4J_BASIC_USERNAME:doc}
+    password: ${KNIFE4J_BASIC_PASSWORD:}
   setting:
     enableFooter: false
 

@@ -249,6 +249,30 @@ def try_resolve_mode_phrase(conn, text: str) -> Tuple[bool, Optional[str]]:
     return False, None
 
 
+REFUSE_PHOTO_PHRASES = (
+    "不用拍",
+    "不要拍",
+    "不需要拍",
+    "不用拍照",
+    "没题",
+    "没有题",
+    "不是拍照",
+    "我没有需要拍照",
+)
+
+
+def match_refuse_photo(text: str) -> bool:
+    norm = normalize_utterance(text)
+    if not norm:
+        return False
+    return any(p in norm for p in REFUSE_PHOTO_PHRASES)
+
+
+def try_clear_photo_if_refused(conn, text: str) -> None:
+    if is_active(conn) and is_photo_pending(conn) and match_refuse_photo(text):
+        clear_photo_flow(conn)
+
+
 def apply_zhiban_homework_meta(conn, meta: dict) -> None:
     """应用 zhiban 下发的作业辅导会话控制（如 photo_guide 进入摆拍等待）。"""
     if not isinstance(meta, dict):
@@ -261,10 +285,12 @@ def apply_zhiban_homework_meta(conn, meta: dict) -> None:
 def try_resolve_homework_photo_phrase(conn, text: str) -> Tuple[bool, Optional[str]]:
     """
     作业辅导模式下仅处理「好了」→ photo_capture_now。
-    摆拍引导由 zhiban router 识别 knowledge_qa 后下发。
+    摆拍引导由 zhiban 在需要看题时下发 homework_action=photo_guide。
     """
     if not is_active(conn):
         return False, None
+
+    try_clear_photo_if_refused(conn, text)
 
     if is_photo_pending(conn) and match_photo_ready(text):
         conn.homework_photo_pending = False

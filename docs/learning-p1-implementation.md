@@ -36,3 +36,7 @@ learning:
 ## 6. 回炉影子任务
 
 拍照诊断判错且置信度足够 → 自动创建 `source=learning` 的 `parent_shadow_mission`（日常对话也会注入，与现有影子任务相同）。
+
+## 7. 家长端掌握地图 API
+
+小程序「学习 Tab」掌握地图与知识点详情见 **`docs/家长端-学习Tab-小程序开发说明.md`**。

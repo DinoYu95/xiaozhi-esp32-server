@@ -26,17 +26,29 @@ def is_owner_dialogue_busy(conn: Any) -> bool:
     return is_machine_busy(conn)
 
 
-def _voiceprint_gate_enabled(conn: Any) -> bool:
-    """是否要求「已录入声纹」才允许在机器忙时插话/受理语音。"""
-    v = conn.config.get("barge_in_requires_voiceprint", True)
+def _config_flag(conn: Any, key: str, default: bool) -> bool:
+    v = conn.config.get(key, default)
     if isinstance(v, str):
         return v.strip().lower() not in ("0", "false", "no", "off")
     return bool(v)
 
 
+def _owner_child_barge_exclusive_enabled(conn: Any) -> bool:
+    """
+    为 true 时恢复「主孩子独占 + 声纹门禁」打断（见 _should_accept_speech_strict 等）。
+    为 false（默认）：机器忙时任意说话人均可插话打断。
+    """
+    return _config_flag(conn, "owner_child_barge_in_exclusive", False)
+
+
+def _voiceprint_gate_enabled(conn: Any) -> bool:
+    """是否要求「已录入声纹」才允许在机器忙时插话/受理语音（仅 strict 模式使用）。"""
+    return _config_flag(conn, "barge_in_requires_voiceprint", True)
+
+
 def is_registered_voiceprint_speaker(conn: Any, speaker_id: Optional[str] = None) -> bool:
     """说话人 id 是否命中本设备已配置的声纹库。"""
-    sid = (speaker_id if speaker_id is not None else getattr(conn, "current_speaker_id", None))
+    sid = speaker_id if speaker_id is not None else getattr(conn, "current_speaker_id", None)
     if not sid:
         return False
     vp = getattr(conn, "voiceprint_provider", None)
@@ -51,19 +63,23 @@ def is_registered_voiceprint_speaker(conn: Any, speaker_id: Optional[str] = None
 def allow_vad_barge_in(conn: Any) -> bool:
     """
     VAD 层是否允许「听见人声就立刻打断」。
-    产品默认关闭：VAD 无法区分是否已录声纹，插话须等 ASR+声纹识别后再决定。
+    宽松模式（owner_child_barge_in_exclusive=false）：允许 VAD 打断。
+    严格模式：须 barge_in_requires_voiceprint=false 才 VAD 打断，否则等 ASR+声纹。
     """
+    if not _owner_child_barge_exclusive_enabled(conn):
+        return True
     if _voiceprint_gate_enabled(conn):
         return False
     return True
 
 
-def should_accept_speech(conn: Any, speaker_id: Optional[str] = None) -> bool:
-    """
-    是否受理本段语音。
-    机器忙时：仅已识别且已录入声纹的说话人可插话；未识别/未录声纹一律丢弃。
-    空闲时：任意说话人均可开新轮。
-    """
+def barge_in_permissive(conn: Any) -> bool:
+    """是否处于「任意说话人均可插话」模式（与 owner_child_barge_in_exclusive 相反）。"""
+    return not _owner_child_barge_exclusive_enabled(conn)
+
+
+def _should_accept_speech_strict(conn: Any, speaker_id: Optional[str] = None) -> bool:
+    """原主孩子/声纹门禁逻辑，owner_child_barge_in_exclusive=true 时使用。"""
     if not is_machine_busy(conn):
         return True
     if not _voiceprint_gate_enabled(conn):
@@ -73,15 +89,35 @@ def should_accept_speech(conn: Any, speaker_id: Optional[str] = None) -> bool:
     return is_registered_voiceprint_speaker(conn, speaker_id)
 
 
+def should_accept_speech(conn: Any, speaker_id: Optional[str] = None) -> bool:
+    """
+    是否受理本段语音。
+    宽松模式：机器忙时也受理任意说话人。
+    严格模式：机器忙时仅已识别且符合声纹/主孩子策略者可插话。
+    """
+    if not _owner_child_barge_exclusive_enabled(conn):
+        return True
+    return _should_accept_speech_strict(conn, speaker_id)
+
+
+def _should_interrupt_on_voiceprint_strict(
+    conn: Any, speaker_id: Optional[str] = None
+) -> bool:
+    """原 ASR+声纹完成后的打断判定。"""
+    if not is_machine_busy(conn):
+        return False
+    if not _voiceprint_gate_enabled(conn):
+        return is_owner_dialogue_busy(conn) and is_owner_speaker(conn, speaker_id)
+    return is_registered_voiceprint_speaker(conn, speaker_id)
+
+
 def should_interrupt_on_voiceprint(conn: Any, speaker_id: Optional[str] = None) -> bool:
     """ASR+声纹完成后，是否应打断当前播读/在途对话。"""
     if not is_machine_busy(conn):
         return False
-
-    return True;
-    # if not _voiceprint_gate_enabled(conn):
-    #     return is_owner_dialogue_busy(conn) and is_owner_speaker(conn, speaker_id)
-    # return is_registered_voiceprint_speaker(conn, speaker_id)
+    if not _owner_child_barge_exclusive_enabled(conn):
+        return True
+    return _should_interrupt_on_voiceprint_strict(conn, speaker_id)
 
 
 def maybe_clear_owner_exclusive(conn: Any) -> None:

@@ -77,7 +77,8 @@ class TTSProviderBase(ABC):
         )
 
     def abort_playback(self):
-        """打断播读：子类可覆写以取消流式 TTS 会话。"""
+        """打断播读：清空待播队列并标记停止。"""
+        self.tts_stop_request = True
 
     def handle_opus(self, opus_data: bytes):
         if self.conn and getattr(self.conn, "client_abort", False):

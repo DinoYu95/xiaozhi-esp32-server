@@ -191,8 +191,9 @@ class ASRProviderBase(ABC):
                     from core.handle.abortHandle import handleAbortMessage
 
                     logger.bind(tag=TAG).info(
-                        "已录声纹说话人插话，触发打断 speaker_id=%s",
+                        "ASR 完成后触发打断 speaker_id=%s type=%s",
                         speaker_id,
+                        getattr(conn, "current_round_speaker_type", None),
                     )
                     await handleAbortMessage(conn)
                 await startToChat(conn, enhanced_text)

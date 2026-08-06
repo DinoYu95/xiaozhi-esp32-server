@@ -14,6 +14,7 @@ from core.handle.sendAudioHandle import (
 )
 from core.utils.owner_dialogue_guard import (
     allow_vad_barge_in,
+    barge_in_permissive,
     is_owner_dialogue_busy,
     is_owner_speaker,
     is_machine_busy,
@@ -100,29 +101,30 @@ async def handleAudioMessage(conn, audio):
     machine_busy = is_machine_busy(conn)
     if not machine_busy:
         conn._barge_in_voice_accum_ms = 0
-    # 播读/LLM 在途：默认不在 VAD 层打断，等 ASR+声纹确认已录声纹后再插话
+    # 播读/LLM 在途：宽松模式下 VAD 累计人声后打断；严格模式等 ASR+声纹
     if have_voice and machine_busy and conn.client_listen_mode != "manual":
         if allow_vad_barge_in(conn):
             min_ms = int(conn.config.get("barge_in_min_voice_ms", 400))
             if min_ms <= 0:
                 conn.logger.bind(tag=TAG).info(
-                    "播读/在途中人声触发打断（VAD 即时） speaking=%s inflight=%s",
+                    "播读/在途中人声触发打断（VAD 即时） speaking=%s inflight=%s permissive=%s",
                     conn.client_is_speaking,
                     chat_inflight,
+                    barge_in_permissive(conn),
                 )
                 await handleAbortMessage(conn)
             else:
                 conn._barge_in_voice_accum_ms += AUDIO_FRAME_DURATION
                 if conn._barge_in_voice_accum_ms >= min_ms:
                     conn.logger.bind(tag=TAG).info(
-                        "播读/在途中人声累计约 %dms（阈值 %dms），VAD 即时打断",
+                        "播读/在途中人声累计约 %dms（阈值 %dms），VAD 打断 permissive=%s",
                         conn._barge_in_voice_accum_ms,
                         min_ms,
+                        barge_in_permissive(conn),
                     )
                     conn._barge_in_voice_accum_ms = 0
                     await handleAbortMessage(conn)
-        # else: 等待 ASR+声纹，未识别声纹的说话不会触发 abort
-    elif machine_busy:
+    elif machine_busy and not have_voice:
         conn._barge_in_voice_accum_ms = 0
     # 设备长时间空闲检测，用于say goodbye
     await no_voice_close_connect(conn, have_voice)
@@ -203,6 +205,11 @@ async def startToChat(conn, text):
     if conn.client_listen_mode != "manual":
         chat_inflight = int(getattr(conn, "_chat_inflight", 0) or 0) > 0
         if conn.client_is_speaking or chat_inflight:
+            conn.logger.bind(tag=TAG).info(
+                "startToChat 前打断上一轮 speaking=%s inflight=%s",
+                conn.client_is_speaking,
+                chat_inflight,
+            )
             await handleAbortMessage(conn)
 
     # 首先进行意图分析，使用实际文本内容

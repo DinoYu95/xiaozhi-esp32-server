@@ -1364,6 +1364,9 @@ class ConnectionHandler:
         # 支持多个并行工具调用 - 使用列表存储
         tool_calls_list = []  # 格式: [{"id": "", "name": "", "arguments": ""}]
         content_arguments = ""
+        if self.client_abort:
+            self.logger.bind(tag=TAG).info("LLM 响应前已收到打断，跳过本轮生成")
+            return None
         self.client_abort = False
         emotion_flag = True
         first_token_logged = False

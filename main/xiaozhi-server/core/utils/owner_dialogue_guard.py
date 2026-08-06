@@ -77,9 +77,11 @@ def should_interrupt_on_voiceprint(conn: Any, speaker_id: Optional[str] = None) 
     """ASR+声纹完成后，是否应打断当前播读/在途对话。"""
     if not is_machine_busy(conn):
         return False
-    if not _voiceprint_gate_enabled(conn):
-        return is_owner_dialogue_busy(conn) and is_owner_speaker(conn, speaker_id)
-    return is_registered_voiceprint_speaker(conn, speaker_id)
+
+    return True;
+    # if not _voiceprint_gate_enabled(conn):
+    #     return is_owner_dialogue_busy(conn) and is_owner_speaker(conn, speaker_id)
+    # return is_registered_voiceprint_speaker(conn, speaker_id)
 
 
 def maybe_clear_owner_exclusive(conn: Any) -> None:

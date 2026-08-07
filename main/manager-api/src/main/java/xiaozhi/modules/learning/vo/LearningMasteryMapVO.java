@@ -20,4 +20,8 @@ public class LearningMasteryMapVO {
     private LearningMasterySummaryVO summary;
     private List<LearningMasteryModuleVO> modules;
     private String coverageNote;
+    @Schema(description = "与 overview 一致的周一 yyyy-MM-dd")
+    private String weekStart;
+    @Schema(description = "weekStart + 6 天")
+    private String weekEnd;
 }

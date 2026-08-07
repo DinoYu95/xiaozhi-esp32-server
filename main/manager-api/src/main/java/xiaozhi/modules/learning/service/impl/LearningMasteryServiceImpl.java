@@ -1,8 +1,13 @@
 package xiaozhi.modules.learning.service.impl;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -18,6 +23,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 import lombok.RequiredArgsConstructor;
 import xiaozhi.common.exception.RenException;
+import xiaozhi.common.utils.JsonUtils;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.learning.dao.KgEdgeDao;
@@ -25,11 +31,13 @@ import xiaozhi.modules.learning.dao.KgGraphReleaseDao;
 import xiaozhi.modules.learning.dao.KgNodeDao;
 import xiaozhi.modules.learning.dao.KgNodeRevisionDao;
 import xiaozhi.modules.learning.dao.LearnerSkillStateDao;
+import xiaozhi.modules.learning.dao.LearningEvidenceEventDao;
 import xiaozhi.modules.learning.entity.KgEdgeEntity;
 import xiaozhi.modules.learning.entity.KgGraphReleaseEntity;
 import xiaozhi.modules.learning.entity.KgNodeEntity;
 import xiaozhi.modules.learning.entity.KgNodeRevisionEntity;
 import xiaozhi.modules.learning.entity.LearnerSkillStateEntity;
+import xiaozhi.modules.learning.entity.LearningEvidenceEventEntity;
 import xiaozhi.modules.learning.service.LearningKgService;
 import xiaozhi.modules.learning.service.LearningMasteryService;
 import xiaozhi.modules.learning.util.LearningMasteryModuleLabels;
@@ -55,6 +63,8 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
     private static final String EDGE_MIS = "HAS_MISCONCEPTION";
     private static final String COVERAGE_NOTE =
             "掌握度来自作业辅导中的问答/拍题观察，不是学校考试成绩。当前精准图谱：小学1-3年级数学。";
+    private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    private static final int SUGGESTED_CONSOLIDATE_TOP_N = 5;
 
     private final DeviceChildDao deviceChildDao;
     private final ParentDeviceBindingDao parentDeviceBindingDao;
@@ -64,10 +74,16 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
     private final KgNodeRevisionDao kgNodeRevisionDao;
     private final KgEdgeDao kgEdgeDao;
     private final LearnerSkillStateDao learnerSkillStateDao;
+    private final LearningEvidenceEventDao learningEvidenceEventDao;
 
     @Override
-    public LearningMasteryMapVO masteryMap(Long parentUserId, Long childId, String subject, Integer grade) {
+    public LearningMasteryMapVO masteryMap(
+            Long parentUserId, Long childId, String subject, Integer grade, String weekStart) {
         ChildRelease ctx = loadContext(parentUserId, childId, subject, grade);
+        WeekRange week = resolveWeekRange(weekStart);
+        Set<String> observedThisWeekCodes = loadObservedSkillCodesInRange(childId, week.from, week.toExclusive);
+        Set<String> consolidatePeriodCodes = loadSuggestedConsolidateSkillCodes(childId);
+
         List<SkillRow> rows = loadSkillRowsForGrade(ctx.releaseId, ctx.grade);
         Map<Long, LearnerSkillStateEntity> stateByNodeId = loadStatesForChild(childId, rows);
 
@@ -78,10 +94,11 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
 
         List<LearningMasteryModuleVO> modules = byModule.entrySet().stream()
                 .sorted(Comparator.comparingInt(e -> LearningMasteryModuleLabels.sortIndex(e.getKey())))
-                .map(e -> buildModuleVO(e.getKey(), e.getValue(), stateByNodeId))
+                .map(e -> buildModuleVO(
+                        e.getKey(), e.getValue(), stateByNodeId, observedThisWeekCodes, consolidatePeriodCodes))
                 .collect(Collectors.toList());
 
-        LearningMasterySummaryVO summary = aggregateSummary(modules);
+        LearningMasterySummaryVO summary = aggregateSummary(modules, ctx.grade);
         LearningMasteryMapVO vo = new LearningMasteryMapVO();
         vo.setChildId(childId);
         vo.setSubject(ctx.subject);
@@ -93,6 +110,8 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         vo.setSummary(summary);
         vo.setModules(modules);
         vo.setCoverageNote(COVERAGE_NOTE);
+        vo.setWeekStart(week.start.toString());
+        vo.setWeekEnd(week.end.toString());
         return vo;
     }
 
@@ -129,7 +148,7 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         vo.setDescription(rev.getDescription());
         vo.setGrade(rev.getGrade());
         vo.setSubject("math");
-        vo.setMastery(toSkillVO(node, rev, st));
+        vo.setMastery(toSkillVO(node, rev, st, false, false));
         vo.setPrerequisites(loadLinkedSkills(releaseId, childId, node.getId(), true));
         vo.setNextSkills(loadLinkedSkills(releaseId, childId, node.getId(), false));
         vo.setMisconceptions(loadMisconceptions(releaseId, node.getId()));
@@ -178,7 +197,7 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         for (Long nid : sorted) {
             SkillRow r = rowByNodeId.get(nid);
             if (r != null) {
-                path.add(toSkillVO(r.node, r.revision, stateByNodeId.get(nid)));
+                path.add(toSkillVO(r.node, r.revision, stateByNodeId.get(nid), false, false));
             }
         }
         LearningModulePathVO vo = new LearningModulePathVO();
@@ -264,13 +283,20 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
     private LearningMasteryModuleVO buildModuleVO(
             String moduleKey,
             List<SkillRow> rows,
-            Map<Long, LearnerSkillStateEntity> stateByNodeId) {
+            Map<Long, LearnerSkillStateEntity> stateByNodeId,
+            Set<String> observedThisWeekCodes,
+            Set<String> consolidatePeriodCodes) {
         List<LearningMasterySkillVO> skills = new ArrayList<>();
         int observed = 0;
         int need = 0;
         for (SkillRow row : rows) {
             LearnerSkillStateEntity st = stateByNodeId.get(row.nodeId);
-            LearningMasterySkillVO sv = toSkillVO(row.node, row.revision, st);
+            LearningMasterySkillVO sv = toSkillVO(
+                    row.node,
+                    row.revision,
+                    st,
+                    observedThisWeekCodes.contains(row.node.getCode()),
+                    consolidatePeriodCodes.contains(row.node.getCode()));
             skills.add(sv);
             if (st != null && st.getEvidenceCount() != null && st.getEvidenceCount() > 0) {
                 observed++;
@@ -289,7 +315,7 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         return m;
     }
 
-    private LearningMasterySummaryVO aggregateSummary(List<LearningMasteryModuleVO> modules) {
+    private LearningMasterySummaryVO aggregateSummary(List<LearningMasteryModuleVO> modules, int grade) {
         LearningMasterySummaryVO s = new LearningMasterySummaryVO();
         int total = 0;
         int observed = 0;
@@ -297,6 +323,8 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         int practicing = 0;
         int stable = 0;
         int unobserved = 0;
+        int observedThisWeek = 0;
+        int suggestedConsolidate = 0;
         for (LearningMasteryModuleVO m : modules) {
             total += m.getSkillTotal() != null ? m.getSkillTotal() : 0;
             observed += m.getObservedCount() != null ? m.getObservedCount() : 0;
@@ -305,6 +333,12 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
                 continue;
             }
             for (LearningMasterySkillVO sk : m.getSkills()) {
+                if (Boolean.TRUE.equals(sk.getObservedThisWeek())) {
+                    observedThisWeek++;
+                }
+                if (Boolean.TRUE.equals(sk.getConsolidateThisPeriod())) {
+                    suggestedConsolidate++;
+                }
                 switch (StringUtils.defaultString(sk.getStatus())) {
                     case LearningMasteryStatusUtil.PRACTICING -> practicing++;
                     case LearningMasteryStatusUtil.STABLE -> stable++;
@@ -320,11 +354,19 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         s.setPracticingCount(practicing);
         s.setStableCount(stable);
         s.setUnobservedCount(unobserved);
+        s.setCoverageScope("grade_cumulative");
+        s.setTermLabel("小学" + grade + "年级图谱累计");
+        s.setObservedThisWeekCount(observedThisWeek);
+        s.setSuggestedConsolidateCount(suggestedConsolidate);
         return s;
     }
 
     private LearningMasterySkillVO toSkillVO(
-            KgNodeEntity node, KgNodeRevisionEntity rev, LearnerSkillStateEntity st) {
+            KgNodeEntity node,
+            KgNodeRevisionEntity rev,
+            LearnerSkillStateEntity st,
+            boolean observedThisWeek,
+            boolean consolidateThisPeriod) {
         LearningMasterySkillVO vo = new LearningMasterySkillVO();
         vo.setCode(node.getCode());
         vo.setName(rev.getName());
@@ -337,7 +379,74 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
             vo.setEvidenceCount(0);
         }
         vo.setStatus(LearningMasteryStatusUtil.resolveStatus(vo.getEvidenceCount(), vo.getPMastery()));
+        vo.setObservedThisWeek(observedThisWeek);
+        vo.setConsolidateThisPeriod(consolidateThisPeriod);
         return vo;
+    }
+
+    private Set<String> loadObservedSkillCodesInRange(Long childId, Date from, Date toExclusive) {
+        List<LearningEvidenceEventEntity> events = learningEvidenceEventDao.selectList(
+                new LambdaQueryWrapper<LearningEvidenceEventEntity>()
+                        .eq(LearningEvidenceEventEntity::getChildId, childId)
+                        .ge(LearningEvidenceEventEntity::getOccurredAt, from)
+                        .lt(LearningEvidenceEventEntity::getOccurredAt, toExclusive)
+                        .in(
+                                LearningEvidenceEventEntity::getEventType,
+                                "DIAGNOSIS_VISION",
+                                "DIAGNOSIS_VERBAL"));
+        Set<String> codes = new HashSet<>();
+        for (LearningEvidenceEventEntity ev : events) {
+            appendSkillCodesFromEvent(ev, codes);
+        }
+        return codes;
+    }
+
+    /** 与 {@link LearningSessionServiceImpl#weeklyDigest} 的 topWeakSkills 同源（全局最低掌握度 Top5）。 */
+    private Set<String> loadSuggestedConsolidateSkillCodes(Long childId) {
+        List<LearnerSkillStateEntity> states = learnerSkillStateDao.selectList(
+                new LambdaQueryWrapper<LearnerSkillStateEntity>()
+                        .eq(LearnerSkillStateEntity::getChildId, childId)
+                        .orderByAsc(LearnerSkillStateEntity::getPMastery)
+                        .last("LIMIT " + SUGGESTED_CONSOLIDATE_TOP_N));
+        Set<String> codes = new HashSet<>();
+        for (LearnerSkillStateEntity st : states) {
+            KgNodeEntity node = kgNodeDao.selectById(st.getSkillNodeId());
+            if (node != null && StringUtils.isNotBlank(node.getCode())) {
+                codes.add(node.getCode());
+            }
+        }
+        return codes;
+    }
+
+    private static void appendSkillCodesFromEvent(LearningEvidenceEventEntity ev, Set<String> codes) {
+        if (StringUtils.isBlank(ev.getSkillCodes())) {
+            return;
+        }
+        try {
+            List<String> part = JsonUtils.parseArray(ev.getSkillCodes(), String.class);
+            if (part == null) {
+                return;
+            }
+            for (String c : part) {
+                if (StringUtils.isNotBlank(c)) {
+                    codes.add(c.trim());
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static WeekRange resolveWeekRange(String weekStart) {
+        LocalDate start = StringUtils.isNotBlank(weekStart)
+                ? LocalDate.parse(weekStart)
+                : LocalDate.now(ZONE).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate end = start.plusDays(6);
+        Date from = Date.from(start.atStartOfDay(ZONE).toInstant());
+        Date toExclusive = Date.from(end.plusDays(1).atStartOfDay(ZONE).toInstant());
+        return new WeekRange(start, end, from, toExclusive);
+    }
+
+    private record WeekRange(LocalDate start, LocalDate end, Date from, Date toExclusive) {
     }
 
     private List<LearningSkillBriefVO> loadLinkedSkills(

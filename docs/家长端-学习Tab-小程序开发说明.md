@@ -105,7 +105,7 @@ GET /xiaozhi/parent-api/learning/overview?childId={id}&weekStart={yyyy-MM-dd}
 ### 3.1 接口
 
 ```
-GET /xiaozhi/parent-api/learning/mastery-map?childId={id}&subject=math&grade={1-6}
+GET /xiaozhi/parent-api/learning/mastery-map?childId={id}&subject=math&grade={1-6}&weekStart=2026-08-04
 ```
 
 | Query | 必填 | 说明 |
@@ -113,6 +113,7 @@ GET /xiaozhi/parent-api/learning/mastery-map?childId={id}&subject=math&grade={1-
 | childId | 是 | |
 | subject | 否 | 默认 `math`；P1 仅 math |
 | grade | 否 | 默认孩子 `currentGrade`；未填档案时用 **1**，且 `gradeConfigured=false` |
+| weekStart | 否 | 周一 `yyyy-MM-dd`，与 `GET /learning/overview` 一致；默认当前自然周（Asia/Shanghai） |
 
 ### 3.2 响应 `data`（`LearningMasteryMapVO`）
 
@@ -125,13 +126,19 @@ GET /xiaozhi/parent-api/learning/mastery-map?childId={id}&subject=math&grade={1-
   "gradeConfigured": true,
   "graphReleaseId": 1,
   "graphVersionLabel": "2026.01-math-g1g3",
+  "weekStart": "2026-08-04",
+  "weekEnd": "2026-08-10",
   "summary": {
     "skillTotal": 28,
     "observedCount": 12,
     "needConsolidateCount": 3,
     "practicingCount": 6,
     "stableCount": 3,
-    "unobservedCount": 16
+    "unobservedCount": 16,
+    "coverageScope": "grade_cumulative",
+    "termLabel": "小学1年级图谱累计",
+    "observedThisWeekCount": 2,
+    "suggestedConsolidateCount": 1
   },
   "modules": [
     {
@@ -148,7 +155,9 @@ GET /xiaozhi/parent-api/learning/mastery-map?childId={id}&subject=math&grade={1-
           "status": "practicing",
           "pMastery": 0.62,
           "evidenceCount": 4,
-          "lastEvidenceAt": "2026-08-01T14:30:00.000+00:00"
+          "lastEvidenceAt": "2026-08-01T14:30:00.000+00:00",
+          "observedThisWeek": true,
+          "consolidateThisPeriod": false
         }
       ]
     }
@@ -172,6 +181,22 @@ GET /xiaozhi/parent-api/learning/mastery-map?childId={id}&subject=math&grade={1-
 - 有证据：`pMastery < 0.45` → `need_consolidate`；`< 0.75` → `practicing`；否则 `stable`
 
 **禁止**用「不及格」「差」等字样。
+
+### 3.3.1 Tab 筛选（小程序）
+
+| Tab | 筛选 |
+|-----|------|
+| 本学期（`all`） | 展示全部 `modules` |
+| 本周（`week`） | 仅 `skills[].observedThisWeek === true`；若 `summary.observedThisWeekCount === 0` 可灰掉 Tab |
+| 本次建议巩固（`weak`） | 若存在任一 `consolidateThisPeriod === true`，只展示这些；否则退回 `status === need_consolidate` |
+
+**字段口径**
+
+- `observedThisWeek`：`weekStart`～`weekEnd` 内存在 `DIAGNOSIS_VISION` / `DIAGNOSIS_VERBAL` 证据且 `skill_codes` 含该 code。
+- `consolidateThisPeriod`：与周报 `weeklyDigest.topWeakSkills` 同源（孩子全局掌握度最低的 5 个 SKILL code），**不会**把所有 `need_consolidate` 标为 true。
+- `summary.observedCount / skillTotal`：当前**年级图谱**下累计有证据的知识点（文案「本学期观察覆盖」与此一致；`termLabel` 说明范围）。
+
+请求掌握地图时请传与 overview **相同的** `weekStart`，以便「本周」与周报对齐。
 
 ### 3.4 页面交互
 

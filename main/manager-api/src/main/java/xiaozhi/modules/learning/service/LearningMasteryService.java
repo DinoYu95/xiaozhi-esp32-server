@@ -6,7 +6,8 @@ import xiaozhi.modules.learning.vo.LearningSkillDetailVO;
 
 public interface LearningMasteryService {
 
-    LearningMasteryMapVO masteryMap(Long parentUserId, Long childId, String subject, Integer grade);
+    LearningMasteryMapVO masteryMap(
+            Long parentUserId, Long childId, String subject, Integer grade, String weekStart);
 
     LearningSkillDetailVO skillDetail(Long parentUserId, Long childId, String skillCode);
 

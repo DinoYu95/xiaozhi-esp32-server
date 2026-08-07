@@ -86,9 +86,11 @@ public class LearningParentController {
     public Result<LearningMasteryMapVO> masteryMap(
             @Parameter(description = "device_child.id", required = true) @RequestParam Long childId,
             @Parameter(description = "学科，默认 math") @RequestParam(required = false) String subject,
-            @Parameter(description = "年级 1-6，默认孩子档案 currentGrade，未填则 1") @RequestParam(required = false) Integer grade) {
+            @Parameter(description = "年级 1-6，默认孩子档案 currentGrade，未填则 1") @RequestParam(required = false) Integer grade,
+            @Parameter(description = "本周周一 yyyy-MM-dd，与 overview 一致；默认当前自然周") @RequestParam(required = false) String weekStart) {
         return new Result<LearningMasteryMapVO>().ok(
-                learningMasteryService.masteryMap(requireParentUserId(), childId, subject, grade));
+                learningMasteryService.masteryMap(
+                        requireParentUserId(), childId, subject, grade, weekStart));
     }
 
     @GetMapping("/skills/{code}")

@@ -1,0 +1,19 @@
+code,node_type,name,description,grade
+ENG.G1.PH.ALPHABET,SKILL,字母认读,26 个字母名与形,1
+ENG.G1.PH.LOWER_UPPER,SKILL,大小写对应,配对大小写字母,1
+ENG.G1.PH.PHONICS_CVC,SKILL,CVC 拼读,cat bed 等短元音拼读,1
+ENG.G1.VOC.COLORS,SKILL,颜色词汇,red blue green 等,1
+ENG.G1.VOC.NUMBERS,SKILL,数字 1-20,听认与跟读,1
+ENG.G1.VOC.CLASSROOM,SKILL,课堂用语,book desk teacher 等,1
+ENG.G1.GRM.BE_AM_IS,SKILL,be 动词 am/is,This is... I am...,1
+ENG.G1.GRM.PLURAL_S,SKILL,名词复数 -s,one cat two cats,1
+ENG.G1.LIS.ORDERS,SKILL,听懂课堂指令,Stand up / Sit down,1
+ENG.G1.SPE.ORAL_WORD,SKILL,单词跟读,模仿发音跟读单词,1
+ENG.G1.READ.SIGHT,SKILL,高频词认读,the a is 等 sight words,1
+ENG.G1.MIS.LETTER_NAME_SOUND,MISCONCEPTION,字母名当音,用字母名拼读单词,1
+ENG.G1.MIS.BE_OMIT,MISCONCEPTION,省略 be,He happy 缺 is,1
+ENG.G1.MIS.PLURAL_ES,MISCONCEPTION,复数规则混,boxs 等错误,1
+ENG.G1.PROBE.CVC,DIAGNOSTIC_PROBE,CVC 抽查,随机 3 个 CVC 词拼读,1
+ENG.G1.PROBE.SENT_BE,DIAGNOSTIC_PROBE,be 句型,看图说 This is a...,1
+ENG.G1.INT.PHONICS_CARD,INTERVENTION,拼读卡片,每日 CVC 卡片 5 分钟,1
+ENG.G1.INT.CHANT,INTERVENTION,儿歌跟唱,颜色/数字 chant 巩固,1

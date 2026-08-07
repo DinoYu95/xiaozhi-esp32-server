@@ -6,13 +6,25 @@
 
 ## 2. 导入并发布图谱（管理端）
 
-需超级管理员 Token，接口前缀 `admin/learning/kg`：
+需超级管理员 Token（Header：`Authorization: Bearer <token>`），完整前缀 `http://<host>:8002/xiaozhi/admin/learning/kg`。
 
-1. `POST /admin/learning/kg/release?versionLabel=2026.01-math-g1g3&gradeMin=1&gradeMax=3`
+**CSV 位置**：`docs/learning-kg-sample/`（数学 full、语/英 G1 pilot、最小样例）。**curl 与脚本**：见同目录 `README.md`、`import-kg.sh`。
+
+### 数学（推荐 full 版）
+
+1. `POST /admin/learning/kg/release?versionLabel=2026.01-math-g1g3&subject=math&gradeMin=1&gradeMax=3`
 2. `POST /admin/learning/kg/release/{id}/import-nodes` multipart `file=@docs/learning-kg-sample/nodes-g1-g3-math-full.csv`
 3. `POST /admin/learning/kg/release/{id}/import-edges` multipart `file=@docs/learning-kg-sample/edges-g1-g3-math-full.csv`
 4. `POST /admin/learning/kg/release/{id}/validate`
 5. `POST /admin/learning/kg/release/{id}/publish`
+6. `GET /admin/learning/kg/release/active?subject=math`
+
+### 语文 / 英语（试点，可选）
+
+1. `subject=chinese` 或 `english`，`gradeMin=1&gradeMax=1`
+2. nodes/edges 分别用 `nodes-g1-chinese-pilot.csv`、`edges-g1-chinese-pilot.csv`（或 english 同名）
+
+发布后可查 active；家长端掌握地图与作业 SKILL 池 **当前仍仅 math**。
 
 ## 3. 孩子档案
 

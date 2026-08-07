@@ -1,0 +1,21 @@
+code,node_type,name,description,grade
+CHN.G1.PY.INI_ShengMu,SKILL,声母认读,认读 b p m f 等常见声母,1
+CHN.G1.PY.INI_YunMu,SKILL,单韵母认读,认读 a o e i u ü,1
+CHN.G1.PY.BLEND,SKILL,两拼三拼,声韵拼读简单音节,1
+CHN.G1.PY.TONE,SKILL,声调识别,听辨并标调,1
+CHN.G1.WR.STROKE,SKILL,基本笔画,横竖撇捺点,1
+CHN.G1.WR.ORDER,SKILL,笔顺规则,先横后竖等常见笔顺,1
+CHN.G1.READ.SILENT,SKILL,默读短文,不出声读懂简单段落,1
+CHN.G1.READ.LOUD,SKILL,朗读流利,正确停顿与语气,1
+CHN.G1.VOC.CORE_300,SKILL,常用字识读,课标一级字表中高频字,1
+CHN.G1.VOC.MEANING,SKILL,词语理解,联系上下文理解词义,1
+CHN.G1.WORD.SENTENCE,SKILL,造句,用给定词语写通顺句子,1
+CHN.G1.WRITE.PICTURE,SKILL,看图写话,看图写 2～3 句,1
+CHN.G1.MIS.PY_CONFUSE,MISCONCEPTION,拼音混淆,b/d、n/l 等易混,1
+CHN.G1.MIS.TONE_FLAT,MISCONCEPTION,声调读平,四声不分或全读一声,1
+CHN.G1.MIS.STROKE_ORDER,MISCONCEPTION,笔顺随意,不按规范笔顺书写,1
+CHN.G1.MIS.GUESS_CHAR,MISCONCEPTION,猜字读,按偏旁乱猜读音,1
+CHN.G1.PROBE.PY_READ,DIAGNOSTIC_PROBE,拼读抽查,随机音节让孩子拼读,1
+CHN.G1.PROBE.SENTENCE,DIAGNOSTIC_PROBE,句子通顺,读句子问是否通顺,1
+CHN.G1.INT.PY_CARD,INTERVENTION,拼音卡片,每天 5 分钟声韵拼读卡片,1
+CHN.G1.INT.READ_ALOUD,INTERVENTION,指读跟读,指字朗读短文一段,1

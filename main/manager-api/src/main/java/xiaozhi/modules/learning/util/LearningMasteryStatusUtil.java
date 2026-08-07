@@ -40,11 +40,25 @@ public final class LearningMasteryStatusUtil {
         return "OTHER";
     }
 
+    /** 从节点 code 首段推断学科（MATH / CHN / ENG）。 */
+    public static String subjectFromSkillCode(String code) {
+        if (StringUtils.isBlank(code)) {
+            return "math";
+        }
+        String head = code.split("\\.", 2)[0].trim().toUpperCase();
+        return switch (head) {
+            case "CHN" -> "chinese";
+            case "ENG" -> "english";
+            default -> "math";
+        };
+    }
+
     public static String subjectLabel(String subject) {
         return switch (StringUtils.defaultIfBlank(subject, "math").toLowerCase()) {
             case "math" -> "数学";
             case "chinese" -> "语文";
             case "english" -> "英语";
+            case "science" -> "科学";
             default -> subject;
         };
     }

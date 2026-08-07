@@ -26,6 +26,16 @@ public final class LearningMasteryModuleLabels {
         LABELS.put("FRA", "分数");
         LABELS.put("DATA", "数据");
         LABELS.put("OTHER", "其它");
+        // 语文 / 英语试点模块键（code 第三段）
+        LABELS.put("PY", "拼音");
+        LABELS.put("WR", "书写");
+        LABELS.put("READ", "阅读");
+        LABELS.put("VOC", "字词");
+        LABELS.put("WRITE", "写话");
+        LABELS.put("PH", "语音");
+        LABELS.put("GRM", "语法");
+        LABELS.put("LIS", "听力");
+        LABELS.put("SPE", "口语");
     }
 
     /** 模块 Tab 排序（未列出的排在后面按字母） */

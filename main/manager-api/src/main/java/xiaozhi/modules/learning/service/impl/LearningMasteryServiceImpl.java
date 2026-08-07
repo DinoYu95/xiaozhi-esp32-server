@@ -128,7 +128,8 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         if (node == null || !NODE_SKILL.equalsIgnoreCase(node.getNodeType())) {
             throw new RenException("知识点不存在或不是 SKILL");
         }
-        Long releaseId = learningKgService.requireActiveReleaseId("math");
+        Long releaseId = learningKgService.requireActiveReleaseId(
+                LearningMasteryStatusUtil.subjectFromSkillCode(code));
         KgNodeRevisionEntity rev = kgNodeRevisionDao.selectOne(
                 new LambdaQueryWrapper<KgNodeRevisionEntity>()
                         .eq(KgNodeRevisionEntity::getGraphReleaseId, releaseId)
@@ -147,7 +148,7 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         vo.setName(rev.getName());
         vo.setDescription(rev.getDescription());
         vo.setGrade(rev.getGrade());
-        vo.setSubject("math");
+        vo.setSubject(LearningMasteryStatusUtil.subjectFromSkillCode(code));
         vo.setMastery(toSkillVO(node, rev, st, false, false));
         vo.setPrerequisites(loadLinkedSkills(releaseId, childId, node.getId(), true));
         vo.setNextSkills(loadLinkedSkills(releaseId, childId, node.getId(), false));
@@ -216,9 +217,6 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
             throw new RenException("孩子不存在");
         }
         String sub = StringUtils.defaultIfBlank(subject, "math").toLowerCase();
-        if (!"math".equals(sub)) {
-            throw new RenException("该学科图谱尚未开放，请稍后再试");
-        }
         Long releaseId = learningKgService.requireActiveReleaseId(sub);
         KgGraphReleaseEntity release = kgGraphReleaseDao.selectById(releaseId);
         boolean gradeConfigured = child.getCurrentGrade() != null && child.getCurrentGrade() > 0;

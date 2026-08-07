@@ -55,8 +55,8 @@
 
 **学科（P1）**
 
-- **数学**：`subject=math`，可进入掌握地图（需 `overview.graphReady === true`）。
-- **语文 / 英语**：Tab 内展示占位卡片 + `coverageNote` 文案，**不请求** `mastery-map`（非 math 会报错）。
+- **数学 / 语文 / 英语**：`subject=math|chinese|english`，需该学科在管理端 **publish** 过图谱；未发布时接口 `msg` 为「尚未发布学科图谱」。
+- **科学**：仓库暂无 `science` 图谱 CSV，接口也未定义该 subject，小程序卡片会保持「未开通」。
 
 ---
 
@@ -111,7 +111,7 @@ GET /xiaozhi/parent-api/learning/mastery-map?childId={id}&subject=math&grade={1-
 | Query | 必填 | 说明 |
 |-------|------|------|
 | childId | 是 | |
-| subject | 否 | 默认 `math`；P1 仅 math |
+| subject | 否 | 默认 `math`；需该学科已有 **published** 图谱（`chinese` / `english` 等） |
 | grade | 否 | 默认孩子 `currentGrade`；未填档案时用 **1**，且 `gradeConfigured=false` |
 | weekStart | 否 | 周一 `yyyy-MM-dd`，与 `GET /learning/overview` 一致；默认当前自然周（Asia/Shanghai） |
 

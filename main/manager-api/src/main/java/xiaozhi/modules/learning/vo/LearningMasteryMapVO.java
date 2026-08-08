@@ -15,6 +15,12 @@ public class LearningMasteryMapVO {
     private String subjectLabel;
     private Integer grade;
     private Boolean gradeConfigured;
+    @Schema(description = "当前发布版本覆盖的最低年级")
+    private Integer graphGradeMin;
+    @Schema(description = "当前发布版本覆盖的最高年级")
+    private Integer graphGradeMax;
+    @Schema(description = "请求的 grade 是否有对应图谱节点；false 时 modules 为空，应展示「暂无该年级图谱」")
+    private Boolean gradeSupported;
     private Long graphReleaseId;
     private String graphVersionLabel;
     private LearningMasterySummaryVO summary;

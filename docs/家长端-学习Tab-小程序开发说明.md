@@ -115,6 +115,17 @@ GET /xiaozhi/parent-api/learning/mastery-map?childId={id}&subject=math&grade={1-
 | grade | 否 | 默认孩子 `currentGrade`；未填档案时用 **1**，且 `gradeConfigured=false` |
 | weekStart | 否 | 周一 `yyyy-MM-dd`，与 `GET /learning/overview` 一致；默认当前自然周（Asia/Shanghai） |
 
+**年级与空态**
+
+| 字段 | 说明 |
+|------|------|
+| `grade` | 与请求 query 一致（**不再** silent 改成别的年级） |
+| `graphGradeMin` / `graphGradeMax` | 当前发布版本声明的覆盖范围，用于 Picker 上限 |
+| `gradeSupported` | `false`：`grade` 超出范围或该年级无 SKILL 节点；`modules=[]`，`summary.skillTotal=0`，UI 展示「暂无该年级图谱」 |
+| `gradeSupported` | `true`：正常展示模块树 |
+
+学科首页卡片：若 `gradeSupported === false`，勿用 clamp 后的假进度；可展示「暂无 x 年级图谱」并提示可选 `graphGradeMin～graphGradeMax`。
+
 ### 3.2 响应 `data`（`LearningMasteryMapVO`）
 
 ```json
@@ -124,6 +135,9 @@ GET /xiaozhi/parent-api/learning/mastery-map?childId={id}&subject=math&grade={1-
   "subjectLabel": "数学",
   "grade": 1,
   "gradeConfigured": true,
+  "graphGradeMin": 1,
+  "graphGradeMax": 3,
+  "gradeSupported": true,
   "graphReleaseId": 1,
   "graphVersionLabel": "2026.01-math-g1g3",
   "weekStart": "2026-08-04",
@@ -202,7 +216,8 @@ GET /xiaozhi/parent-api/learning/mastery-map?childId={id}&subject=math&grade={1-
 
 **掌握地图页**
 
-- 顶栏：**年级 Picker**（1～3 与图谱一致；切换 grade 重新请求）
+- 顶栏：**年级 Picker**（建议上限取响应 `graphGradeMax`；切换 grade 重新请求）
+- **`gradeSupported === false`**：空态文案，例如「暂无该年级图谱（当前覆盖 x～y 年级）」
 - **进度摘要**：`summary.observedCount / summary.skillTotal` 文案如「已观察 12/28 个知识点 · 3 个建议巩固」
 - **模块列表**：每行 `moduleLabel` + 迷你条（该 module 内各 status 占比）+ 箭头
 - 点击进入 **模块页**：展示该 module 的 `skills[]` 列表；右上角可选「学习顺序」→ 调 module-path

@@ -85,18 +85,30 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         Set<String> consolidatePeriodCodes = loadSuggestedConsolidateSkillCodes(childId);
 
         List<SkillRow> rows = loadSkillRowsForGrade(ctx.releaseId, ctx.grade);
-        Map<Long, LearnerSkillStateEntity> stateByNodeId = loadStatesForChild(childId, rows);
+        boolean gradeSupported = isGradeSupported(ctx, rows);
+
+        Map<Long, LearnerSkillStateEntity> stateByNodeId = gradeSupported
+                ? loadStatesForChild(childId, rows)
+                : Map.of();
 
         Map<String, List<SkillRow>> byModule = new LinkedHashMap<>();
-        for (SkillRow row : rows) {
-            byModule.computeIfAbsent(row.moduleKey, k -> new ArrayList<>()).add(row);
+        if (gradeSupported) {
+            for (SkillRow row : rows) {
+                byModule.computeIfAbsent(row.moduleKey, k -> new ArrayList<>()).add(row);
+            }
         }
 
-        List<LearningMasteryModuleVO> modules = byModule.entrySet().stream()
-                .sorted(Comparator.comparingInt(e -> LearningMasteryModuleLabels.sortIndex(e.getKey())))
-                .map(e -> buildModuleVO(
-                        e.getKey(), e.getValue(), stateByNodeId, observedThisWeekCodes, consolidatePeriodCodes))
-                .collect(Collectors.toList());
+        List<LearningMasteryModuleVO> modules = gradeSupported
+                ? byModule.entrySet().stream()
+                        .sorted(Comparator.comparingInt(e -> LearningMasteryModuleLabels.sortIndex(e.getKey())))
+                        .map(e -> buildModuleVO(
+                                e.getKey(),
+                                e.getValue(),
+                                stateByNodeId,
+                                observedThisWeekCodes,
+                                consolidatePeriodCodes))
+                        .collect(Collectors.toList())
+                : List.of();
 
         LearningMasterySummaryVO summary = aggregateSummary(modules, ctx.grade);
         LearningMasteryMapVO vo = new LearningMasteryMapVO();
@@ -105,6 +117,9 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         vo.setSubjectLabel(LearningMasteryStatusUtil.subjectLabel(ctx.subject));
         vo.setGrade(ctx.grade);
         vo.setGradeConfigured(ctx.gradeConfigured);
+        vo.setGraphGradeMin(ctx.graphGradeMin);
+        vo.setGraphGradeMax(ctx.graphGradeMax);
+        vo.setGradeSupported(gradeSupported);
         vo.setGraphReleaseId(ctx.releaseId);
         vo.setGraphVersionLabel(ctx.versionLabel);
         vo.setSummary(summary);
@@ -164,8 +179,15 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
             throw new RenException("moduleKey 必填");
         }
         ChildRelease ctx = loadContext(parentUserId, childId, subject, grade);
+        if (!isGradeWithinRelease(ctx)) {
+            throw new RenException("该年级暂无图谱");
+        }
         String mk = moduleKey.trim().toUpperCase();
-        List<SkillRow> rows = loadSkillRowsForGrade(ctx.releaseId, ctx.grade).stream()
+        List<SkillRow> allGradeRows = loadSkillRowsForGrade(ctx.releaseId, ctx.grade);
+        if (allGradeRows.isEmpty()) {
+            throw new RenException("该年级暂无图谱");
+        }
+        List<SkillRow> rows = allGradeRows.stream()
                 .filter(r -> mk.equals(r.moduleKey))
                 .collect(Collectors.toList());
         if (rows.isEmpty()) {
@@ -223,21 +245,31 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         int grade = gradeParam != null && gradeParam > 0
                 ? gradeParam
                 : (gradeConfigured ? child.getCurrentGrade() : 1);
-        if (release != null) {
-            if (grade < release.getGradeMin()) {
-                grade = release.getGradeMin();
-            }
-            if (grade > release.getGradeMax()) {
-                grade = release.getGradeMax();
-            }
-        }
         ChildRelease ctx = new ChildRelease();
         ctx.subject = sub;
         ctx.releaseId = releaseId;
         ctx.versionLabel = release != null ? release.getVersionLabel() : null;
         ctx.grade = grade;
         ctx.gradeConfigured = gradeConfigured;
+        if (release != null) {
+            ctx.graphGradeMin = release.getGradeMin();
+            ctx.graphGradeMax = release.getGradeMax();
+        }
         return ctx;
+    }
+
+    private static boolean isGradeWithinRelease(ChildRelease ctx) {
+        if (ctx.graphGradeMin == null || ctx.graphGradeMax == null) {
+            return true;
+        }
+        return ctx.grade >= ctx.graphGradeMin && ctx.grade <= ctx.graphGradeMax;
+    }
+
+    private static boolean isGradeSupported(ChildRelease ctx, List<SkillRow> rows) {
+        if (!isGradeWithinRelease(ctx)) {
+            return false;
+        }
+        return rows != null && !rows.isEmpty();
     }
 
     private List<SkillRow> loadSkillRowsForGrade(Long releaseId, int grade) {
@@ -572,5 +604,7 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         String versionLabel;
         int grade;
         boolean gradeConfigured;
+        Integer graphGradeMin;
+        Integer graphGradeMax;
     }
 }

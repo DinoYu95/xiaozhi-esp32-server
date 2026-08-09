@@ -300,7 +300,22 @@ public class LearningKgServiceImpl implements LearningKgService {
                 return hit;
             }
         }
+        KgGraphReleaseEntity byGrade = queryPublishedReleaseByGradeOnly(sub, graphGrade);
+        if (byGrade != null) {
+            return byGrade;
+        }
         return findActivePublished(sub);
+    }
+
+    private KgGraphReleaseEntity queryPublishedReleaseByGradeOnly(String subject, int graphGrade) {
+        return kgGraphReleaseDao.selectOne(
+                new LambdaQueryWrapper<KgGraphReleaseEntity>()
+                        .eq(KgGraphReleaseEntity::getSubject, subject)
+                        .eq(KgGraphReleaseEntity::getGradeMin, graphGrade)
+                        .eq(KgGraphReleaseEntity::getGradeMax, graphGrade)
+                        .eq(KgGraphReleaseEntity::getStatus, KgGraphReleaseEntity.STATUS_PUBLISHED)
+                        .orderByDesc(KgGraphReleaseEntity::getPublishedAt)
+                        .last("LIMIT 1"));
     }
 
     private KgGraphReleaseEntity queryPublishedRelease(
@@ -439,8 +454,10 @@ public class LearningKgServiceImpl implements LearningKgService {
             throw new RenException("年级无效");
         }
         String subject = StringUtils.defaultIfBlank(dto.getSubject(), "math");
-        String province = StringUtils.defaultIfBlank(dto.getProvinceCode(), "CN");
-        String textbook = StringUtils.defaultIfBlank(dto.getTextbookEdition(), "generic");
+        String province = xiaozhi.modules.learning.util.LearningProfileConstants.normalizeProvince(
+                dto.getProvinceCode());
+        String textbook = xiaozhi.modules.learning.util.LearningProfileConstants.normalizeTextbook(
+                dto.getTextbookEdition());
         String versionLabel = StringUtils.defaultIfBlank(dto.getVersionLabel(),
                 "teaching-" + subject + "-G" + grade + "-" + System.currentTimeMillis());
 

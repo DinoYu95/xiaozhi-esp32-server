@@ -49,7 +49,42 @@ public final class LearningProfileConstants {
         if (code == null || code.isBlank()) {
             return DEFAULT_PROVINCE;
         }
-        return code.trim().toLowerCase();
+        String raw = code.trim();
+        if ("CN".equalsIgnoreCase(raw) || "全国".equals(raw) || raw.contains("未指定")) {
+            return DEFAULT_PROVINCE;
+        }
+        for (Map<String, String> opt : PROVINCE_OPTIONS) {
+            if (raw.equalsIgnoreCase(opt.get("code")) || raw.equals(opt.get("label"))) {
+                return opt.get("code");
+            }
+        }
+        for (Map.Entry<String, String> e : PROVINCE_API_MAP.entrySet()) {
+            if (e.getKey().equalsIgnoreCase(raw)) {
+                return e.getValue();
+            }
+        }
+        if ("北京".equals(raw) || raw.startsWith("北京")) {
+            return "beijing";
+        }
+        if ("上海".equals(raw) || raw.startsWith("上海")) {
+            return "shanghai";
+        }
+        if ("江苏".equals(raw) || raw.startsWith("江苏")) {
+            return "jiangsu";
+        }
+        if ("浙江".equals(raw) || raw.startsWith("浙江")) {
+            return "zhejiang";
+        }
+        if ("广东".equals(raw) || raw.startsWith("广东")) {
+            return "guangdong";
+        }
+        if ("山东".equals(raw) || raw.startsWith("山东")) {
+            return "shandong";
+        }
+        if ("四川".equals(raw) || raw.startsWith("四川")) {
+            return "sichuan";
+        }
+        return raw.toLowerCase(java.util.Locale.ROOT);
     }
 
     public static String normalizeTextbook(String code) {

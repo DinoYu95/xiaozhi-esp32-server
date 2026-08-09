@@ -81,7 +81,7 @@ public class LearningParentController {
                 learningSessionService.getSessionDetail(requireParentUserId(), sessionId));
     }
 
-    @GetMapping("/mastery-map")
+    @GetMapping({"/mastery-map", "/mastery/map"})
     @Operation(summary = "掌握地图（按年级模块聚合 SKILL + 掌握度）")
     public Result<LearningMasteryMapVO> masteryMap(
             @Parameter(description = "device_child.id", required = true) @RequestParam Long childId,

@@ -36,6 +36,8 @@ import xiaozhi.modules.learning.entity.KgNodeRevisionEntity;
 import cn.hutool.json.JSONUtil;
 import xiaozhi.modules.learning.dto.TeachingKgPublishDTO;
 import xiaozhi.modules.learning.service.LearningKgService;
+import xiaozhi.modules.learning.util.LearningKgGraphMatchUtil;
+import xiaozhi.modules.learning.util.LearningProfileConstants;
 import xiaozhi.modules.learning.vo.KgReleaseVO;
 
 @Service
@@ -61,7 +63,7 @@ public class LearningKgServiceImpl implements LearningKgService {
         KgGraphReleaseEntity e = new KgGraphReleaseEntity();
         e.setVersionLabel(versionLabel.trim());
         e.setStatus(KgGraphReleaseEntity.STATUS_DRAFT);
-        e.setSubject(StringUtils.defaultIfBlank(subject, "math"));
+        e.setSubject(LearningKgGraphMatchUtil.normalizeSubject(subject));
         e.setGradeMin(gradeMin);
         e.setGradeMax(gradeMax);
         e.setProvinceCode("CN");
@@ -263,16 +265,18 @@ public class LearningKgServiceImpl implements LearningKgService {
     @Override
     public Long requireActiveReleaseId(
             String subject, String provinceCode, String textbookEdition, int graphGrade) {
-        KgGraphReleaseEntity e =
-                findActivePublishedRelease(subject, provinceCode, textbookEdition, graphGrade);
+        String sub = LearningKgGraphMatchUtil.normalizeSubject(subject);
+        String province = LearningProfileConstants.normalizeProvince(provinceCode);
+        String textbook = LearningProfileConstants.normalizeTextbook(textbookEdition);
+        KgGraphReleaseEntity e = findActivePublishedRelease(sub, province, textbook, graphGrade);
         if (e == null) {
             throw new RenException(
                     "尚未发布匹配的图谱: "
-                            + subject
+                            + sub
                             + " / "
-                            + provinceCode
+                            + province
                             + " / "
-                            + textbookEdition
+                            + textbook
                             + " / "
                             + graphGrade
                             + "年级");
@@ -283,16 +287,17 @@ public class LearningKgServiceImpl implements LearningKgService {
     @Override
     public KgGraphReleaseEntity findActivePublishedRelease(
             String subject, String provinceCode, String textbookEdition, int graphGrade) {
-        String sub = org.apache.commons.lang3.StringUtils.defaultIfBlank(subject, "math").toLowerCase();
-        String province = xiaozhi.modules.learning.util.LearningProfileConstants.normalizeProvince(provinceCode);
-        String textbook =
-                xiaozhi.modules.learning.util.LearningProfileConstants.normalizeTextbook(textbookEdition);
+        if (graphGrade <= 0) {
+            return null;
+        }
+        String sub = LearningKgGraphMatchUtil.normalizeSubject(subject);
+        String province = LearningProfileConstants.normalizeProvince(provinceCode);
+        String textbook = LearningProfileConstants.normalizeTextbook(textbookEdition);
         String[][] attempts = {
             {province, textbook},
-            {province, xiaozhi.modules.learning.util.LearningProfileConstants.DEFAULT_TEXTBOOK},
-            {xiaozhi.modules.learning.util.LearningProfileConstants.DEFAULT_PROVINCE, textbook},
-            {xiaozhi.modules.learning.util.LearningProfileConstants.DEFAULT_PROVINCE,
-                xiaozhi.modules.learning.util.LearningProfileConstants.DEFAULT_TEXTBOOK},
+            {province, LearningProfileConstants.DEFAULT_TEXTBOOK},
+            {LearningProfileConstants.DEFAULT_PROVINCE, textbook},
+            {LearningProfileConstants.DEFAULT_PROVINCE, LearningProfileConstants.DEFAULT_TEXTBOOK},
         };
         for (String[] pair : attempts) {
             KgGraphReleaseEntity hit = queryPublishedRelease(sub, pair[0], pair[1], graphGrade);
@@ -300,45 +305,86 @@ public class LearningKgServiceImpl implements LearningKgService {
                 return hit;
             }
         }
-        KgGraphReleaseEntity byGrade = queryPublishedReleaseByGradeOnly(sub, graphGrade);
+        KgGraphReleaseEntity byGrade = queryPublishedReleaseIgnoringRegion(sub, graphGrade);
         if (byGrade != null) {
             return byGrade;
         }
         return findActivePublished(sub);
     }
 
-    private KgGraphReleaseEntity queryPublishedReleaseByGradeOnly(String subject, int graphGrade) {
-        return kgGraphReleaseDao.selectOne(
+    /**
+     * 省/教材四维未命中时：仍要求 graphGrade 落在 release 区间内（不按 min=max 精确相等）。
+     */
+    private KgGraphReleaseEntity queryPublishedReleaseIgnoringRegion(String subject, int graphGrade) {
+        LambdaQueryWrapper<KgGraphReleaseEntity> w =
                 new LambdaQueryWrapper<KgGraphReleaseEntity>()
                         .eq(KgGraphReleaseEntity::getSubject, subject)
-                        .eq(KgGraphReleaseEntity::getGradeMin, graphGrade)
-                        .eq(KgGraphReleaseEntity::getGradeMax, graphGrade)
-                        .eq(KgGraphReleaseEntity::getStatus, KgGraphReleaseEntity.STATUS_PUBLISHED)
-                        .orderByDesc(KgGraphReleaseEntity::getPublishedAt)
-                        .last("LIMIT 1"));
+                        .eq(KgGraphReleaseEntity::getStatus, KgGraphReleaseEntity.STATUS_PUBLISHED);
+        LearningKgGraphMatchUtil.applyGraphGradeWithinRelease(w, graphGrade);
+        w.orderByDesc(KgGraphReleaseEntity::getPublishedAt).last("LIMIT 1");
+        return kgGraphReleaseDao.selectOne(w);
     }
 
     private KgGraphReleaseEntity queryPublishedRelease(
             String subject, String provinceCode, String textbookEdition, int graphGrade) {
-        return kgGraphReleaseDao.selectOne(
+        LambdaQueryWrapper<KgGraphReleaseEntity> w =
                 new LambdaQueryWrapper<KgGraphReleaseEntity>()
                         .eq(KgGraphReleaseEntity::getSubject, subject)
                         .eq(KgGraphReleaseEntity::getProvinceCode, provinceCode)
                         .eq(KgGraphReleaseEntity::getTextbookEdition, textbookEdition)
-                        .eq(KgGraphReleaseEntity::getGradeMin, graphGrade)
-                        .eq(KgGraphReleaseEntity::getGradeMax, graphGrade)
+                        .eq(KgGraphReleaseEntity::getStatus, KgGraphReleaseEntity.STATUS_PUBLISHED);
+        LearningKgGraphMatchUtil.applyGraphGradeWithinRelease(w, graphGrade);
+        w.orderByDesc(KgGraphReleaseEntity::getPublishedAt).last("LIMIT 1");
+        return kgGraphReleaseDao.selectOne(w);
+    }
+
+    private KgGraphReleaseEntity findActivePublished(String subject) {
+        String sub = LearningKgGraphMatchUtil.normalizeSubject(subject);
+        return kgGraphReleaseDao.selectOne(
+                new LambdaQueryWrapper<KgGraphReleaseEntity>()
+                        .eq(KgGraphReleaseEntity::getSubject, sub)
                         .eq(KgGraphReleaseEntity::getStatus, KgGraphReleaseEntity.STATUS_PUBLISHED)
                         .orderByDesc(KgGraphReleaseEntity::getPublishedAt)
                         .last("LIMIT 1"));
     }
 
-    private KgGraphReleaseEntity findActivePublished(String subject) {
-        return kgGraphReleaseDao.selectOne(
-                new LambdaQueryWrapper<KgGraphReleaseEntity>()
-                        .eq(KgGraphReleaseEntity::getSubject, StringUtils.defaultIfBlank(subject, "math"))
-                        .eq(KgGraphReleaseEntity::getStatus, KgGraphReleaseEntity.STATUS_PUBLISHED)
-                        .orderByDesc(KgGraphReleaseEntity::getPublishedAt)
-                        .last("LIMIT 1"));
+    @Override
+    public long countSkillNodesAtGrade(Long releaseId, int grade) {
+        if (releaseId == null || grade <= 0) {
+            return 0;
+        }
+        KgGraphReleaseEntity release = kgGraphReleaseDao.selectById(releaseId);
+        List<KgNodeRevisionEntity> revs = kgNodeRevisionDao.selectList(
+                revisionGradeWrapper(releaseId, release, grade));
+        long count = 0;
+        for (KgNodeRevisionEntity rev : revs) {
+            KgNodeEntity node = kgNodeDao.selectById(rev.getNodeId());
+            if (node != null && "SKILL".equalsIgnoreCase(node.getNodeType())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public static LambdaQueryWrapper<KgNodeRevisionEntity> revisionGradeWrapper(
+            Long releaseId, KgGraphReleaseEntity release, int grade) {
+        LambdaQueryWrapper<KgNodeRevisionEntity> w = new LambdaQueryWrapper<KgNodeRevisionEntity>()
+                .eq(KgNodeRevisionEntity::getGraphReleaseId, releaseId);
+        w.and(q -> {
+            q.eq(KgNodeRevisionEntity::getGrade, grade);
+            if (singleGradeRelease(release, grade)) {
+                q.or().isNull(KgNodeRevisionEntity::getGrade);
+            }
+        });
+        return w;
+    }
+
+    static boolean singleGradeRelease(KgGraphReleaseEntity release, int grade) {
+        return release != null
+                && release.getGradeMin() != null
+                && release.getGradeMax() != null
+                && release.getGradeMin().equals(release.getGradeMax())
+                && release.getGradeMin() == grade;
     }
 
     private KgGraphReleaseEntity requireDraft(Long releaseId) {
@@ -453,7 +499,7 @@ public class LearningKgServiceImpl implements LearningKgService {
         if (grade < 1 || grade > 12) {
             throw new RenException("年级无效");
         }
-        String subject = StringUtils.defaultIfBlank(dto.getSubject(), "math");
+        String subject = LearningKgGraphMatchUtil.normalizeSubject(dto.getSubject());
         String province = xiaozhi.modules.learning.util.LearningProfileConstants.normalizeProvince(
                 dto.getProvinceCode());
         String textbook = xiaozhi.modules.learning.util.LearningProfileConstants.normalizeTextbook(
@@ -476,24 +522,28 @@ public class LearningKgServiceImpl implements LearningKgService {
         Long releaseId = release.getId();
 
         for (TeachingKgPublishDTO.TeachingKgNodeDTO n : dto.getNodes()) {
-            if (n == null || StringUtils.isAnyBlank(n.getCode(), n.getNodeType(), n.getName())) {
+            if (n == null || StringUtils.isAnyBlank(n.getCode(), n.getName())) {
                 continue;
             }
             KgNodeEntity node = kgNodeDao.selectOne(
                     new LambdaQueryWrapper<KgNodeEntity>().eq(KgNodeEntity::getCode, n.getCode().trim()));
+            String nodeType = normalizeTeachingNodeType(n.getNodeType());
             if (node == null) {
                 node = new KgNodeEntity();
                 node.setCode(n.getCode().trim());
-                node.setNodeType(n.getNodeType().trim());
+                node.setNodeType(nodeType);
                 node.setCreateTime(now);
                 kgNodeDao.insert(node);
+            } else if (!nodeType.equalsIgnoreCase(node.getNodeType())) {
+                node.setNodeType(nodeType);
+                kgNodeDao.updateById(node);
             }
             KgNodeRevisionEntity rev = new KgNodeRevisionEntity();
             rev.setGraphReleaseId(releaseId);
             rev.setNodeId(node.getId());
             rev.setName(n.getName().trim());
             rev.setDescription(StringUtils.defaultString(n.getDescription()));
-            rev.setGrade(n.getGrade() != null ? n.getGrade() : grade);
+            rev.setGrade(resolveRevisionGrade(n.getGrade(), grade));
             Map<String, Object> props = new HashMap<>();
             if (StringUtils.isNotBlank(n.getModuleCode())) {
                 props.put("module_code", n.getModuleCode().trim());
@@ -536,7 +586,37 @@ public class LearningKgServiceImpl implements LearningKgService {
             }
         }
 
+        if (countSkillNodesAtGrade(releaseId, grade) == 0) {
+            throw new RenException(
+                    "发布失败："
+                            + grade
+                            + " 年级无 SKILL 知识点（请检查教研节点 nodeType 是否为 SKILL/知识点，且 grade 正确）");
+        }
         publishRelease(releaseId);
         return releaseId;
+    }
+
+    private static int resolveRevisionGrade(Integer nodeGrade, int releaseGrade) {
+        if (nodeGrade == null || nodeGrade <= 0) {
+            return releaseGrade;
+        }
+        return nodeGrade;
+    }
+
+    /** 教研侧常见别名 → 运行时 SKILL / MISCONCEPTION 等 */
+    private static String normalizeTeachingNodeType(String raw) {
+        if (StringUtils.isBlank(raw)) {
+            return "SKILL";
+        }
+        String t = raw.trim();
+        if ("知识点".equals(t) || "知识节点".equals(t)) {
+            return "SKILL";
+        }
+        String upper = t.toUpperCase(java.util.Locale.ROOT);
+        return switch (upper) {
+            case "SKILL", "KNOWLEDGE", "KNOWLEDGE_POINT", "KP", "LEAF" -> "SKILL";
+            case "MISCONCEPTION", "MIS" -> "MISCONCEPTION";
+            default -> upper;
+        };
     }
 }

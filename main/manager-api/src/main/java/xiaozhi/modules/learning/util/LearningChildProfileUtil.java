@@ -45,6 +45,6 @@ public final class LearningChildProfileUtil {
     }
 
     public static String resolveSubject(String subject) {
-        return StringUtils.defaultIfBlank(subject, "math").toLowerCase();
+        return LearningKgGraphMatchUtil.normalizeSubject(subject);
     }
 }

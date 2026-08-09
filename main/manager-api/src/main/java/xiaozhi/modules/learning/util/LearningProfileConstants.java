@@ -63,7 +63,7 @@ public final class LearningProfileConstants {
                 return e.getValue();
             }
         }
-        if ("北京".equals(raw) || raw.startsWith("北京")) {
+        if ("北京".equals(raw) || raw.startsWith("北京") || "北京市".equals(raw)) {
             return "beijing";
         }
         if ("上海".equals(raw) || raw.startsWith("上海")) {

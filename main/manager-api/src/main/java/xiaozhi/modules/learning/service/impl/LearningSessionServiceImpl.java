@@ -42,6 +42,7 @@ import xiaozhi.modules.learning.entity.LearningHomeworkSessionEntity;
 import xiaozhi.modules.learning.service.LearningKgService;
 import xiaozhi.modules.learning.service.LearningRemedialService;
 import xiaozhi.modules.learning.service.LearningSessionService;
+import xiaozhi.modules.learning.entity.KgGraphReleaseEntity;
 import xiaozhi.modules.learning.util.LearningChildProfileUtil;
 import xiaozhi.modules.learning.vo.LearningOverviewVO;
 import xiaozhi.modules.learning.vo.LearningRemedialMissionBriefVO;
@@ -319,16 +320,22 @@ public class LearningSessionServiceImpl implements LearningSessionService {
         ov.setGradeConfigured(child.getCurrentGrade() != null && child.getCurrentGrade() > 0);
         ov.setTextbookSeries(child.getTextbookSeries());
         ov.setSubjectsEnabled(child.getSubjectsEnabled());
+        ov.setProfileProvinceRaw(child.getProvinceCode());
         int g = LearningChildProfileUtil.clampGraphGrade(child, child.getCurrentGrade());
-        try {
-            learningKgService.requireActiveReleaseId(
-                    "math",
-                    LearningChildProfileUtil.resolveProvince(child),
-                    LearningChildProfileUtil.resolveTextbook(child),
-                    g);
-            ov.setGraphReady(true);
-        } catch (RenException e) {
+        KgGraphReleaseEntity release = learningKgService.findActivePublishedRelease(
+                "math",
+                LearningChildProfileUtil.resolveProvince(child),
+                LearningChildProfileUtil.resolveTextbook(child),
+                g);
+        if (release == null) {
             ov.setGraphReady(false);
+            ov.setGraphReleaseId(null);
+            ov.setGraphSkillCountAtGrade(0);
+        } else {
+            long skillN = learningKgService.countSkillNodesAtGrade(release.getId(), g);
+            ov.setGraphReleaseId(release.getId());
+            ov.setGraphSkillCountAtGrade((int) skillN);
+            ov.setGraphReady(skillN > 0);
         }
         ov.setWeeklyDigest(weeklyDigest(parentUserId, childId, weekStart));
         return ov;

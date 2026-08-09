@@ -290,10 +290,9 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
     }
 
     private List<SkillRow> loadSkillRowsForGrade(Long releaseId, int grade) {
+        KgGraphReleaseEntity release = kgGraphReleaseDao.selectById(releaseId);
         List<KgNodeRevisionEntity> revs = kgNodeRevisionDao.selectList(
-                new LambdaQueryWrapper<KgNodeRevisionEntity>()
-                        .eq(KgNodeRevisionEntity::getGraphReleaseId, releaseId)
-                        .eq(KgNodeRevisionEntity::getGrade, grade));
+                LearningKgServiceImpl.revisionGradeWrapper(releaseId, release, grade));
         List<SkillRow> out = new ArrayList<>();
         for (KgNodeRevisionEntity rev : revs) {
             KgNodeEntity node = kgNodeDao.selectById(rev.getNodeId());

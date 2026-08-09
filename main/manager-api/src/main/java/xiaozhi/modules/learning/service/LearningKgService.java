@@ -30,6 +30,9 @@ public interface LearningKgService {
     KgGraphReleaseEntity findActivePublishedRelease(
             String subject, String provinceCode, String textbookEdition, int graphGrade);
 
+    /** 指定 release 在某年级下可展示的 SKILL 节点数（掌握地图与 graphReady 口径一致） */
+    long countSkillNodesAtGrade(Long releaseId, int grade);
+
     /**
      * 教研审批通过后：导入 JSON 并发布到 kg_*（单年级 + 省 + 教材维度）
      */

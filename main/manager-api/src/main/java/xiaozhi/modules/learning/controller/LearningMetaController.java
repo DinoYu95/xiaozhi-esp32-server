@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import xiaozhi.common.utils.Result;
 import xiaozhi.modules.learning.entity.KgGraphReleaseEntity;
 import xiaozhi.modules.learning.service.LearningKgService;
+import xiaozhi.modules.learning.service.impl.LearningKgServiceImpl;
 import xiaozhi.modules.learning.util.LearningChildProfileUtil;
 import xiaozhi.modules.learning.util.LearningProfileConstants;
 import xiaozhi.modules.parent.context.ParentContext;
@@ -88,10 +89,9 @@ public class LearningMetaController {
                 out.put("hint", "kg_graph_release 中无 published 的 math 图谱，请确认教研审核已通过");
                 return new Result<Map<String, Object>>().ok(out);
             }
-            long skillCount = kgNodeRevisionDao.selectCount(
-                    new LambdaQueryWrapper<KgNodeRevisionEntity>()
-                            .eq(KgNodeRevisionEntity::getGraphReleaseId, release.getId())
-                            .eq(KgNodeRevisionEntity::getGrade, g));
+            long skillCount = learningKgService.countSkillNodesAtGrade(release.getId(), g);
+            long revisionCount = kgNodeRevisionDao.selectCount(
+                    LearningKgServiceImpl.revisionGradeWrapper(release.getId(), release, g));
             out.put("matched", true);
             out.put(
                     "release",
@@ -102,9 +102,15 @@ public class LearningMetaController {
                             "textbookEdition", release.getTextbookEdition(),
                             "gradeMin", release.getGradeMin(),
                             "gradeMax", release.getGradeMax(),
-                            "skillCountAtGrade", skillCount));
+                            "skillCountAtGrade", skillCount,
+                            "revisionCountAtGrade", revisionCount));
             if (skillCount == 0) {
-                out.put("hint", "已匹配 release 但该年级无 SKILL 节点，请检查教研发布内容");
+                out.put(
+                        "hint",
+                        "已匹配 release 但该年级无 SKILL 节点（revision 行数="
+                                + revisionCount
+                                + "）。请检查 kg_node.node_type 是否为 SKILL，或 kg_node_revision.grade 是否为 "
+                                + g);
             }
         } catch (Exception e) {
             out.put("matched", false);

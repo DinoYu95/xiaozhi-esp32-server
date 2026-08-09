@@ -40,6 +40,7 @@ import xiaozhi.modules.learning.entity.LearnerSkillStateEntity;
 import xiaozhi.modules.learning.entity.LearningEvidenceEventEntity;
 import xiaozhi.modules.learning.service.LearningKgService;
 import xiaozhi.modules.learning.service.LearningMasteryService;
+import xiaozhi.modules.learning.util.LearningChildProfileUtil;
 import xiaozhi.modules.learning.util.LearningMasteryModuleLabels;
 import xiaozhi.modules.learning.util.LearningMasteryStatusUtil;
 import xiaozhi.modules.learning.vo.LearningMasteryMapVO;
@@ -117,6 +118,7 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         vo.setSubjectLabel(LearningMasteryStatusUtil.subjectLabel(ctx.subject));
         vo.setGrade(ctx.grade);
         vo.setGradeConfigured(ctx.gradeConfigured);
+        vo.setChildMaxGrade(ctx.childMaxGrade);
         vo.setGraphGradeMin(ctx.graphGradeMin);
         vo.setGraphGradeMax(ctx.graphGradeMax);
         vo.setGradeSupported(gradeSupported);
@@ -137,14 +139,26 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         }
         ParentChildAccessHelper.ensureParentCanAccessChildById(
                 deviceChildDao, parentDeviceBindingDao, parentUserId, childId);
+        DeviceChildEntity child = deviceChildDao.selectById(childId);
+        if (child == null) {
+            throw new RenException("孩子不存在");
+        }
         String code = skillCode.trim();
         KgNodeEntity node = kgNodeDao.selectOne(
                 new LambdaQueryWrapper<KgNodeEntity>().eq(KgNodeEntity::getCode, code));
         if (node == null || !NODE_SKILL.equalsIgnoreCase(node.getNodeType())) {
             throw new RenException("知识点不存在或不是 SKILL");
         }
+        int skillGrade = LearningMasteryStatusUtil.gradeFromSkillCode(code);
+        if (skillGrade <= 0) {
+            skillGrade = LearningChildProfileUtil.resolveChildMaxGrade(child);
+        }
+        LearningChildProfileUtil.validateGraphGradeVisible(child, skillGrade);
         Long releaseId = learningKgService.requireActiveReleaseId(
-                LearningMasteryStatusUtil.subjectFromSkillCode(code));
+                LearningMasteryStatusUtil.subjectFromSkillCode(code),
+                LearningChildProfileUtil.resolveProvince(child),
+                LearningChildProfileUtil.resolveTextbook(child),
+                skillGrade);
         KgNodeRevisionEntity rev = kgNodeRevisionDao.selectOne(
                 new LambdaQueryWrapper<KgNodeRevisionEntity>()
                         .eq(KgNodeRevisionEntity::getGraphReleaseId, releaseId)
@@ -238,18 +252,21 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         if (child == null) {
             throw new RenException("孩子不存在");
         }
-        String sub = StringUtils.defaultIfBlank(subject, "math").toLowerCase();
-        Long releaseId = learningKgService.requireActiveReleaseId(sub);
+        String sub = LearningChildProfileUtil.resolveSubject(subject);
+        String province = LearningChildProfileUtil.resolveProvince(child);
+        String textbook = LearningChildProfileUtil.resolveTextbook(child);
+        int childMax = LearningChildProfileUtil.resolveChildMaxGrade(child);
+        int grade = LearningChildProfileUtil.clampGraphGrade(child, gradeParam);
+        LearningChildProfileUtil.validateGraphGradeVisible(child, grade);
+        Long releaseId = learningKgService.requireActiveReleaseId(sub, province, textbook, grade);
         KgGraphReleaseEntity release = kgGraphReleaseDao.selectById(releaseId);
         boolean gradeConfigured = child.getCurrentGrade() != null && child.getCurrentGrade() > 0;
-        int grade = gradeParam != null && gradeParam > 0
-                ? gradeParam
-                : (gradeConfigured ? child.getCurrentGrade() : 1);
         ChildRelease ctx = new ChildRelease();
         ctx.subject = sub;
         ctx.releaseId = releaseId;
         ctx.versionLabel = release != null ? release.getVersionLabel() : null;
         ctx.grade = grade;
+        ctx.childMaxGrade = childMax;
         ctx.gradeConfigured = gradeConfigured;
         if (release != null) {
             ctx.graphGradeMin = release.getGradeMin();
@@ -603,6 +620,7 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         Long releaseId;
         String versionLabel;
         int grade;
+        int childMaxGrade;
         boolean gradeConfigured;
         Integer graphGradeMin;
         Integer graphGradeMax;

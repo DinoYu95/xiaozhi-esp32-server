@@ -260,6 +260,63 @@ public class LearningKgServiceImpl implements LearningKgService {
         return e.getId();
     }
 
+    @Override
+    public Long requireActiveReleaseId(
+            String subject, String provinceCode, String textbookEdition, int graphGrade) {
+        KgGraphReleaseEntity e =
+                findActivePublishedRelease(subject, provinceCode, textbookEdition, graphGrade);
+        if (e == null) {
+            throw new RenException(
+                    "尚未发布匹配的图谱: "
+                            + subject
+                            + " / "
+                            + provinceCode
+                            + " / "
+                            + textbookEdition
+                            + " / "
+                            + graphGrade
+                            + "年级");
+        }
+        return e.getId();
+    }
+
+    @Override
+    public KgGraphReleaseEntity findActivePublishedRelease(
+            String subject, String provinceCode, String textbookEdition, int graphGrade) {
+        String sub = org.apache.commons.lang3.StringUtils.defaultIfBlank(subject, "math").toLowerCase();
+        String province = xiaozhi.modules.learning.util.LearningProfileConstants.normalizeProvince(provinceCode);
+        String textbook =
+                xiaozhi.modules.learning.util.LearningProfileConstants.normalizeTextbook(textbookEdition);
+        String[][] attempts = {
+            {province, textbook},
+            {province, xiaozhi.modules.learning.util.LearningProfileConstants.DEFAULT_TEXTBOOK},
+            {xiaozhi.modules.learning.util.LearningProfileConstants.DEFAULT_PROVINCE, textbook},
+            {xiaozhi.modules.learning.util.LearningProfileConstants.DEFAULT_PROVINCE,
+                xiaozhi.modules.learning.util.LearningProfileConstants.DEFAULT_TEXTBOOK},
+        };
+        for (String[] pair : attempts) {
+            KgGraphReleaseEntity hit = queryPublishedRelease(sub, pair[0], pair[1], graphGrade);
+            if (hit != null) {
+                return hit;
+            }
+        }
+        return findActivePublished(sub);
+    }
+
+    private KgGraphReleaseEntity queryPublishedRelease(
+            String subject, String provinceCode, String textbookEdition, int graphGrade) {
+        return kgGraphReleaseDao.selectOne(
+                new LambdaQueryWrapper<KgGraphReleaseEntity>()
+                        .eq(KgGraphReleaseEntity::getSubject, subject)
+                        .eq(KgGraphReleaseEntity::getProvinceCode, provinceCode)
+                        .eq(KgGraphReleaseEntity::getTextbookEdition, textbookEdition)
+                        .eq(KgGraphReleaseEntity::getGradeMin, graphGrade)
+                        .eq(KgGraphReleaseEntity::getGradeMax, graphGrade)
+                        .eq(KgGraphReleaseEntity::getStatus, KgGraphReleaseEntity.STATUS_PUBLISHED)
+                        .orderByDesc(KgGraphReleaseEntity::getPublishedAt)
+                        .last("LIMIT 1"));
+    }
+
     private KgGraphReleaseEntity findActivePublished(String subject) {
         return kgGraphReleaseDao.selectOne(
                 new LambdaQueryWrapper<KgGraphReleaseEntity>()

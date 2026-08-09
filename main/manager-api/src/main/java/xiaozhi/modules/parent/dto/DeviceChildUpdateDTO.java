@@ -42,8 +42,14 @@ public class DeviceChildUpdateDTO {
     @Schema(description = "学校/幼儿园")
     private String school;
 
-    @Schema(description = "当前年级1-6")
+    @Schema(description = "当前年级1-12")
     private Integer currentGrade;
+
+    @Schema(description = "省/地区代码")
+    private String provinceCode;
+
+    @Schema(description = "教材版本代码")
+    private String textbookEdition;
 
     @Schema(description = "教材系列")
     private String textbookSeries;

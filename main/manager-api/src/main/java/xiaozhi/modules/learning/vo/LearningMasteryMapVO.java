@@ -15,6 +15,8 @@ public class LearningMasteryMapVO {
     private String subjectLabel;
     private Integer grade;
     private Boolean gradeConfigured;
+    @Schema(description = "孩子档案 currentGrade，家长不可查看高于此年级的图谱")
+    private Integer childMaxGrade;
     @Schema(description = "当前发布版本覆盖的最低年级")
     private Integer graphGradeMin;
     @Schema(description = "当前发布版本覆盖的最高年级")

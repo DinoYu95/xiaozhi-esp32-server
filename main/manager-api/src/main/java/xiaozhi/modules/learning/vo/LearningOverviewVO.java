@@ -12,6 +12,8 @@ public class LearningOverviewVO {
     @Schema(description = "是否已发布数学图谱")
     private Boolean graphReady;
     private Integer currentGrade;
+    private String provinceCode;
+    private String textbookEdition;
     private String textbookSeries;
     private String subjectsEnabled;
     private LearningWeeklyDigestVO weeklyDigest;

@@ -53,6 +53,22 @@ public final class LearningMasteryStatusUtil {
         };
     }
 
+    /** 从 MATH.G1.NUM.001 解析年级 G 段。 */
+    public static int gradeFromSkillCode(String code) {
+        if (StringUtils.isBlank(code)) {
+            return 0;
+        }
+        String[] parts = code.split("\\.");
+        if (parts.length >= 2 && parts[1].length() > 1 && parts[1].charAt(0) == 'G') {
+            try {
+                return Integer.parseInt(parts[1].substring(1));
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
     public static String subjectLabel(String subject) {
         return switch (StringUtils.defaultIfBlank(subject, "math").toLowerCase()) {
             case "math" -> "数学";

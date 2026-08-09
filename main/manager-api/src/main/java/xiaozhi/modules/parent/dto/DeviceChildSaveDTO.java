@@ -42,10 +42,16 @@ public class DeviceChildSaveDTO {
     @Schema(description = "学校/幼儿园")
     private String school;
 
-    @Schema(description = "当前年级1-6")
+    @Schema(description = "当前年级1-12")
     private Integer currentGrade;
 
-    @Schema(description = "教材系列")
+    @Schema(description = "省/地区代码，与教研一致")
+    private String provinceCode;
+
+    @Schema(description = "教材版本代码 pep/generic")
+    private String textbookEdition;
+
+    @Schema(description = "教材系列（兼容旧版，建议改用 textbookEdition）")
     private String textbookSeries;
 
     @Schema(description = "启用学科JSON")

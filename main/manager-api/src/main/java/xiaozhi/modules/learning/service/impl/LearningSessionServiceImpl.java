@@ -42,6 +42,7 @@ import xiaozhi.modules.learning.entity.LearningHomeworkSessionEntity;
 import xiaozhi.modules.learning.service.LearningKgService;
 import xiaozhi.modules.learning.service.LearningRemedialService;
 import xiaozhi.modules.learning.service.LearningSessionService;
+import xiaozhi.modules.learning.util.LearningChildProfileUtil;
 import xiaozhi.modules.learning.vo.LearningOverviewVO;
 import xiaozhi.modules.learning.vo.LearningRemedialMissionBriefVO;
 import xiaozhi.modules.learning.vo.LearningSessionDetailVO;
@@ -313,11 +314,18 @@ public class LearningSessionServiceImpl implements LearningSessionService {
         }
         LearningOverviewVO ov = new LearningOverviewVO();
         ov.setCurrentGrade(child.getCurrentGrade());
+        ov.setProvinceCode(LearningChildProfileUtil.resolveProvince(child));
+        ov.setTextbookEdition(LearningChildProfileUtil.resolveTextbook(child));
         ov.setGradeConfigured(child.getCurrentGrade() != null && child.getCurrentGrade() > 0);
         ov.setTextbookSeries(child.getTextbookSeries());
         ov.setSubjectsEnabled(child.getSubjectsEnabled());
+        int g = LearningChildProfileUtil.clampGraphGrade(child, child.getCurrentGrade());
         try {
-            learningKgService.requireActiveReleaseId("math");
+            learningKgService.requireActiveReleaseId(
+                    "math",
+                    LearningChildProfileUtil.resolveProvince(child),
+                    LearningChildProfileUtil.resolveTextbook(child),
+                    g);
             ov.setGraphReady(true);
         } catch (RenException e) {
             ov.setGraphReady(false);

@@ -94,6 +94,11 @@ public class DeviceChildServiceImpl implements DeviceChildService {
         entity.setPersonalityNote(dto.getPersonalityNote());
         entity.setSchool(dto.getSchool());
         entity.setCurrentGrade(dto.getCurrentGrade());
+        entity.setProvinceCode(
+                xiaozhi.modules.learning.util.LearningProfileConstants.normalizeProvince(dto.getProvinceCode()));
+        entity.setTextbookEdition(
+                xiaozhi.modules.learning.util.LearningProfileConstants.textbookFromLegacySeries(
+                        dto.getTextbookSeries(), dto.getTextbookEdition()));
         entity.setTextbookSeries(dto.getTextbookSeries());
         entity.setSubjectsEnabled(dto.getSubjectsEnabled());
     }
@@ -110,6 +115,17 @@ public class DeviceChildServiceImpl implements DeviceChildService {
         if (dto.getPersonalityNote() != null) entity.setPersonalityNote(dto.getPersonalityNote());
         if (dto.getSchool() != null) entity.setSchool(dto.getSchool());
         if (dto.getCurrentGrade() != null) entity.setCurrentGrade(dto.getCurrentGrade());
+        if (dto.getProvinceCode() != null) {
+            entity.setProvinceCode(
+                    xiaozhi.modules.learning.util.LearningProfileConstants.normalizeProvince(
+                            dto.getProvinceCode()));
+        }
+        if (dto.getTextbookEdition() != null || dto.getTextbookSeries() != null) {
+            entity.setTextbookEdition(
+                    xiaozhi.modules.learning.util.LearningProfileConstants.textbookFromLegacySeries(
+                            dto.getTextbookSeries() != null ? dto.getTextbookSeries() : entity.getTextbookSeries(),
+                            dto.getTextbookEdition() != null ? dto.getTextbookEdition() : entity.getTextbookEdition()));
+        }
         if (dto.getTextbookSeries() != null) entity.setTextbookSeries(dto.getTextbookSeries());
         if (dto.getSubjectsEnabled() != null) entity.setSubjectsEnabled(dto.getSubjectsEnabled());
     }

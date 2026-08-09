@@ -1,4 +1,4 @@
-package xiaozhi.modules.learning.entity;
+package xiaozhi.modules.parent.entity;
 
 import java.time.LocalDate;
 import java.util.Date;

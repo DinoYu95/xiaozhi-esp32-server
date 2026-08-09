@@ -52,6 +52,9 @@ knife4j:
   setting:
     enableFooter: false
 
+teaching:
+  internal-api-key: ${TEACHING_INTERNAL_API_KEY:dev-teaching-internal-change-me}
+
 renren:
   redis:
     open: true

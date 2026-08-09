@@ -2,6 +2,7 @@ package xiaozhi.modules.learning.service;
 
 import java.io.InputStream;
 
+import xiaozhi.modules.learning.dto.TeachingKgPublishDTO;
 import xiaozhi.modules.learning.vo.KgReleaseVO;
 
 public interface LearningKgService {
@@ -19,4 +20,9 @@ public interface LearningKgService {
     KgReleaseVO getActivePublishedRelease(String subject);
 
     Long requireActiveReleaseId(String subject);
+
+    /**
+     * 教研审批通过后：导入 JSON 并发布到 kg_*（单年级 + 省 + 教材维度）
+     */
+    Long publishFromTeaching(TeachingKgPublishDTO dto);
 }

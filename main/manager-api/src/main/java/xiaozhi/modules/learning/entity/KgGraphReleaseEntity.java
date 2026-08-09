@@ -25,6 +25,9 @@ public class KgGraphReleaseEntity {
     private Integer gradeMax;
     private Date publishedAt;
     private String checksum;
+    /** 省编码，CN=全国通用 */
+    private String provinceCode;
+    private String textbookEdition;
     private Date createTime;
     private Date updateTime;
 }

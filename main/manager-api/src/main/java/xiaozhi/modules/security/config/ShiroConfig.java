@@ -110,6 +110,7 @@ public class ShiroConfig {
         filterMap.put("/parent-api/consent/document", "anon");
         filterMap.put("/parent-api/chat/snapshot/device-upload", "anon");
         filterMap.put("/parent-api/**", "parentToken,parentConsent");
+        filterMap.put("/internal/teaching/**", "anon");
         filterMap.put("/**", "oauth2");
         shiroFilter.setFilterChainDefinitionMap(filterMap);
 

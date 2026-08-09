@@ -186,3 +186,4 @@ uploadfile
 !main/manager-mobile/**/*.json
 !main/xiaozhi-server/**/*.json
 .m2
+docs/prototypes

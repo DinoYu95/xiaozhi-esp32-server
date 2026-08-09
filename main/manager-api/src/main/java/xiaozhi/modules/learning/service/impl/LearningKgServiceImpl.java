@@ -33,6 +33,8 @@ import xiaozhi.modules.learning.entity.KgEdgeEntity;
 import xiaozhi.modules.learning.entity.KgGraphReleaseEntity;
 import xiaozhi.modules.learning.entity.KgNodeEntity;
 import xiaozhi.modules.learning.entity.KgNodeRevisionEntity;
+import cn.hutool.json.JSONUtil;
+import xiaozhi.modules.learning.dto.TeachingKgPublishDTO;
 import xiaozhi.modules.learning.service.LearningKgService;
 import xiaozhi.modules.learning.vo.KgReleaseVO;
 
@@ -62,6 +64,8 @@ public class LearningKgServiceImpl implements LearningKgService {
         e.setSubject(StringUtils.defaultIfBlank(subject, "math"));
         e.setGradeMin(gradeMin);
         e.setGradeMax(gradeMax);
+        e.setProvinceCode("CN");
+        e.setTextbookEdition("generic");
         e.setCreateTime(now);
         e.setUpdateTime(now);
         kgGraphReleaseDao.insert(e);
@@ -204,6 +208,12 @@ public class LearningKgServiceImpl implements LearningKgService {
         List<KgGraphReleaseEntity> oldPublished = kgGraphReleaseDao.selectList(
                 new LambdaQueryWrapper<KgGraphReleaseEntity>()
                         .eq(KgGraphReleaseEntity::getSubject, release.getSubject())
+                        .eq(KgGraphReleaseEntity::getProvinceCode,
+                                StringUtils.defaultIfBlank(release.getProvinceCode(), "CN"))
+                        .eq(KgGraphReleaseEntity::getTextbookEdition,
+                                StringUtils.defaultIfBlank(release.getTextbookEdition(), "generic"))
+                        .eq(KgGraphReleaseEntity::getGradeMin, release.getGradeMin())
+                        .eq(KgGraphReleaseEntity::getGradeMax, release.getGradeMax())
                         .eq(KgGraphReleaseEntity::getStatus, KgGraphReleaseEntity.STATUS_PUBLISHED));
         Date now = new Date();
         for (KgGraphReleaseEntity old : oldPublished) {
@@ -359,5 +369,100 @@ public class LearningKgServiceImpl implements LearningKgService {
                 }
             }
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long publishFromTeaching(TeachingKgPublishDTO dto) {
+        if (dto == null || dto.getNodes() == null || dto.getNodes().isEmpty()) {
+            throw new RenException("图谱节点为空");
+        }
+        int grade = dto.getGrade();
+        if (grade < 1 || grade > 12) {
+            throw new RenException("年级无效");
+        }
+        String subject = StringUtils.defaultIfBlank(dto.getSubject(), "math");
+        String province = StringUtils.defaultIfBlank(dto.getProvinceCode(), "CN");
+        String textbook = StringUtils.defaultIfBlank(dto.getTextbookEdition(), "generic");
+        String versionLabel = StringUtils.defaultIfBlank(dto.getVersionLabel(),
+                "teaching-" + subject + "-G" + grade + "-" + System.currentTimeMillis());
+
+        Date now = new Date();
+        KgGraphReleaseEntity release = new KgGraphReleaseEntity();
+        release.setVersionLabel(versionLabel.trim());
+        release.setStatus(KgGraphReleaseEntity.STATUS_DRAFT);
+        release.setSubject(subject);
+        release.setProvinceCode(province);
+        release.setTextbookEdition(textbook);
+        release.setGradeMin(grade);
+        release.setGradeMax(grade);
+        release.setCreateTime(now);
+        release.setUpdateTime(now);
+        kgGraphReleaseDao.insert(release);
+        Long releaseId = release.getId();
+
+        for (TeachingKgPublishDTO.TeachingKgNodeDTO n : dto.getNodes()) {
+            if (n == null || StringUtils.isAnyBlank(n.getCode(), n.getNodeType(), n.getName())) {
+                continue;
+            }
+            KgNodeEntity node = kgNodeDao.selectOne(
+                    new LambdaQueryWrapper<KgNodeEntity>().eq(KgNodeEntity::getCode, n.getCode().trim()));
+            if (node == null) {
+                node = new KgNodeEntity();
+                node.setCode(n.getCode().trim());
+                node.setNodeType(n.getNodeType().trim());
+                node.setCreateTime(now);
+                kgNodeDao.insert(node);
+            }
+            KgNodeRevisionEntity rev = new KgNodeRevisionEntity();
+            rev.setGraphReleaseId(releaseId);
+            rev.setNodeId(node.getId());
+            rev.setName(n.getName().trim());
+            rev.setDescription(StringUtils.defaultString(n.getDescription()));
+            rev.setGrade(n.getGrade() != null ? n.getGrade() : grade);
+            Map<String, Object> props = new HashMap<>();
+            if (StringUtils.isNotBlank(n.getModuleCode())) {
+                props.put("module_code", n.getModuleCode().trim());
+            }
+            if (StringUtils.isNotBlank(n.getModuleName())) {
+                props.put("module_name", n.getModuleName().trim());
+            }
+            if (n.getModuleSortOrder() != null) {
+                props.put("module_sort_order", n.getModuleSortOrder());
+            }
+            if (StringUtils.isNotBlank(n.getTeachingContent())) {
+                props.put("teaching_content", n.getTeachingContent());
+            }
+            if (n.getMasteryRubric() != null && !n.getMasteryRubric().isEmpty()) {
+                props.put("mastery_rubric", n.getMasteryRubric());
+            }
+            if (!props.isEmpty()) {
+                rev.setProperties(JSONUtil.toJsonStr(props));
+            }
+            kgNodeRevisionDao.insert(rev);
+        }
+
+        if (dto.getEdges() != null) {
+            for (TeachingKgPublishDTO.TeachingKgEdgeDTO e : dto.getEdges()) {
+                if (e == null || StringUtils.isAnyBlank(e.getFromCode(), e.getToCode(), e.getEdgeType())) {
+                    continue;
+                }
+                Long fromId = nodeIdByCode(e.getFromCode().trim());
+                Long toId = nodeIdByCode(e.getToCode().trim());
+                if (fromId == null || toId == null) {
+                    throw new RenException("边引用了未知节点: " + e.getFromCode() + " -> " + e.getToCode());
+                }
+                KgEdgeEntity edge = new KgEdgeEntity();
+                edge.setGraphReleaseId(releaseId);
+                edge.setFromNodeId(fromId);
+                edge.setToNodeId(toId);
+                edge.setEdgeType(e.getEdgeType().trim());
+                edge.setRequired(true);
+                kgEdgeDao.insert(edge);
+            }
+        }
+
+        publishRelease(releaseId);
+        return releaseId;
     }
 }

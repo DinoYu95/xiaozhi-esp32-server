@@ -32,7 +32,12 @@ public class LearningKgTeachingInternalController {
     public Result<Long> publish(
             @RequestHeader(value = "X-Teaching-Internal-Key", required = false) String key,
             @RequestBody TeachingKgPublishDTO body) {
-        if (StringUtils.isBlank(internalApiKey) || !internalApiKey.equals(key)) {
+        String expected = StringUtils.trimToEmpty(internalApiKey);
+        String got = StringUtils.trimToEmpty(key);
+        if (StringUtils.isBlank(expected)) {
+            throw new RenException("服务端未配置 TEACHING_INTERNAL_API_KEY");
+        }
+        if (!expected.equals(got)) {
             throw new RenException("无效的内部密钥");
         }
         Long releaseId = learningKgService.publishFromTeaching(body);

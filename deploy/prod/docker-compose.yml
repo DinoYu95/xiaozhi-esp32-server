@@ -14,6 +14,9 @@ services:
     image: ${WEB_IMAGE:?set WEB_IMAGE in .env.prod — build via deploy/prod/images/xiaozhi-web/build-app.sh}
     container_name: xiaozhi-web
     restart: always
+    # 密钥等直接从文件进容器，避免 shell 里 export TEACHING_INTERNAL_API_KEY= 空值盖掉 .env.prod
+    env_file:
+      - .env.prod
     environment:
       TZ: Asia/Shanghai
       XIAOZHI_PARENT_PUBLIC_BASE_URL: ${XIAOZHI_PARENT_PUBLIC_BASE_URL:-}

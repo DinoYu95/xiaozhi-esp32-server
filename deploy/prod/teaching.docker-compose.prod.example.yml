@@ -1,24 +1,39 @@
-# 教研平台（teaching-stack）生产 compose 片段示例
-# 本文件不在 xiaozhi 仓库内运行；请复制到与 xiaozhi-esp32-server 同级的 teaching 项目 deploy/prod/docker-compose.yml 中对照修改。
+# 教研平台 teaching-research 生产 compose 对照示例
+# 实际文件路径（与 xiaozhi-esp32-server 同级）：
+#   ~/prjs/teaching-research/deploy/prod/docker-compose.yml
 #
-# 要点：HTTPS 由宿主机 edge-nginx（xiaozhi deploy/prod/edge-nginx）终结；
-#       teaching 的 Nginx 只监听 127.0.0.1:8100，公网用 https://teach.newgravtech.com 访问。
+# 在 teaching-research 仓库中修改对应服务的 ports / networks，不要在本仓库执行 compose。
+# HTTPS 由 xiaozhi 侧 deploy/prod/edge-nginx 占 443；
+# teaching 的 Nginx 只绑定 127.0.0.1:8100，公网用 https://teach.newgravtech.com。
 
-version: '3.8'
+# ---------------------------------------------------------------------------
+# 1. 在 teaching-research/deploy/prod/.env.prod（或 .env.example）增加：
+# ---------------------------------------------------------------------------
+# TEACHING_BIND=127.0.0.1
+# TEACHING_PORT=8100
 
-services:
-  # 服务名、镜像名按 teaching 项目实际为准，此处仅为示例
-  teaching-web:
-    # image: ${TEACHING_WEB_IMAGE}
-    container_name: teaching-web
-    restart: always
-    ports:
-      # 8100 与 edge-nginx 中 teach.newgravtech.com 的 proxy_pass 端口一致
-      - "${TEACHING_BIND:-127.0.0.1}:${TEACHING_PORT:-8100}:80"
-    networks:
-      - prod
-
-networks:
-  prod:
-    name: zhiban-prod
-    external: true
+# ---------------------------------------------------------------------------
+# 2. 找到对外提供 Web/Nginx 的服务（名称可能是 web / nginx / teaching-web），
+#    将 ports 改为仅本机可访问，例如：
+# -------------------------------------------------------------------
+#    ports:
+#      - "${TEACHING_BIND:-127.0.0.1}:${TEACHING_PORT:-8100}:80"
+#    若容器内 Nginx 监听 8080，则右侧改为 8080，例如 :8080 而非 :80
+#
+# ---------------------------------------------------------------------------
+# 3. 接入与小智相同的 Docker 网络（便于 internal API；若 teaching 已配置可跳过）：
+# -------------------------------------------------------------------
+#    networks:
+#      prod:
+#        aliases:
+#          - teaching-api   # 按 teaching 项目实际别名
+#
+# networks:
+#   prod:
+#     name: zhiban-prod
+#     external: true
+#
+# ---------------------------------------------------------------------------
+# 4. 勿在 teaching compose 中映射 443；证书与 teach.newgravtech.com 在
+#    xiaozhi-esp32-server/deploy/prod/edge-nginx/nginx.conf 中配置。
+# ---------------------------------------------------------------------------

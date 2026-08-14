@@ -5,7 +5,7 @@
 # 启动：docker compose --env-file .env.prod up -d
 # 生产镜像：先在 deploy/prod/images 构建 push ACR，再在此填 SERVER_IMAGE / WEB_IMAGE，勿 --build
 #
-# 同机还需启动 zhiban-agent、voiceprint-api、teaching-stack 的 deploy/prod（共用网络 zhiban-prod）
+# 同机还需启动 zhiban-agent、voiceprint-api、teaching-research 的 deploy/prod（共用网络 zhiban-prod）
 # HTTPS 由宿主机 edge-nginx（deploy/prod/edge-nginx）占 443，web/server 仅绑定 127.0.0.1，勿对公网暴露 8002/8000
 
 version: '3.8'

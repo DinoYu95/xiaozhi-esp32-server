@@ -1,0 +1,24 @@
+# 教研平台（teaching-stack）生产 compose 片段示例
+# 本文件不在 xiaozhi 仓库内运行；请复制到与 xiaozhi-esp32-server 同级的 teaching 项目 deploy/prod/docker-compose.yml 中对照修改。
+#
+# 要点：HTTPS 由宿主机 edge-nginx（xiaozhi deploy/prod/edge-nginx）终结；
+#       teaching 的 Nginx 只监听 127.0.0.1:8100，公网用 https://teach.newgravtech.com 访问。
+
+version: '3.8'
+
+services:
+  # 服务名、镜像名按 teaching 项目实际为准，此处仅为示例
+  teaching-web:
+    # image: ${TEACHING_WEB_IMAGE}
+    container_name: teaching-web
+    restart: always
+    ports:
+      # 8100 与 edge-nginx 中 teach.newgravtech.com 的 proxy_pass 端口一致
+      - "${TEACHING_BIND:-127.0.0.1}:${TEACHING_PORT:-8100}:80"
+    networks:
+      - prod
+
+networks:
+  prod:
+    name: zhiban-prod
+    external: true

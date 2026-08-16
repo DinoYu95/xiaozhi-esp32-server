@@ -27,6 +27,10 @@ public class KgGraphReleaseEntity {
     private String checksum;
     /** 省编码，CN=全国通用 */
     private String provinceCode;
+    /** 地市编码；all=旧版/不限 */
+    private String cityCode;
+    /** upper|lower|all */
+    private String semester;
     private String textbookEdition;
     private Date createTime;
     private Date updateTime;

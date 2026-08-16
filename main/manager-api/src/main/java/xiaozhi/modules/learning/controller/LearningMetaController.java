@@ -19,6 +19,7 @@ import xiaozhi.modules.learning.entity.KgGraphReleaseEntity;
 import xiaozhi.modules.learning.service.LearningKgService;
 import xiaozhi.modules.learning.service.impl.LearningKgServiceImpl;
 import xiaozhi.modules.learning.util.LearningChildProfileUtil;
+import xiaozhi.modules.learning.util.LearningGeoConstants;
 import xiaozhi.modules.learning.util.LearningProfileConstants;
 import xiaozhi.modules.parent.context.ParentContext;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
@@ -44,15 +45,21 @@ public class LearningMetaController {
     @Operation(summary = "孩子档案下拉：省/教材（与教研后台一致）")
     public Result<Map<String, Object>> profileOptions() {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("provinces", LearningProfileConstants.PROVINCE_OPTIONS);
+        body.put("provinces", LearningGeoConstants.provinces());
+        body.put("semesters", LearningGeoConstants.semesters());
+        body.put("citiesByProvince", LearningGeoConstants.citiesByProvince());
         body.put(
                 "textbooks",
                 LearningProfileConstants.TEXTBOOKS.entrySet().stream()
                         .map(e -> Map.of("code", e.getKey(), "label", e.getValue()))
                         .collect(Collectors.toList()));
-        body.put("defaults", Map.of(
-                "provinceCode", LearningProfileConstants.DEFAULT_PROVINCE,
-                "textbookEdition", LearningProfileConstants.DEFAULT_TEXTBOOK));
+        body.put(
+                "defaults",
+                Map.of(
+                        "provinceCode", LearningProfileConstants.DEFAULT_PROVINCE,
+                        "cityCode", "CN_all",
+                        "semester", LearningGeoConstants.SEMESTER_UPPER,
+                        "textbookEdition", LearningProfileConstants.DEFAULT_TEXTBOOK));
         return new Result<Map<String, Object>>().ok(body);
     }
 
@@ -72,9 +79,13 @@ public class LearningMetaController {
                 Map.of(
                         "currentGrade", child.getCurrentGrade(),
                         "provinceCode", child.getProvinceCode(),
+                        "cityCode", child.getCityCode(),
+                        "semester", child.getSemester(),
                         "textbookEdition", child.getTextbookEdition(),
                         "textbookSeries", child.getTextbookSeries(),
                         "resolvedProvince", LearningChildProfileUtil.resolveProvince(child),
+                        "resolvedCity", LearningChildProfileUtil.resolveCity(child),
+                        "resolvedSemester", LearningChildProfileUtil.resolveSemester(child),
                         "resolvedTextbook", LearningChildProfileUtil.resolveTextbook(child)));
         int g = LearningChildProfileUtil.clampGraphGrade(child, grade);
         out.put("graphGrade", g);
@@ -82,7 +93,9 @@ public class LearningMetaController {
             KgGraphReleaseEntity release = learningKgService.findActivePublishedRelease(
                     LearningChildProfileUtil.resolveSubject(subject),
                     LearningChildProfileUtil.resolveProvince(child),
+                    LearningChildProfileUtil.resolveCity(child),
                     LearningChildProfileUtil.resolveTextbook(child),
+                    LearningChildProfileUtil.resolveSemester(child),
                     g);
             if (release == null) {
                 out.put("matched", false);
@@ -99,6 +112,8 @@ public class LearningMetaController {
                             "id", release.getId(),
                             "versionLabel", release.getVersionLabel(),
                             "provinceCode", release.getProvinceCode(),
+                            "cityCode", release.getCityCode(),
+                            "semester", release.getSemester(),
                             "textbookEdition", release.getTextbookEdition(),
                             "gradeMin", release.getGradeMin(),
                             "gradeMax", release.getGradeMax(),

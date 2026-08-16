@@ -12,6 +12,8 @@ public class TeachingKgPublishDTO {
     private String draftMetaId;
     private String subject;
     private String provinceCode;
+    private String cityCode;
+    private String semester;
     private String textbookEdition;
     private int grade;
     private Long teachingSubmissionId;

@@ -48,6 +48,12 @@ public class DeviceChildSaveDTO {
     @Schema(description = "省/地区代码，与教研一致")
     private String provinceCode;
 
+    @Schema(description = "地市编码，如 shandong_jinan")
+    private String cityCode;
+
+    @Schema(description = "上下册 upper=上册 lower=下册")
+    private String semester;
+
     @Schema(description = "教材版本代码 pep/generic")
     private String textbookEdition;
 

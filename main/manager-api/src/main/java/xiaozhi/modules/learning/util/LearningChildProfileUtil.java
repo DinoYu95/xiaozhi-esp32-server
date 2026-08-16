@@ -9,6 +9,21 @@ public final class LearningChildProfileUtil {
 
     private LearningChildProfileUtil() {}
 
+    public static String resolveCity(DeviceChildEntity child) {
+        if (child == null || child.getCityCode() == null || child.getCityCode().isBlank()) {
+            String province = resolveProvince(child);
+            return province + "_all";
+        }
+        return LearningGeoConstants.normalizeCity(resolveProvince(child), child.getCityCode());
+    }
+
+    public static String resolveSemester(DeviceChildEntity child) {
+        if (child == null || child.getSemester() == null || child.getSemester().isBlank()) {
+            return LearningGeoConstants.SEMESTER_UPPER;
+        }
+        return LearningGeoConstants.normalizeSemester(child.getSemester());
+    }
+
     public static String resolveProvince(DeviceChildEntity child) {
         if (child == null) {
             return LearningProfileConstants.DEFAULT_PROVINCE;

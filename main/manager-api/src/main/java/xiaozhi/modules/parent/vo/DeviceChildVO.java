@@ -52,6 +52,12 @@ public class DeviceChildVO {
     @Schema(description = "省/地区代码")
     private String provinceCode;
 
+    @Schema(description = "地市编码")
+    private String cityCode;
+
+    @Schema(description = "上下册 upper/lower")
+    private String semester;
+
     @Schema(description = "教材版本代码")
     private String textbookEdition;
 

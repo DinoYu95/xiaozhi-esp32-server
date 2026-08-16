@@ -37,6 +37,7 @@ import cn.hutool.json.JSONUtil;
 import xiaozhi.modules.learning.dto.TeachingKgPublishDTO;
 import xiaozhi.modules.learning.service.LearningKgService;
 import xiaozhi.modules.learning.util.LearningKgGraphMatchUtil;
+import xiaozhi.modules.learning.util.LearningGeoConstants;
 import xiaozhi.modules.learning.util.LearningProfileConstants;
 import xiaozhi.modules.learning.vo.KgReleaseVO;
 
@@ -212,6 +213,10 @@ public class LearningKgServiceImpl implements LearningKgService {
                         .eq(KgGraphReleaseEntity::getSubject, release.getSubject())
                         .eq(KgGraphReleaseEntity::getProvinceCode,
                                 StringUtils.defaultIfBlank(release.getProvinceCode(), "CN"))
+                        .eq(KgGraphReleaseEntity::getCityCode,
+                                StringUtils.defaultIfBlank(release.getCityCode(), LearningGeoConstants.CITY_ANY))
+                        .eq(KgGraphReleaseEntity::getSemester,
+                                StringUtils.defaultIfBlank(release.getSemester(), LearningGeoConstants.SEMESTER_ANY))
                         .eq(KgGraphReleaseEntity::getTextbookEdition,
                                 StringUtils.defaultIfBlank(release.getTextbookEdition(), "generic"))
                         .eq(KgGraphReleaseEntity::getGradeMin, release.getGradeMin())
@@ -265,18 +270,31 @@ public class LearningKgServiceImpl implements LearningKgService {
     @Override
     public Long requireActiveReleaseId(
             String subject, String provinceCode, String textbookEdition, int graphGrade) {
-        String sub = LearningKgGraphMatchUtil.normalizeSubject(subject);
-        String province = LearningProfileConstants.normalizeProvince(provinceCode);
-        String textbook = LearningProfileConstants.normalizeTextbook(textbookEdition);
-        KgGraphReleaseEntity e = findActivePublishedRelease(sub, province, textbook, graphGrade);
+        return requireActiveReleaseId(subject, provinceCode, null, textbookEdition, null, graphGrade);
+    }
+
+    @Override
+    public Long requireActiveReleaseId(
+            String subject,
+            String provinceCode,
+            String cityCode,
+            String textbookEdition,
+            String semester,
+            int graphGrade) {
+        KgGraphReleaseEntity e =
+                findActivePublishedRelease(subject, provinceCode, cityCode, textbookEdition, semester, graphGrade);
         if (e == null) {
             throw new RenException(
                     "尚未发布匹配的图谱: "
-                            + sub
+                            + LearningKgGraphMatchUtil.normalizeSubject(subject)
                             + " / "
-                            + province
+                            + LearningProfileConstants.normalizeProvince(provinceCode)
                             + " / "
-                            + textbook
+                            + (cityCode != null ? cityCode : "—")
+                            + " / "
+                            + LearningProfileConstants.normalizeTextbook(textbookEdition)
+                            + " / "
+                            + (semester != null ? semester : "—")
                             + " / "
                             + graphGrade
                             + "年级");
@@ -287,22 +305,54 @@ public class LearningKgServiceImpl implements LearningKgService {
     @Override
     public KgGraphReleaseEntity findActivePublishedRelease(
             String subject, String provinceCode, String textbookEdition, int graphGrade) {
+        return findActivePublishedRelease(subject, provinceCode, null, textbookEdition, null, graphGrade);
+    }
+
+    @Override
+    public KgGraphReleaseEntity findActivePublishedRelease(
+            String subject,
+            String provinceCode,
+            String cityCode,
+            String textbookEdition,
+            String semester,
+            int graphGrade) {
         if (graphGrade <= 0) {
             return null;
         }
         String sub = LearningKgGraphMatchUtil.normalizeSubject(subject);
         String province = LearningProfileConstants.normalizeProvince(provinceCode);
         String textbook = LearningProfileConstants.normalizeTextbook(textbookEdition);
-        String[][] attempts = {
+        String city =
+                cityCode != null && !cityCode.isBlank()
+                        ? LearningGeoConstants.normalizeCity(province, cityCode)
+                        : LearningGeoConstants.normalizeCity(province, province + "_all");
+        String sem =
+                semester != null && !semester.isBlank()
+                        ? LearningGeoConstants.normalizeSemester(semester)
+                        : LearningGeoConstants.SEMESTER_UPPER;
+        String provinceAll = province + "_all";
+
+        String[][] cityAttempts = {
+            {city, sem},
+            {city, LearningGeoConstants.SEMESTER_ANY},
+            {provinceAll, sem},
+            {provinceAll, LearningGeoConstants.SEMESTER_ANY},
+            {LearningGeoConstants.CITY_ANY, sem},
+            {LearningGeoConstants.CITY_ANY, LearningGeoConstants.SEMESTER_ANY},
+        };
+        String[][] regionAttempts = {
             {province, textbook},
             {province, LearningProfileConstants.DEFAULT_TEXTBOOK},
             {LearningProfileConstants.DEFAULT_PROVINCE, textbook},
             {LearningProfileConstants.DEFAULT_PROVINCE, LearningProfileConstants.DEFAULT_TEXTBOOK},
         };
-        for (String[] pair : attempts) {
-            KgGraphReleaseEntity hit = queryPublishedRelease(sub, pair[0], pair[1], graphGrade);
-            if (hit != null) {
-                return hit;
+        for (String[] region : regionAttempts) {
+            for (String[] dim : cityAttempts) {
+                KgGraphReleaseEntity hit =
+                        queryPublishedRelease(sub, region[0], dim[0], region[1], dim[1], graphGrade);
+                if (hit != null) {
+                    return hit;
+                }
             }
         }
         KgGraphReleaseEntity byGrade = queryPublishedReleaseIgnoringRegion(sub, graphGrade);
@@ -326,13 +376,32 @@ public class LearningKgServiceImpl implements LearningKgService {
     }
 
     private KgGraphReleaseEntity queryPublishedRelease(
-            String subject, String provinceCode, String textbookEdition, int graphGrade) {
+            String subject,
+            String provinceCode,
+            String cityCode,
+            String textbookEdition,
+            String semester,
+            int graphGrade) {
         LambdaQueryWrapper<KgGraphReleaseEntity> w =
                 new LambdaQueryWrapper<KgGraphReleaseEntity>()
                         .eq(KgGraphReleaseEntity::getSubject, subject)
                         .eq(KgGraphReleaseEntity::getProvinceCode, provinceCode)
                         .eq(KgGraphReleaseEntity::getTextbookEdition, textbookEdition)
                         .eq(KgGraphReleaseEntity::getStatus, KgGraphReleaseEntity.STATUS_PUBLISHED);
+        if (cityCode != null) {
+            w.and(
+                    q ->
+                            q.eq(KgGraphReleaseEntity::getCityCode, cityCode)
+                                    .or()
+                                    .eq(KgGraphReleaseEntity::getCityCode, LearningGeoConstants.CITY_ANY));
+        }
+        if (semester != null) {
+            w.and(
+                    q ->
+                            q.eq(KgGraphReleaseEntity::getSemester, semester)
+                                    .or()
+                                    .eq(KgGraphReleaseEntity::getSemester, LearningGeoConstants.SEMESTER_ANY));
+        }
         LearningKgGraphMatchUtil.applyGraphGradeWithinRelease(w, graphGrade);
         w.orderByDesc(KgGraphReleaseEntity::getPublishedAt).last("LIMIT 1");
         return kgGraphReleaseDao.selectOne(w);
@@ -502,6 +571,15 @@ public class LearningKgServiceImpl implements LearningKgService {
         String subject = LearningKgGraphMatchUtil.normalizeSubject(dto.getSubject());
         String province = xiaozhi.modules.learning.util.LearningProfileConstants.normalizeProvince(
                 dto.getProvinceCode());
+        String city =
+                dto.getCityCode() != null && !dto.getCityCode().isBlank()
+                        ? xiaozhi.modules.learning.util.LearningGeoConstants.normalizeCity(
+                                province, dto.getCityCode())
+                        : province + "_all";
+        String semester =
+                dto.getSemester() != null && !dto.getSemester().isBlank()
+                        ? xiaozhi.modules.learning.util.LearningGeoConstants.normalizeSemester(dto.getSemester())
+                        : xiaozhi.modules.learning.util.LearningGeoConstants.SEMESTER_UPPER;
         String textbook = xiaozhi.modules.learning.util.LearningProfileConstants.normalizeTextbook(
                 dto.getTextbookEdition());
         String versionLabel = StringUtils.defaultIfBlank(dto.getVersionLabel(),
@@ -513,6 +591,8 @@ public class LearningKgServiceImpl implements LearningKgService {
         release.setStatus(KgGraphReleaseEntity.STATUS_DRAFT);
         release.setSubject(subject);
         release.setProvinceCode(province);
+        release.setCityCode(city);
+        release.setSemester(semester);
         release.setTextbookEdition(textbook);
         release.setGradeMin(grade);
         release.setGradeMax(grade);

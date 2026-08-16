@@ -96,6 +96,19 @@ public class DeviceChildServiceImpl implements DeviceChildService {
         entity.setCurrentGrade(dto.getCurrentGrade());
         entity.setProvinceCode(
                 xiaozhi.modules.learning.util.LearningProfileConstants.normalizeProvince(dto.getProvinceCode()));
+        if (dto.getCityCode() != null && !dto.getCityCode().isBlank()) {
+            entity.setCityCode(
+                    xiaozhi.modules.learning.util.LearningGeoConstants.normalizeCity(
+                            entity.getProvinceCode(), dto.getCityCode()));
+        } else if (entity.getProvinceCode() != null) {
+            entity.setCityCode(entity.getProvinceCode() + "_all");
+        }
+        if (dto.getSemester() != null && !dto.getSemester().isBlank()) {
+            entity.setSemester(
+                    xiaozhi.modules.learning.util.LearningGeoConstants.normalizeSemester(dto.getSemester()));
+        } else if (entity.getSemester() == null || entity.getSemester().isBlank()) {
+            entity.setSemester(xiaozhi.modules.learning.util.LearningGeoConstants.SEMESTER_UPPER);
+        }
         entity.setTextbookEdition(
                 xiaozhi.modules.learning.util.LearningProfileConstants.textbookFromLegacySeries(
                         dto.getTextbookSeries(), dto.getTextbookEdition()));
@@ -119,6 +132,15 @@ public class DeviceChildServiceImpl implements DeviceChildService {
             entity.setProvinceCode(
                     xiaozhi.modules.learning.util.LearningProfileConstants.normalizeProvince(
                             dto.getProvinceCode()));
+        }
+        if (dto.getCityCode() != null) {
+            entity.setCityCode(
+                    xiaozhi.modules.learning.util.LearningGeoConstants.normalizeCity(
+                            entity.getProvinceCode(), dto.getCityCode()));
+        }
+        if (dto.getSemester() != null) {
+            entity.setSemester(
+                    xiaozhi.modules.learning.util.LearningGeoConstants.normalizeSemester(dto.getSemester()));
         }
         if (dto.getTextbookEdition() != null || dto.getTextbookSeries() != null) {
             entity.setTextbookEdition(

@@ -30,6 +30,22 @@ public interface LearningKgService {
     KgGraphReleaseEntity findActivePublishedRelease(
             String subject, String provinceCode, String textbookEdition, int graphGrade);
 
+    KgGraphReleaseEntity findActivePublishedRelease(
+            String subject,
+            String provinceCode,
+            String cityCode,
+            String textbookEdition,
+            String semester,
+            int graphGrade);
+
+    Long requireActiveReleaseId(
+            String subject,
+            String provinceCode,
+            String cityCode,
+            String textbookEdition,
+            String semester,
+            int graphGrade);
+
     /** 指定 release 在某年级下可展示的 SKILL 节点数（掌握地图与 graphReady 口径一致） */
     long countSkillNodesAtGrade(Long releaseId, int grade);
 

@@ -325,7 +325,9 @@ public class LearningSessionServiceImpl implements LearningSessionService {
         KgGraphReleaseEntity release = learningKgService.findActivePublishedRelease(
                 "math",
                 LearningChildProfileUtil.resolveProvince(child),
+                LearningChildProfileUtil.resolveCity(child),
                 LearningChildProfileUtil.resolveTextbook(child),
+                LearningChildProfileUtil.resolveSemester(child),
                 g);
         if (release == null) {
             ov.setGraphReady(false);

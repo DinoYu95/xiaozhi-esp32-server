@@ -157,7 +157,9 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         Long releaseId = learningKgService.requireActiveReleaseId(
                 LearningMasteryStatusUtil.subjectFromSkillCode(code),
                 LearningChildProfileUtil.resolveProvince(child),
+                LearningChildProfileUtil.resolveCity(child),
                 LearningChildProfileUtil.resolveTextbook(child),
+                LearningChildProfileUtil.resolveSemester(child),
                 skillGrade);
         KgNodeRevisionEntity rev = kgNodeRevisionDao.selectOne(
                 new LambdaQueryWrapper<KgNodeRevisionEntity>()
@@ -254,11 +256,13 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         }
         String sub = LearningChildProfileUtil.resolveSubject(subject);
         String province = LearningChildProfileUtil.resolveProvince(child);
+        String city = LearningChildProfileUtil.resolveCity(child);
+        String semester = LearningChildProfileUtil.resolveSemester(child);
         String textbook = LearningChildProfileUtil.resolveTextbook(child);
         int childMax = LearningChildProfileUtil.resolveChildMaxGrade(child);
         int grade = LearningChildProfileUtil.clampGraphGrade(child, gradeParam);
         LearningChildProfileUtil.validateGraphGradeVisible(child, grade);
-        Long releaseId = learningKgService.requireActiveReleaseId(sub, province, textbook, grade);
+        Long releaseId = learningKgService.requireActiveReleaseId(sub, province, city, textbook, semester, grade);
         KgGraphReleaseEntity release = kgGraphReleaseDao.selectById(releaseId);
         boolean gradeConfigured = child.getCurrentGrade() != null && child.getCurrentGrade() > 0;
         ChildRelease ctx = new ChildRelease();

@@ -784,9 +784,26 @@ databaseChangeLog:
             encoding: utf8
             path: classpath:db/changelog/202608162000.sql
   - changeSet:
-      id: 202608171000
+      id: 202608171001
       author: xiaozhi
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            columnExists:
+              tableName: device_child
+              columnName: city_code
       changes:
-        - sqlFile:
-            encoding: utf8
-            path: classpath:db/changelog/202608171000_device_child_geo.sql
+        - sql:
+            sql: ALTER TABLE device_child ADD COLUMN city_code VARCHAR(32) DEFAULT NULL COMMENT '地市编码，如 shandong_jinan' AFTER province_code
+  - changeSet:
+      id: 202608171002
+      author: xiaozhi
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            columnExists:
+              tableName: device_child
+              columnName: semester
+      changes:
+        - sql:
+            sql: ALTER TABLE device_child ADD COLUMN semester VARCHAR(16) DEFAULT 'upper' COMMENT 'upper=上册 lower=下册' AFTER city_code

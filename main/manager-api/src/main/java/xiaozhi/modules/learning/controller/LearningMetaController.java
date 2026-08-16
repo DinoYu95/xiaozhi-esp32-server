@@ -42,25 +42,29 @@ public class LearningMetaController {
     private final KgNodeRevisionDao kgNodeRevisionDao;
 
     @GetMapping("/profile-options")
-    @Operation(summary = "孩子档案下拉：省/教材（与教研后台一致）")
+    @Operation(summary = "孩子档案下拉：省/市/上下册/教材（与教研后台一致）")
     public Result<Map<String, Object>> profileOptions() {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("provinces", LearningGeoConstants.provinces());
-        body.put("semesters", LearningGeoConstants.semesters());
-        body.put("citiesByProvince", LearningGeoConstants.citiesByProvince());
-        body.put(
-                "textbooks",
-                LearningProfileConstants.TEXTBOOKS.entrySet().stream()
-                        .map(e -> Map.of("code", e.getKey(), "label", e.getValue()))
-                        .collect(Collectors.toList()));
-        body.put(
-                "defaults",
-                Map.of(
-                        "provinceCode", LearningProfileConstants.DEFAULT_PROVINCE,
-                        "cityCode", "CN_all",
-                        "semester", LearningGeoConstants.SEMESTER_UPPER,
-                        "textbookEdition", LearningProfileConstants.DEFAULT_TEXTBOOK));
-        return new Result<Map<String, Object>>().ok(body);
+        try {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("provinces", LearningGeoConstants.provinces());
+            body.put("semesters", LearningGeoConstants.semesters());
+            body.put("citiesByProvince", LearningGeoConstants.citiesByProvince());
+            body.put(
+                    "textbooks",
+                    LearningProfileConstants.TEXTBOOKS.entrySet().stream()
+                            .map(e -> Map.of("code", e.getKey(), "label", e.getValue()))
+                            .collect(Collectors.toList()));
+            body.put(
+                    "defaults",
+                    Map.of(
+                            "provinceCode", LearningProfileConstants.DEFAULT_PROVINCE,
+                            "cityCode", "CN_all",
+                            "semester", LearningGeoConstants.SEMESTER_UPPER,
+                            "textbookEdition", LearningProfileConstants.DEFAULT_TEXTBOOK));
+            return new Result<Map<String, Object>>().ok(body);
+        } catch (Exception e) {
+            return new Result<Map<String, Object>>().error("加载省市区选项失败: " + e.getMessage());
+        }
     }
 
     @GetMapping("/graph-match-preview")

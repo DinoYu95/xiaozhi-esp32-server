@@ -95,7 +95,7 @@ public class DeviceChildServiceImpl implements DeviceChildService {
         entity.setSchool(dto.getSchool());
         entity.setCurrentGrade(dto.getCurrentGrade());
         entity.setProvinceCode(
-                xiaozhi.modules.learning.util.LearningProfileConstants.normalizeProvince(dto.getProvinceCode()));
+                xiaozhi.modules.learning.util.LearningGeoConstants.normalizeProvince(dto.getProvinceCode()));
         if (dto.getCityCode() != null && !dto.getCityCode().isBlank()) {
             entity.setCityCode(
                     xiaozhi.modules.learning.util.LearningGeoConstants.normalizeCity(
@@ -128,15 +128,17 @@ public class DeviceChildServiceImpl implements DeviceChildService {
         if (dto.getPersonalityNote() != null) entity.setPersonalityNote(dto.getPersonalityNote());
         if (dto.getSchool() != null) entity.setSchool(dto.getSchool());
         if (dto.getCurrentGrade() != null) entity.setCurrentGrade(dto.getCurrentGrade());
-        if (dto.getProvinceCode() != null) {
+        if (dto.getProvinceCode() != null && !dto.getProvinceCode().isBlank()) {
             entity.setProvinceCode(
-                    xiaozhi.modules.learning.util.LearningProfileConstants.normalizeProvince(
+                    xiaozhi.modules.learning.util.LearningGeoConstants.normalizeProvince(
                             dto.getProvinceCode()));
         }
-        if (dto.getCityCode() != null) {
+        if (dto.getCityCode() != null && !dto.getCityCode().isBlank()) {
             entity.setCityCode(
                     xiaozhi.modules.learning.util.LearningGeoConstants.normalizeCity(
                             entity.getProvinceCode(), dto.getCityCode()));
+        } else if (dto.getProvinceCode() != null && !dto.getProvinceCode().isBlank()) {
+            entity.setCityCode(entity.getProvinceCode() + "_all");
         }
         if (dto.getSemester() != null) {
             entity.setSemester(

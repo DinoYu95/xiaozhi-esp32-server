@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonAlias;
 
 @Data
 @Schema(description = "保存/添加设备主孩子")
@@ -46,12 +47,15 @@ public class DeviceChildSaveDTO {
     private Integer currentGrade;
 
     @Schema(description = "省/地区代码，与教研一致")
+    @JsonAlias({"province", "provinceName"})
     private String provinceCode;
 
     @Schema(description = "地市编码，如 shandong_jinan")
+    @JsonAlias({"city", "cityName"})
     private String cityCode;
 
     @Schema(description = "上下册 upper=上册 lower=下册")
+    @JsonAlias({"volume", "semesterCode", "textbookVolume"})
     private String semester;
 
     @Schema(description = "教材版本代码 pep/generic")

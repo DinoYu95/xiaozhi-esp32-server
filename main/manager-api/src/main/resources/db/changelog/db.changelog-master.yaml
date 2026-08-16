@@ -783,3 +783,10 @@ databaseChangeLog:
         - sqlFile:
             encoding: utf8
             path: classpath:db/changelog/202608162000.sql
+  - changeSet:
+      id: 202608171000
+      author: xiaozhi
+      changes:
+        - sqlFile:
+            encoding: utf8
+            path: classpath:db/changelog/202608171000_device_child_geo.sql

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Objects;
 
 import org.apache.shiro.authz.UnauthorizedException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -35,6 +36,17 @@ public class RenExceptionHandler {
         result.error(ex.getCode(), ex.getMsg());
 
         return result;
+    }
+
+    @ExceptionHandler(DataAccessException.class)
+    public Result<Void> handleDataAccessException(DataAccessException ex) {
+        log.error(ex.getMessage(), ex);
+        String msg = ex.getMessage();
+        if (msg != null && (msg.contains("city_code") || msg.contains("semester"))) {
+            return new Result<Void>().error(
+                    "孩子档案表缺少 city_code/semester 字段，请重启 manager-api 并确认 Liquibase 已执行 202608162000 或 202608171000");
+        }
+        return new Result<Void>().error();
     }
 
     @ExceptionHandler(DuplicateKeyException.class)

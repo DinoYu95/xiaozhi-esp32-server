@@ -3,8 +3,11 @@ package xiaozhi.modules.learning.util;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
+
+import xiaozhi.common.utils.JsonUtils;
 
 /**
  * SKILL code 第三段 → 家长可读模块名。
@@ -48,6 +51,38 @@ public final class LearningMasteryModuleLabels {
     public static String labelFor(String moduleKey) {
         String k = StringUtils.defaultIfBlank(moduleKey, "OTHER").toUpperCase();
         return LABELS.getOrDefault(k, k);
+    }
+
+    /** 优先用发布时写入 revision.properties 的 module_name（教研自定义大知识点名） */
+    public static String resolveLabel(String moduleKey, String moduleNameFromRevision) {
+        if (StringUtils.isNotBlank(moduleNameFromRevision)) {
+            return moduleNameFromRevision.trim();
+        }
+        return labelFor(moduleKey);
+    }
+
+    public static String moduleNameFromProperties(String propertiesJson) {
+        if (StringUtils.isBlank(propertiesJson)) {
+            return null;
+        }
+        try {
+            Map<String, Object> map =
+                    JsonUtils.parseObject(propertiesJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            if (map == null) {
+                return null;
+            }
+            Object v = map.get("module_name");
+            if (v == null) {
+                v = map.get("moduleName");
+            }
+            if (v == null) {
+                return null;
+            }
+            String s = String.valueOf(v).trim();
+            return s.isEmpty() ? null : s;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public static int sortIndex(String moduleKey) {

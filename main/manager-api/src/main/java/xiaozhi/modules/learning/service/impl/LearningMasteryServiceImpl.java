@@ -241,7 +241,7 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         }
         LearningModulePathVO vo = new LearningModulePathVO();
         vo.setModuleKey(mk);
-        vo.setModuleLabel(LearningMasteryModuleLabels.labelFor(mk));
+        vo.setModuleLabel(resolveModuleLabel(mk, rows));
         vo.setGrade(ctx.grade);
         vo.setPath(path);
         return vo;
@@ -357,12 +357,26 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         }
         LearningMasteryModuleVO m = new LearningMasteryModuleVO();
         m.setModuleKey(moduleKey);
-        m.setModuleLabel(LearningMasteryModuleLabels.labelFor(moduleKey));
+        m.setModuleLabel(resolveModuleLabel(moduleKey, rows));
         m.setSkillTotal(skills.size());
         m.setObservedCount(observed);
         m.setNeedConsolidateCount(need);
         m.setSkills(skills);
         return m;
+    }
+
+    private static String resolveModuleLabel(String moduleKey, List<SkillRow> rows) {
+        if (rows != null) {
+            for (SkillRow row : rows) {
+                String name =
+                        LearningMasteryModuleLabels.moduleNameFromProperties(
+                                row.revision != null ? row.revision.getProperties() : null);
+                if (StringUtils.isNotBlank(name)) {
+                    return name.trim();
+                }
+            }
+        }
+        return LearningMasteryModuleLabels.labelFor(moduleKey);
     }
 
     private LearningMasterySummaryVO aggregateSummary(List<LearningMasteryModuleVO> modules, int grade) {

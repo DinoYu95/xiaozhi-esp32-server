@@ -807,3 +807,10 @@ databaseChangeLog:
       changes:
         - sql:
             sql: ALTER TABLE device_child ADD COLUMN semester VARCHAR(16) DEFAULT 'upper' COMMENT 'upper=上册 lower=下册' AFTER city_code
+  - changeSet:
+      id: 202608211600
+      author: xiaozhi
+      changes:
+        - sqlFile:
+            encoding: utf8
+            path: classpath:db/changelog/202608211600.sql

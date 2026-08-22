@@ -87,7 +87,7 @@
       flex-shrink: 0; border: 1px solid rgba(255,255,255,0.08);
       background: rgba(255,255,255,0.03); color: #8b9bb8;
       font-size: 0.62rem; padding: 4px 9px; border-radius: 999px; cursor: pointer;
-      touch-action: manipulation;
+      touch-action: pan-x;
     }
     .filter-chip.on { background: rgba(255,184,64,0.12); border-color: rgba(255,184,64,0.4); color: #ffd591; }
 
@@ -190,12 +190,13 @@
     .state-chip.on { border-color: rgba(255,184,64,0.5); color: #ffd591; background: rgba(255,184,64,0.1); }
     .tip { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08); font-size: 0.7rem; color: #c5d0e8; }
 
-    .link-node { stroke-opacity: 0.12; transition: stroke-opacity 0.25s; }
-    .link-node.highlight { stroke-opacity: 0.65; }
-    .node { cursor: pointer; }
+    .link-node { stroke-opacity: 0.12; transition: stroke-opacity 0.25s, stroke-width 0.25s; }
+    .link-node.highlight { stroke-opacity: 0.65; stroke-width: 1.2; }
+    .node { cursor: pointer; transition: opacity 0.32s ease; pointer-events: none; }
     .node .hit-area { pointer-events: none; }
     .node .node-core { pointer-events: all; cursor: pointer; }
     .node.dimmed { opacity: 0.1; }
+    .node.focused { opacity: 1 !important; }
     .node.selected .node-core { stroke-width: 2.5 !important; }
     .node-label { fill: rgba(255,255,255,0.72); font-size: 7.5px; pointer-events: none; text-anchor: middle; }
     .node-label.hub { font-size: 9px; font-weight: 600; fill: rgba(255,255,255,0.95); }
@@ -406,6 +407,9 @@
     let layoutSettling = false;
     let svg, g, zoomBehavior, simulation, layoutNodes = [];
     let graphLayoutW = 0, graphLayoutH = 0;
+    let graphShell = null;
+    let currentZoomTransform = d3.zoomIdentity;
+    let pendingFocusCluster = null;
     let graphData = { nodes: [], links: [] };
     let pendingToastNode = null;
 
@@ -593,43 +597,82 @@
       return clusters;
     }
 
-    function focusCluster(clusterKey) {
-      if (!svg || !zoomBehavior || !layoutNodes.length) return;
-      const W = graphLayoutW, H = graphLayoutH;
-      if (clusterKey === 'all') {
-        svg.transition().duration(550).ease(d3.easeCubicOut)
-          .call(zoomBehavior.transform, d3.zoomIdentity);
-        selectedId = null;
-        showDetail(null);
-        updateDimming();
+    function onLayoutReady(fn) {
+      const ready = !layoutSettling && layoutNodes.some(n => n.type !== 'center' && n.x != null && !isNaN(n.x));
+      if (ready) {
+        fn();
         return;
       }
-      const members = layoutNodes.filter(n => n.cluster === clusterKey);
-      if (!members.length) return;
-      const cx = d3.mean(members, d => d.x);
-      const cy = d3.mean(members, d => d.y);
-      const scale = Math.min(1.85, 2.1);
-      const tx = W / 2 - cx * scale;
-      const ty = H / 2 - cy * scale;
-      svg.transition().duration(550).ease(d3.easeCubicOut)
-        .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
-      const hub = members.find(n => n.type === 'hub') || members[0];
-      if (hub) {
-        selectedId = hub.id;
-        showDetail(hub);
-        updateDimming();
-      }
+      if (!simulation) return;
+      simulation.on('end.focus', () => {
+        simulation.on('end.focus', null);
+        fn();
+      });
+    }
+
+    function applyZoomTransform(t) {
+      currentZoomTransform = t;
+      if (g) g.attr('transform', t);
+      const label = document.getElementById('zoomLabel');
+      if (label) label.textContent = Math.round(t.k * 100) + '%';
+    }
+
+    function focusCluster(clusterKey) {
+      if (!svg || !zoomBehavior || !layoutNodes.length) return;
+      pendingFocusCluster = clusterKey;
+      onLayoutReady(() => {
+        if (pendingFocusCluster !== clusterKey) return;
+        pendingFocusCluster = null;
+        const W = graphLayoutW, H = graphLayoutH;
+        if (clusterKey === 'all') {
+          svg.transition().duration(550).ease(d3.easeCubicOut)
+            .call(zoomBehavior.transform, d3.zoomIdentity);
+          selectedId = null;
+          showDetail(null);
+          updateDimming();
+          return;
+        }
+        const members = layoutNodes.filter(n => n.cluster === clusterKey);
+        if (!members.length) return;
+        const xs = members.map(n => n.x).filter(v => v != null && !isNaN(v));
+        const ys = members.map(n => n.y).filter(v => v != null && !isNaN(v));
+        if (!xs.length || !ys.length) return;
+        const cx = d3.mean(xs), cy = d3.mean(ys);
+        const spread = Math.max(
+          d3.max(xs) - d3.min(xs),
+          d3.max(ys) - d3.min(ys),
+          80
+        );
+        const scale = Math.min(2.2, Math.max(1.2, (Math.min(W, H) * 0.72) / spread));
+        const tx = W / 2 - cx * scale;
+        const ty = H / 2 - cy * scale;
+        svg.transition().duration(550).ease(d3.easeCubicOut)
+          .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+        const hub = members.find(n => n.type === 'hub') || members[0];
+        if (hub) {
+          selectedId = String(hub.id);
+          showDetail(hub);
+          updateDimming();
+        }
+      });
     }
 
     function renderFilters() {
       const bar = document.getElementById('filterBar');
-      const hubs = graphData.nodes.filter(n => n.type === 'hub');
+      const hubs = [];
+      const seen = new Set();
+      graphData.nodes.filter(n => n.type === 'hub').forEach(h => {
+        const key = h.cluster || h.id;
+        if (seen.has(key)) return;
+        seen.add(key);
+        hubs.push(h);
+      });
       bar.innerHTML = `<button type="button" class="filter-chip ${currentFilter==='all'?'on':''}" data-f="all">全部维度</button>` +
         hubs.map(h =>
-          `<button type="button" class="filter-chip ${currentFilter===h.cluster?'on':''}" data-f="${h.cluster}">${h.label || DIM_LABELS[h.cluster] || h.cluster}</button>`
+          `<button type="button" class="filter-chip ${currentFilter===(h.cluster||h.id)?'on':''}" data-f="${h.cluster || h.id}">${h.label || DIM_LABELS[h.cluster] || h.cluster}</button>`
         ).join('');
       bar.querySelectorAll('.filter-chip').forEach(btn => {
-        bindTap(btn, () => {
+        bindFilterChip(btn, () => {
           const f = btn.dataset.f;
           currentFilter = f;
           renderFilters();
@@ -898,18 +941,20 @@
 
       function pickNode(ev, d, coreSel) {
         ev.stopPropagation();
-        selectedId = d.id;
+        currentFilter = 'all';
+        renderFilters();
+        selectedId = String(d.id);
         showDetail(d);
-        nodeG.classed('selected', n => n.id === d.id);
+        nodeG.classed('selected', n => String(n.id) === selectedId);
         updateDimming();
         const r0 = nodeRadius(d);
         coreSel.transition().duration(180).attr('r', r0 * 1.18)
           .transition().duration(240).attr('r', r0);
         if (g) {
-          const conn = getConnectedIds(d.id);
+          const conn = getConnectedIds(selectedId);
           g.selectAll('.link-node').each(function(ld) {
-            const s = ld.source.id || ld.source;
-            const t = ld.target.id || ld.target;
+            const s = String(ld.source.id || ld.source);
+            const t = String(ld.target.id || ld.target);
             const hi = conn.has(s) && conn.has(t);
             const el = d3.select(this);
             if (hi) {
@@ -947,6 +992,53 @@
       });
     }
 
+    function bindGraphPanZoom(shell) {
+      if (!shell || !zoomBehavior) return;
+      graphShell = shell;
+      d3.select(shell).call(zoomBehavior);
+
+      if (shell._touchPanBound) return;
+      shell._touchPanBound = true;
+
+      let touchStart = null;
+
+      shell.addEventListener('touchstart', (ev) => {
+        const onNode = ev.target.closest && ev.target.closest('.node-core');
+        if (ev.touches.length === 1) {
+          touchStart = {
+            x: ev.touches[0].clientX,
+            y: ev.touches[0].clientY,
+            tx: currentZoomTransform.x,
+            ty: currentZoomTransform.y,
+            moved: false,
+            onNode: !!onNode
+          };
+        }
+      }, { passive: true });
+
+      shell.addEventListener('touchmove', (ev) => {
+        if (!touchStart || ev.touches.length !== 1) return;
+        const dx = ev.touches[0].clientX - touchStart.x;
+        const dy = ev.touches[0].clientY - touchStart.y;
+        const dist = Math.hypot(dx, dy);
+        if (!touchStart.moved) {
+          if (touchStart.onNode && dist < 12) return;
+          if (dist < 5) return;
+          touchStart.moved = true;
+        }
+        ev.preventDefault();
+        const t = d3.zoomIdentity
+          .translate(touchStart.tx + dx, touchStart.ty + dy)
+          .scale(currentZoomTransform.k);
+        applyZoomTransform(t);
+        d3.select(shell).property('__zoom', t);
+      }, { passive: false });
+
+      shell.addEventListener('touchend', () => {
+        touchStart = null;
+      }, { passive: true });
+    }
+
     function initGraph(restart) {
       const shell = document.querySelector('.graph-shell');
       const W = shell.clientWidth, H = shell.clientHeight;
@@ -957,10 +1049,12 @@
       graphLayoutW = W;
       graphLayoutH = H;
       layoutSettling = true;
+      currentZoomTransform = d3.zoomIdentity;
       if (simulation) simulation.stop();
       d3.select('#graphSvg').selectAll('*').remove();
 
-      svg = d3.select('#graphSvg').attr('viewBox', [0, 0, W, H]);
+      graphShell = shell;
+      svg = d3.select('#graphSvg').attr('viewBox', [0, 0, W, H]).style('pointer-events', 'none');
       const defs = svg.append('defs');
       defs.append('filter').attr('id', 'bloom').html(`
         <feGaussianBlur stdDeviation="2.5" result="b"/>
@@ -986,10 +1080,16 @@
       zoomBehavior = d3.zoom()
         .scaleExtent([0.3, 3.5])
         .on('zoom', ev => {
-          g.attr('transform', ev.transform);
-          document.getElementById('zoomLabel').textContent = Math.round(ev.transform.k * 100) + '%';
+          applyZoomTransform(ev.transform);
         });
-      svg.call(zoomBehavior);
+
+      svg.insert('rect', ':first-child')
+        .attr('class', 'zoom-bg')
+        .attr('width', W).attr('height', H)
+        .attr('fill', 'transparent')
+        .style('pointer-events', 'all');
+
+      bindGraphPanZoom(shell);
 
       const nodes = graphData.nodes.map(n => ({ ...n }));
       layoutNodes = nodes;
@@ -1042,8 +1142,7 @@
         });
 
       const nodeG = g.append('g').selectAll('g').data(nodes).join('g')
-        .attr('class', 'node')
-        .attr('opacity', 0);
+        .attr('class', 'node');
 
       const nodeDrag = d3.drag()
         .filter(ev => ev.type === 'mousedown' && ev.button === 0)
@@ -1059,9 +1158,6 @@
         link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
           .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
         nodeG.attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
-        if (layoutSettling && simulation.alpha() > 0.12) {
-          nodeG.attr('opacity', d => d.type === 'center' ? 1 : 0.35 + (1 - simulation.alpha()) * 0.65);
-        }
       });
 
       simulation.on('end', () => {
@@ -1079,55 +1175,83 @@
         });
         if (!selectedId) {
           const hub = nodes.find(n => n.type === 'hub' && n.cluster === 'logic') || nodes.find(n => n.type === 'hub');
-          if (hub) { selectedId = hub.id; showDetail(hub); updateDimming(); }
+          if (hub) { selectedId = String(hub.id); showDetail(hub); updateDimming(); }
         }
       });
 
-      svg.on('click', () => { selectedId = null; showDetail(null); updateDimming(); });
-      document.getElementById('zoomIn').onclick = () => svg.transition().duration(200).call(zoomBehavior.scaleBy, 1.25);
-      document.getElementById('zoomOut').onclick = () => svg.transition().duration(200).call(zoomBehavior.scaleBy, 0.8);
-      document.getElementById('zoomReset').onclick = () => svg.transition().duration(300).call(zoomBehavior.transform, d3.zoomIdentity);
+      svg.on('click', (ev) => {
+        if (ev.target.closest && ev.target.closest('.node-core')) return;
+        selectedId = null;
+        showDetail(null);
+        updateDimming();
+      });
+      document.getElementById('zoomIn').onclick = () => d3.select(shell).transition().duration(200).call(zoomBehavior.scaleBy, 1.25);
+      document.getElementById('zoomOut').onclick = () => d3.select(shell).transition().duration(200).call(zoomBehavior.scaleBy, 0.8);
+      document.getElementById('zoomReset').onclick = () => d3.select(shell).transition().duration(300).call(zoomBehavior.transform, d3.zoomIdentity);
       renderFilters();
       updateMeta();
     }
 
     function getConnectedIds(id) {
-      const set = new Set([id]);
-      graphData.links.forEach(l => {
-        const s = l.source.id || l.source, t = l.target.id || l.target;
-        if (s === id) set.add(t);
-        if (t === id) set.add(s);
-      });
-      const n = graphData.nodes.find(x => x.id === id);
-      if (n?.parentHub) set.add(n.parentHub);
-      if (n?.parentSub) set.add(n.parentSub);
+      const root = String(id);
+      const set = new Set([root]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        graphData.links.forEach(l => {
+          const s = String(l.source?.id ?? l.source);
+          const t = String(l.target?.id ?? l.target);
+          if (set.has(s) && !set.has(t)) { set.add(t); changed = true; }
+          if (set.has(t) && !set.has(s)) { set.add(s); changed = true; }
+        });
+        graphData.nodes.forEach(n => {
+          const nid = String(n.id);
+          const ph = n.parentHub ? String(n.parentHub) : '';
+          const ps = n.parentSub ? String(n.parentSub) : '';
+          if (ph && set.has(ph) && !set.has(nid)) { set.add(nid); changed = true; }
+          if (ps && set.has(ps) && !set.has(nid)) { set.add(nid); changed = true; }
+          if (set.has(nid)) {
+            if (ph && !set.has(ph)) { set.add(ph); changed = true; }
+            if (ps && !set.has(ps)) { set.add(ps); changed = true; }
+          }
+        });
+      }
       return set;
     }
 
     function updateDimming() {
       if (!g) return;
       const conn = selectedId ? getConnectedIds(selectedId) : null;
-      g.selectAll('.node').each(function(d) {
-        const dim = (currentFilter !== 'all' && d.cluster !== currentFilter && d.type !== 'center')
-          || (selectedId && conn && !conn.has(d.id) && d.type !== 'center');
-        d3.select(this).transition().duration(320).attr('opacity', dim ? 0.1 : 1);
-        d3.select(this).selectAll('text').transition().duration(320)
-          .attr('fill-opacity', dim ? 0.35 : 1);
-      });
-      g.selectAll('.link-node').each(function(d) {
-        let hi = false;
-        if (!selectedId) {
-          const tgt = typeof d.target === 'object' ? d.target : null;
-          hi = tgt && tgt.state === 'strong';
-        } else {
-          const s = d.source.id || d.source;
-          const t = d.target.id || d.target;
-          hi = conn.has(s) && conn.has(t);
-        }
-        d3.select(this).transition().duration(320)
-          .attr('stroke-opacity', hi ? 0.65 : (selectedId ? 0.06 : 0.1))
-          .attr('stroke-width', hi ? 1.2 : 0.5);
-      });
+      const sel = String(selectedId || '');
+      g.selectAll('.node')
+        .classed('dimmed', d => {
+          const nid = String(d.id);
+          if (currentFilter !== 'all' && d.cluster !== currentFilter && d.type !== 'center') return true;
+          if (selectedId && conn && !conn.has(nid) && d.type !== 'center') return true;
+          return false;
+        })
+        .classed('focused', d => !!selectedId && String(d.id) === sel)
+        .classed('selected', d => !!selectedId && String(d.id) === sel);
+      g.selectAll('.link-node')
+        .classed('highlight', function(d) {
+          if (!selectedId) {
+            const tgt = typeof d.target === 'object' ? d.target : null;
+            return !!(tgt && tgt.state === 'strong');
+          }
+          const s = String(d.source.id || d.source);
+          const t = String(d.target.id || d.target);
+          return conn.has(s) && conn.has(t);
+        })
+        .transition().duration(320)
+        .attr('stroke-opacity', function(d) {
+          if (!selectedId) {
+            const tgt = typeof d.target === 'object' ? d.target : null;
+            return tgt && tgt.state === 'strong' ? 0.65 : 0.1;
+          }
+          const s = String(d.source.id || d.source);
+          const t = String(d.target.id || d.target);
+          return conn.has(s) && conn.has(t) ? 0.65 : 0.06;
+        });
     }
 
     function showNotifyToast(title, body, node) {
@@ -1193,6 +1317,30 @@
       } catch (e) {
         showError(e.message || '网络错误，请稍后重试');
       }
+    }
+
+    function bindFilterChip(el, handler) {
+      if (!el) return;
+      let sx = 0, sy = 0, moved = false, lastTouch = 0;
+      el.addEventListener('touchstart', (ev) => {
+        sx = ev.touches[0].clientX;
+        sy = ev.touches[0].clientY;
+        moved = false;
+      }, { passive: true });
+      el.addEventListener('touchmove', (ev) => {
+        const dx = ev.touches[0].clientX - sx;
+        const dy = ev.touches[0].clientY - sy;
+        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) moved = true;
+      }, { passive: true });
+      el.addEventListener('touchend', (ev) => {
+        if (moved) return;
+        lastTouch = Date.now();
+        handler(ev);
+      }, { passive: true });
+      el.addEventListener('click', (ev) => {
+        if (Date.now() - lastTouch < 400) return;
+        handler(ev);
+      });
     }
 
     function bindTap(el, handler) {

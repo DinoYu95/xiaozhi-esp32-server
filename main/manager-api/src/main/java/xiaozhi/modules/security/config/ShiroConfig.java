@@ -88,6 +88,8 @@ public class ShiroConfig {
         filterMap.put("/swagger-ui/**", "anon");
         filterMap.put("/swagger-ui.html", "anon");
         filterMap.put("/favicon.ico", "anon");
+        // 成长星图 H5（小程序 web-view 加载，URL 带 token 由页面内请求 API）
+        filterMap.put("/static/**", "anon");
         filterMap.put("/user/captcha", "anon");
         filterMap.put("/user/smsVerification", "anon");
         filterMap.put("/user/login", "anon");

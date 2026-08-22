@@ -160,7 +160,8 @@ public class GrowthPortraitServiceImpl implements GrowthPortraitService {
         String ageBand = GrowthAgeBandUtil.resolveAgeBand(child);
         GpTemplateReleaseEntity release = findPublishedRelease(ageBand);
         if (release == null) {
-            throw new RenException("暂无已发布的成长星图模板：" + ageBand);
+            throw new RenException("暂无已发布的成长星图模板：" + ageBand
+                    + "（孩子档案解析结果；已发布 preschool 不等于所有孩子都能用，请发版对应年龄段或核对生日/年级/年龄段）");
         }
         List<GpTemplateNodeEntity> templateNodes = nodeDao.selectList(
                 new LambdaQueryWrapper<GpTemplateNodeEntity>()
@@ -184,6 +185,8 @@ public class GrowthPortraitServiceImpl implements GrowthPortraitService {
         Map<String, GpTemplateNodeEntity> byCode = templateNodes.stream()
                 .collect(Collectors.toMap(GpTemplateNodeEntity::getCode, n -> n, (a, b) -> a));
         List<GrowthNodeVO> nodes = new ArrayList<>();
+        GrowthNodeVO centerNode = buildCenterNode(center);
+        nodes.add(centerNode);
         int strongCount = 0;
         for (GpTemplateNodeEntity tn : templateNodes) {
             LearnerGrowthStateEntity st = stateByCode.get(tn.getCode());
@@ -193,9 +196,20 @@ public class GrowthPortraitServiceImpl implements GrowthPortraitService {
                 strongCount++;
             }
         }
+        applySimpleLayout(nodes);
         vo.setNodes(nodes);
         vo.setStrongCount(strongCount);
         List<GrowthLinkVO> links = new ArrayList<>();
+        for (GpTemplateNodeEntity tn : templateNodes) {
+            if ("hub".equals(tn.getNodeType())) {
+                GrowthLinkVO cl = new GrowthLinkVO();
+                cl.setSource("center");
+                cl.setTarget(tn.getCode());
+                LearnerGrowthStateEntity hs = stateByCode.get(tn.getCode());
+                cl.setStrength(hs != null ? hs.getStrength() : 30);
+                links.add(cl);
+            }
+        }
         for (GpTemplateEdgeEntity e : templateEdges) {
             GrowthLinkVO l = new GrowthLinkVO();
             l.setSource(e.getFromCode());
@@ -598,6 +612,58 @@ public class GrowthPortraitServiceImpl implements GrowthPortraitService {
                 new LambdaQueryWrapper<ParentDeviceBindingEntity>()
                         .eq(ParentDeviceBindingEntity::getDeviceId, child.getDeviceId()));
         return bindings.stream().map(ParentDeviceBindingEntity::getParentUserId).distinct().toList();
+    }
+
+    private GrowthNodeVO buildCenterNode(GrowthGraphVO.CenterNode center) {
+        GrowthNodeVO n = new GrowthNodeVO();
+        n.setId("center");
+        n.setType("center");
+        n.setLabel(center.getLabel());
+        n.setShortLabel(center.getLabel());
+        n.setShortDesc(center.getShortDesc());
+        n.setCluster("center");
+        n.setLevel(0);
+        n.setStrength(0);
+        n.setEvidenceCount(0);
+        n.setRequiredCount(0);
+        n.setState("visible");
+        n.setVisualIntensity(0.5);
+        n.setVisualTier("mid");
+        n.setEvidence("");
+        n.setSuggest("成长中心");
+        n.setX(0.5);
+        n.setY(0.5);
+        return n;
+    }
+
+    /** 星图预布局（归一化 0~1），供小程序 canvas 直接绘制，不依赖 D3 力导向 */
+    private void applySimpleLayout(List<GrowthNodeVO> nodes) {
+        List<GrowthNodeVO> hubs = nodes.stream().filter(n -> "hub".equals(n.getType())).toList();
+        int hc = Math.max(1, hubs.size());
+        for (int i = 0; i < hc; i++) {
+            double angle = (Math.PI * 2 * i) / hc - Math.PI / 2;
+            hubs.get(i).setX(0.5 + Math.cos(angle) * 0.28);
+            hubs.get(i).setY(0.5 + Math.sin(angle) * 0.28);
+        }
+        Map<String, GrowthNodeVO> byId = nodes.stream().collect(Collectors.toMap(GrowthNodeVO::getId, n -> n, (a, b) -> a));
+        for (GrowthNodeVO sub : nodes.stream().filter(n -> "sub".equals(n.getType())).toList()) {
+            GrowthNodeVO hub = sub.getParentHub() != null ? byId.get(sub.getParentHub()) : null;
+            double bx = hub != null && hub.getX() != null ? hub.getX() : 0.5;
+            double by = hub != null && hub.getY() != null ? hub.getY() : 0.5;
+            int idx = Math.abs(sub.getId().hashCode() % 6);
+            double a = (Math.PI * 2 * idx) / 6;
+            sub.setX(bx + Math.cos(a) * 0.09);
+            sub.setY(by + Math.sin(a) * 0.09);
+        }
+        for (GrowthNodeVO sig : nodes.stream().filter(n -> "signal".equals(n.getType())).toList()) {
+            GrowthNodeVO sub = sig.getParentSub() != null ? byId.get(sig.getParentSub()) : null;
+            double bx = sub != null && sub.getX() != null ? sub.getX() : 0.5;
+            double by = sub != null && sub.getY() != null ? sub.getY() : 0.5;
+            int idx = Math.abs(sig.getId().hashCode() % 4);
+            double a = (Math.PI * 2 * idx) / 4;
+            sig.setX(bx + Math.cos(a) * 0.045);
+            sig.setY(by + Math.sin(a) * 0.045);
+        }
     }
 
     private GrowthNodeVO toNodeVo(

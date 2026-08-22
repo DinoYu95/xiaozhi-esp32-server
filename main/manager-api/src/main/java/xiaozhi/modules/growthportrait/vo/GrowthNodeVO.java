@@ -24,4 +24,7 @@ public class GrowthNodeVO {
     private String parentSub;
     private String evidence;
     private String suggest;
+    /** 可选：服务端预布局（0~1），小程序 canvas 可直接用 */
+    private Double x;
+    private Double y;
 }

@@ -304,7 +304,31 @@ curl -X POST 'http://127.0.0.1:8002/config/growth-portrait/evidence' \
 
 ---
 
-## 11. 给 AI/同事的一键 Prompt
+## 12. 黑屏排查（有节点数、无图形）
+
+若 UI 已显示「201 节点」但画布全黑 → **服务端数据 OK，客户端绘制失败**。
+
+常见原因：
+
+1. **未跑力导向**且未使用 API 返回的 `node.x / node.y`（0~1 归一化坐标）
+2. **缺少 center 节点**：`nodes` 里需有 `id:"center", type:"center"`（新版 API 已自动注入）
+3. **连线 id 未解析**：`links[].source/target` 是字符串，需映射到 node.id
+4. **canvas 高度为 0** 或未在 `onReady` 后初始化
+5. **颜色与背景同色**（如 stroke/fill 透明）
+
+小程序绘制示例：
+
+```javascript
+const W = canvasWidth, H = canvasHeight;
+data.nodes.forEach(n => {
+  if (n.x == null || n.y == null) return;
+  const px = n.x * W, py = n.y * H;
+  ctx.beginPath();
+  ctx.arc(px, py, n.type === 'hub' ? 8 : 4, 0, Math.PI * 2);
+  ctx.fillStyle = CLUSTER_COLORS[n.cluster] || '#597ef7';
+  ctx.fill();
+});
+```
 
 ```
 你是微信小程序前端，对接「成长星图」功能。

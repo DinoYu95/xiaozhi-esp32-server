@@ -191,13 +191,17 @@
 
     .link-node { stroke-opacity: 0.12; transition: stroke-opacity 0.25s; }
     .link-node.highlight { stroke-opacity: 0.65; }
-    .node { cursor: pointer; touch-action: manipulation; }
+    .node { cursor: pointer; touch-action: manipulation; transition: opacity 0.35s ease; }
     .node .hit-area { fill: rgba(0,0,0,0.001); stroke: none; pointer-events: all; }
     .node.dimmed { opacity: 0.1; }
+    .node.selected .node-core { stroke-width: 2.5 !important; }
     .node-label { fill: rgba(255,255,255,0.72); font-size: 7.5px; pointer-events: none; text-anchor: middle; }
     .node-label.hub { font-size: 9px; font-weight: 600; fill: rgba(255,255,255,0.95); }
+    .node-label.pending { fill: rgba(255,255,255,0.42); font-size: 7px; }
+    .node-label.hub.pending { fill: rgba(255,255,255,0.72); }
     .node-label.strong-label { fill: #ffe7ba; font-weight: 700; font-size: 8px; }
     .node-desc { fill: rgba(255,255,255,0.42); font-size: 6px; pointer-events: none; text-anchor: middle; }
+    .node-desc.pending { fill: rgba(255,255,255,0.28); }
     .node-type-tag { fill: rgba(255,255,255,0.38); font-size: 6px; text-anchor: middle; }
 
     @keyframes pulse-strong {
@@ -447,18 +451,30 @@
       signal_node: 'signal', evidence: 'signal'
     };
 
-    function normalizeNode(raw) {
-      const n = { ...raw };
-      n.id = String(n.id ?? n.nodeCode ?? n.code ?? '');
+    function inferNodeType(n) {
       let t = String(n.type ?? n.nodeType ?? '').toLowerCase();
       if (TYPE_ALIASES[t]) t = TYPE_ALIASES[t];
-      if (!t || t === 'undefined') {
+      if (t === '1') t = 'hub';
+      if (t === '2') t = 'sub';
+      if (t === '3') t = 'signal';
+      if (!['center', 'hub', 'sub', 'signal'].includes(t)) {
         const lv = Number(n.level);
         if (lv === 1) t = 'hub';
         else if (lv === 2) t = 'sub';
         else if (lv === 3) t = 'signal';
+        else if (/^hub[-_]/i.test(n.id)) t = 'hub';
+        else if (/^sig[-_]/i.test(n.id)) t = 'signal';
+        else if (/^sub[-_]/i.test(n.id)) t = 'sub';
+        else if (n.parentSub) t = 'signal';
+        else if (n.parentHub) t = 'sub';
       }
-      n.type = t;
+      return t || 'sub';
+    }
+
+    function normalizeNode(raw) {
+      const n = { ...raw };
+      n.id = String(n.id ?? n.nodeCode ?? n.code ?? '').trim();
+      n.type = inferNodeType(n);
       if (n.type === 'hub' && !n.level) n.level = 1;
       if (n.type === 'sub' && !n.level) n.level = 2;
       if (n.type === 'signal' && !n.level) n.level = 3;
@@ -466,11 +482,26 @@
       n.evidenceCount = Number(n.evidenceCount) || 0;
       n.requiredCount = Number(n.requiredCount) || 0;
       n.state = n.state || 'locked';
-      n.parentHub = String(n.parentHub || n.parentHubCode || n.parentId || '');
-      n.parentSub = String(n.parentSub || n.parentSubCode || '');
+      n.parentHub = String(n.parentHub || n.parentHubCode || n.parentId || '').trim();
+      n.parentSub = String(n.parentSub || n.parentSubCode || '').trim();
       if (n.parentHub === 'undefined') n.parentHub = '';
       if (n.parentSub === 'undefined') n.parentSub = '';
       return n;
+    }
+
+    function ensureTreeLinks(nodes, links) {
+      const has = new Set(links.map(l => `${l.source}|${l.target}`));
+      const add = (source, target, strength) => {
+        if (!source || !target || source === target) return;
+        const key = `${source}|${target}`;
+        if (has.has(key)) return;
+        has.add(key);
+        links.push({ source, target, strength: strength || 25 });
+      };
+      nodes.filter(n => n.type === 'sub' && n.parentHub).forEach(n => add(n.parentHub, n.id, 42));
+      nodes.filter(n => n.type === 'signal' && n.parentSub).forEach(n => add(n.parentSub, n.id, 28));
+      nodes.filter(n => n.type === 'signal' && !n.parentSub && n.parentHub).forEach(n => add(n.parentHub, n.id, 22));
+      return links;
     }
 
     function mapApiToGraph(data) {
@@ -489,14 +520,15 @@
       };
       const apiNodes = (data.nodes || [])
         .map(normalizeNode)
-        .filter(n => n.type !== 'center' && n.id !== 'center');
+        .filter(n => n.id && n.type !== 'center' && n.id !== 'center');
       const nodes = [centerNode, ...apiNodes];
       const nodeIds = new Set(nodes.map(n => n.id));
-      const links = (data.links || []).map(l => {
+      let links = (data.links || []).map(l => {
         const source = typeof l.source === 'object' ? l.source.id : l.source;
         const target = typeof l.target === 'object' ? l.target.id : l.target;
         return { source: String(source), target: String(target), strength: l.strength || 20 };
       }).filter(l => nodeIds.has(l.source) && nodeIds.has(l.target));
+      links = ensureTreeLinks(nodes, links);
       const hubNodes = nodes.filter(n => n.type === 'hub');
       const linkedHubs = new Set();
       links.forEach(l => {
@@ -564,7 +596,8 @@
     function updateMeta() {
       const bandLabel = AGE_BAND_LABELS[currentAgeBand] || currentAgeBand;
       const days = graphMeta.observeDays || '—';
-      document.getElementById('profileMeta').textContent = `${childName} · ${bandLabel} · 观测 ${days} 天`;
+      const total = graphData.nodes ? graphData.nodes.length : 0;
+      document.getElementById('profileMeta').textContent = `${childName} · ${bandLabel} · 观测 ${days} 天 · ${total} 节点`;
       document.getElementById('observePill').textContent = `强烈 ${graphMeta.strongCount || 0}`;
     }
 
@@ -599,22 +632,44 @@
     function nodeRadius(d) {
       const s = nodeStrength(d);
       if (d.type === 'center') return 32;
-      if (d.type === 'hub') return 13 + s / 12;
-      if (d.type === 'sub') return 5 + s / 16;
-      return 4 + s / 18;
+      if (d.type === 'hub') return Math.max(14, 13 + s / 12);
+      if (d.type === 'sub') return Math.max(6, 5 + s / 16);
+      return Math.max(4.5, 4 + s / 18);
     }
 
     function appendNodeLabels(el, d, r) {
       if (d.type === 'center') return;
-      if (d.state === 'locked') return;
       const main = d.shortLabel || d.label;
-      const desc = d.shortDesc || '';
+      if (!main) return;
+      const desc = d.shortDesc || (d.state === 'locked' ? '待观测' : '');
       const isStrongLook = d.visualTier === 'high' || (d.visualTier === 'mid' && d.state === 'strong');
-      const labelClass = 'node-label' + (d.type === 'hub' ? ' hub' : '') + (isStrongLook ? ' strong-label' : '');
-      el.append('text').attr('class', labelClass).attr('dy', r + 11).text(main);
+      const isPending = d.state === 'locked' || d.state === 'collecting';
+      const labelClass = 'node-label'
+        + (d.type === 'hub' ? ' hub' : '')
+        + (isStrongLook ? ' strong-label' : '')
+        + (isPending ? ' pending' : '');
+      const text = d.type === 'signal' && main.length > 6 ? main.slice(0, 6) : main;
+      el.append('text').attr('class', labelClass).attr('dy', r + 11).text(text);
       if (desc) {
-        el.append('text').attr('class', 'node-desc').attr('dy', r + 19).text(desc.length > 10 ? desc.slice(0, 10) + '…' : desc);
+        el.append('text').attr('class', 'node-desc' + (isPending ? ' pending' : '')).attr('dy', r + 19)
+          .text(desc.length > 10 ? desc.slice(0, 10) + '…' : desc);
       }
+    }
+
+    function drawPendingNode(el, d, r, c) {
+      el.append('circle').attr('r', r + (d.type === 'hub' ? 5 : 2.5)).attr('fill', 'none')
+        .attr('stroke', c).attr('stroke-opacity', d.type === 'hub' ? 0.38 : 0.32)
+        .attr('stroke-width', d.type === 'hub' ? 2 : 1)
+        .attr('stroke-dasharray', d.type === 'hub' ? null : '3 4');
+      el.append('circle').attr('class', 'node-core').attr('r', r)
+        .attr('fill', c).attr('fill-opacity', d.type === 'hub' ? 0.48 : 0.34)
+        .attr('stroke', d.type === 'hub' ? '#efdbff' : c)
+        .attr('stroke-opacity', d.type === 'hub' ? 0.75 : 0.55)
+        .attr('stroke-width', d.type === 'hub' ? 2.2 : 1);
+      if (d.type === 'hub') {
+        el.append('text').attr('class', 'node-type-tag').attr('dy', -r - 6).text('维度');
+      }
+      appendNodeLabels(el, d, r);
     }
 
     function addNodeGlow(el, r, c, d) {
@@ -707,37 +762,64 @@
       }
 
       if (d.type === 'hub') {
-        el.append('circle').attr('r', r + 5).attr('fill', 'none')
-          .attr('stroke', c).attr('stroke-opacity', 0.45).attr('stroke-width', 2);
-        el.append('circle').attr('r', r).attr('fill', c)
-          .attr('stroke', '#efdbff').attr('stroke-width', 2.5)
-          .attr('filter', st !== 'locked' ? nodeBloomFilter(d) : null);
-        el.append('text').attr('class', 'node-type-tag').attr('dy', -r - 6).text('维度');
-        appendNodeLabels(el, d, r);
+        if (st === 'locked' || st === 'collecting') {
+          drawPendingNode(el, d, r, c);
+        } else {
+          el.append('circle').attr('r', r + 5).attr('fill', 'none')
+            .attr('stroke', c).attr('stroke-opacity', 0.45).attr('stroke-width', 2);
+          el.append('circle').attr('class', 'node-core').attr('r', r).attr('fill', c)
+            .attr('stroke', '#efdbff').attr('stroke-width', 2.5)
+            .attr('filter', nodeBloomFilter(d));
+          el.append('text').attr('class', 'node-type-tag').attr('dy', -r - 6).text('维度');
+          appendNodeLabels(el, d, r);
+        }
+        appendHitArea(el, d, r);
         return;
       }
 
-      const fill = st === 'locked' ? '#2a3142' : (st === 'collecting' ? d3.color(c).darker(0.6) : c);
+      if (st === 'locked') {
+        drawPendingNode(el, d, r, c);
+        appendHitArea(el, d, r);
+        return;
+      }
+
       if (st === 'collecting') {
         el.append('circle').attr('r', r + 3).attr('fill', 'none')
           .attr('stroke', '#597ef7').attr('stroke-opacity', 0.35).attr('stroke-width', 1)
           .attr('stroke-dasharray', `${Math.PI * r * 0.6} ${Math.PI * r * 1.4}`);
       }
+      const fill = st === 'collecting' ? d3.color(c).darker(0.6) : c;
       const strongLook = tier === 'high' || (tier === 'mid' && st === 'strong');
-      el.append('circle').attr('r', r).attr('fill', fill)
+      el.append('circle').attr('class', 'node-core').attr('r', r).attr('fill', fill)
         .attr('stroke', strongLook ? '#ffe7ba' : 'rgba(255,255,255,0.25)')
         .attr('stroke-width', selectedId === d.id ? 2.5 : (strongLook ? 1.2 : 0.8))
         .attr('filter', nodeBloomFilter(d));
       appendNodeLabels(el, d, r);
-      if (d.type !== 'center') {
-        el.append('circle')
-          .attr('class', 'hit-area')
-          .attr('r', Math.max(r + 14, d.type === 'hub' ? 28 : 20))
-          .attr('fill', 'rgba(0,0,0,0.001)');
-      }
+      appendHitArea(el, d, r);
+    }
+
+    function appendHitArea(el, d, r) {
+      el.append('circle')
+        .attr('class', 'hit-area')
+        .attr('r', Math.max(r + 14, d.type === 'hub' ? 28 : 18))
+        .attr('fill', 'rgba(0,0,0,0.001)');
     }
 
     let simulation;
+
+    function seedNodePositions(nodes, W, H) {
+      const cx = W / 2, cy = H / 2;
+      nodes.forEach(n => {
+        if (n.type === 'center') {
+          n.x = cx; n.y = cy;
+          return;
+        }
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 30 + Math.random() * Math.min(W, H) * 0.42;
+        n.x = cx + Math.cos(angle) * dist;
+        n.y = cy + Math.sin(angle) * dist;
+      });
+    }
 
     function onNodePick(ev, d, nodeG) {
       if (ev.cancelable) ev.preventDefault();
@@ -746,8 +828,11 @@
       if (ev.type === 'touchend') onNodePick.lastTouch = Date.now();
       selectedId = d.id;
       showDetail(d);
+      nodeG.classed('selected', n => n.id === d.id);
       updateDimming();
-      nodeG.each(function(n) { if (n.id === d.id) d3.select(this).selectAll('circle').last().attr('stroke-width', 2.5); });
+      nodeG.filter(n => n.id === d.id).select('.node-core')
+        .transition().duration(180).attr('r', nodeRadius(d) * 1.15)
+        .transition().duration(220).attr('r', nodeRadius(d));
     }
     onNodePick.lastTouch = 0;
 
@@ -792,8 +877,12 @@
 
       const nodes = graphData.nodes.map(n => ({ ...n }));
       const links = graphData.links.map(l => ({ ...l }));
+      seedNodePositions(nodes, W, H);
 
       simulation = d3.forceSimulation(nodes)
+        .velocityDecay(0.28)
+        .alpha(1)
+        .alphaDecay(0.018)
         .force('link', d3.forceLink(links).id(d => d.id)
           .distance(l => {
             const t = typeof l.target === 'object' ? l.target : nodes.find(n => n.id === l.target);
@@ -837,6 +926,7 @@
 
       const nodeG = g.append('g').selectAll('g').data(nodes).join('g')
         .attr('class', 'node')
+        .attr('opacity', 0)
         .call(d3.drag()
           .on('start', (ev, d) => { if (!ev.active) simulation.alphaTarget(0.25).restart(); d.fx = d.x; d.fy = d.y; })
           .on('drag', (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
@@ -850,13 +940,19 @@
       simulation.on('tick', () => {
         link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
           .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
-        nodeG.attr('transform', d => `translate(${d.x},${d.y})`);
+        nodeG.attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
+        if (simulation.alpha() > 0.15) {
+          nodeG.attr('opacity', d => d.type === 'center' ? 1 : 0.35 + (1 - simulation.alpha()) * 0.65);
+        } else {
+          nodeG.attr('opacity', 1);
+        }
       });
 
       simulation.on('end', () => {
+        nodeG.transition().duration(300).attr('opacity', 1);
         getHubClusters().forEach(dim => {
           const members = nodes.filter(n => n.cluster === dim);
-          if (members.length < 4) return;
+          if (members.length < 2) return;
           const cx = d3.mean(members, d => d.x), cy = d3.mean(members, d => d.y);
           const r = d3.max(members, d => Math.hypot(d.x - cx, d.y - cy)) + 40;
           clusterLayer.append('circle').attr('cx', cx).attr('cy', cy).attr('r', r)
@@ -894,16 +990,20 @@
     function updateDimming() {
       if (!g) return;
       const conn = selectedId ? getConnectedIds(selectedId) : null;
-      g.selectAll('.node').classed('dimmed', d => {
-        if (currentFilter !== 'all' && d.cluster !== currentFilter && d.type !== 'center') return true;
-        if (selectedId && conn && !conn.has(d.id) && d.type !== 'center') return true;
-        return false;
-      });
-      g.selectAll('.link-node').classed('highlight', d => {
-        if (!selectedId) return (typeof d.target === 'object' ? d.target.state : '') === 'strong';
-        const s = d.source.id || d.source, t = d.target.id || d.target;
-        return conn.has(s) && conn.has(t);
-      });
+      g.selectAll('.node')
+        .transition().duration(320)
+        .classed('dimmed', d => {
+          if (currentFilter !== 'all' && d.cluster !== currentFilter && d.type !== 'center') return true;
+          if (selectedId && conn && !conn.has(d.id) && d.type !== 'center') return true;
+          return false;
+        });
+      g.selectAll('.link-node')
+        .transition().duration(320)
+        .classed('highlight', d => {
+          if (!selectedId) return (typeof d.target === 'object' ? d.target.state : '') === 'strong';
+          const s = d.source.id || d.source, t = d.target.id || d.target;
+          return conn.has(s) && conn.has(t);
+        });
     }
 
     function showNotifyToast(title, body, node) {
@@ -957,10 +1057,12 @@
         selectedId = null;
         showApp();
         requestAnimationFrame(() => {
-          initGraph(false);
-          showDetail(null);
-          updateDimming();
-          fetchUnreadNotification();
+          requestAnimationFrame(() => {
+            initGraph(false);
+            showDetail(null);
+            updateDimming();
+            fetchUnreadNotification();
+          });
         });
       } catch (e) {
         showError(e.message || '网络错误，请稍后重试');

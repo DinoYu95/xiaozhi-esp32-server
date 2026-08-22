@@ -81,12 +81,13 @@
       background: rgba(99,102,241,0.2); color: #c7d2fe; font-weight: 700;
     }
 
-    .filters { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px 0; scrollbar-width: none; flex-shrink: 0; }
+    .filters { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px 0; scrollbar-width: none; flex-shrink: 0; width: 100%; max-width: 100%; -webkit-overflow-scrolling: touch; touch-action: pan-x; overscroll-behavior-x: contain; }
     .filters::-webkit-scrollbar { display: none; }
     .filter-chip {
       flex-shrink: 0; border: 1px solid rgba(255,255,255,0.08);
       background: rgba(255,255,255,0.03); color: #8b9bb8;
       font-size: 0.62rem; padding: 4px 9px; border-radius: 999px; cursor: pointer;
+      touch-action: manipulation;
     }
     .filter-chip.on { background: rgba(255,184,64,0.12); border-color: rgba(255,184,64,0.4); color: #ffd591; }
 
@@ -191,8 +192,9 @@
 
     .link-node { stroke-opacity: 0.12; transition: stroke-opacity 0.25s; }
     .link-node.highlight { stroke-opacity: 0.65; }
-    .node { cursor: pointer; touch-action: manipulation; transition: opacity 0.35s ease; }
-    .node .hit-area { fill: rgba(0,0,0,0.001); stroke: none; pointer-events: all; }
+    .node { cursor: pointer; }
+    .node .hit-area { pointer-events: none; }
+    .node .node-core { pointer-events: all; cursor: pointer; }
     .node.dimmed { opacity: 0.1; }
     .node.selected .node-core { stroke-width: 2.5 !important; }
     .node-label { fill: rgba(255,255,255,0.72); font-size: 7.5px; pointer-events: none; text-anchor: middle; }
@@ -246,7 +248,15 @@
 
     #app { display: none; flex: 1; flex-direction: column; min-height: 0; }
     #app.ready { display: flex; }
-    #graphPanel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    #graphPanel { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+    #lightPanel {
+      display: none; flex: 1; flex-direction: column; min-height: 0;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      padding: 12px; background: rgba(10,14,24,0.95);
+      color: #9aa8c4; font-size: 0.72rem;
+    }
+    #lightPanel.active { display: flex; }
+    .mode-tabs button { touch-action: manipulation; }
   </style>
 </head>
 <body>
@@ -322,8 +332,8 @@
         </div>
       </div>
 
-      <div id="lightPanel" style="display:none;padding:12px;background:rgba(10,14,24,0.95);color:#9aa8c4;font-size:0.72rem;flex-shrink:0;overflow-y:auto;max-height:40vh;">
-        <p style="margin-bottom:10px;color:#c5d0e8;">能力不会「一键点亮」，而是随与小智互动自动累积证据：</p>
+      <div id="lightPanel">
+        <p id="lightIntro" style="margin-bottom:10px;color:#c5d0e8;">能力不会「一键点亮」，而是随与小智互动自动累积证据：</p>
         <div style="display:flex;flex-direction:column;gap:8px;">
           <div style="padding:8px 10px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06)">
             <span style="color:#6b7a99">① 未解锁</span> · 本年龄段暂不评估，或证据 &lt; 2 条 → 灰点
@@ -392,8 +402,10 @@
     let currentAgeBand = 'upper';
     let currentFilter = 'all';
     let selectedId = null;
-    let graphMeta = { strongCount: 0, observeDays: 0 };
-    let svg, g, zoomBehavior;
+    let graphMeta = { strongCount: 0, observeDays: 0, weeklyInstantCap: 2 };
+    let layoutSettling = false;
+    let svg, g, zoomBehavior, simulation, layoutNodes = [];
+    let graphLayoutW = 0, graphLayoutH = 0;
     let graphData = { nodes: [], links: [] };
     let pendingToastNode = null;
 
@@ -581,6 +593,34 @@
       return clusters;
     }
 
+    function focusCluster(clusterKey) {
+      if (!svg || !zoomBehavior || !layoutNodes.length) return;
+      const W = graphLayoutW, H = graphLayoutH;
+      if (clusterKey === 'all') {
+        svg.transition().duration(550).ease(d3.easeCubicOut)
+          .call(zoomBehavior.transform, d3.zoomIdentity);
+        selectedId = null;
+        showDetail(null);
+        updateDimming();
+        return;
+      }
+      const members = layoutNodes.filter(n => n.cluster === clusterKey);
+      if (!members.length) return;
+      const cx = d3.mean(members, d => d.x);
+      const cy = d3.mean(members, d => d.y);
+      const scale = Math.min(1.85, 2.1);
+      const tx = W / 2 - cx * scale;
+      const ty = H / 2 - cy * scale;
+      svg.transition().duration(550).ease(d3.easeCubicOut)
+        .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+      const hub = members.find(n => n.type === 'hub') || members[0];
+      if (hub) {
+        selectedId = hub.id;
+        showDetail(hub);
+        updateDimming();
+      }
+    }
+
     function renderFilters() {
       const bar = document.getElementById('filterBar');
       const hubs = graphData.nodes.filter(n => n.type === 'hub');
@@ -589,8 +629,38 @@
           `<button type="button" class="filter-chip ${currentFilter===h.cluster?'on':''}" data-f="${h.cluster}">${h.label || DIM_LABELS[h.cluster] || h.cluster}</button>`
         ).join('');
       bar.querySelectorAll('.filter-chip').forEach(btn => {
-        bindTap(btn, () => { currentFilter = btn.dataset.f; renderFilters(); updateDimming(); });
+        bindTap(btn, () => {
+          const f = btn.dataset.f;
+          currentFilter = f;
+          renderFilters();
+          focusCluster(f);
+          btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        });
       });
+    }
+
+    function renderLightRules() {
+      const days = graphMeta.observeDays || 0;
+      const cap = graphMeta.weeklyInstantCap || 2;
+      const intro = document.getElementById('lightIntro');
+      if (intro) {
+        intro.textContent = days
+          ? `能力不会「一键点亮」，而是随与小智互动自动累积证据（已观测 ${days} 天，每周最多 ${cap} 条即时通知）：`
+          : `能力不会「一键点亮」，而是随与小智互动自动累积证据（每周最多 ${cap} 条即时通知）：`;
+      }
+    }
+
+    function switchViewMode(mode) {
+      const isGraph = mode === 'graph';
+      document.querySelectorAll('.mode-tabs button').forEach(b => {
+        b.classList.toggle('on', b.dataset.mode === mode);
+      });
+      document.getElementById('graphPanel').style.display = isGraph ? 'flex' : 'none';
+      document.getElementById('lightPanel').classList.toggle('active', !isGraph);
+      document.getElementById('helpPanel').classList.remove('open');
+      if (isGraph && layoutNodes.length) {
+        requestAnimationFrame(() => initGraph(true));
+      }
     }
 
     function updateMeta() {
@@ -744,6 +814,8 @@
           .attr('stroke-width', 1.6).attr('stroke-linecap', 'round');
       }
 
+      el.append('circle').attr('class', 'node-core').attr('r', R + 8)
+        .attr('fill', 'rgba(0,0,0,0.001)').attr('stroke', 'none');
       el.append('text').attr('class', 'node-label hub').attr('dy', R + 16).text(d.label);
       el.append('text').attr('class', 'node-type-tag').attr('dy', R + 24).text(d.shortDesc || '成长中心');
     }
@@ -805,8 +877,6 @@
         .attr('fill', 'rgba(0,0,0,0.001)');
     }
 
-    let simulation;
-
     function seedNodePositions(nodes, W, H) {
       const cx = W / 2, cy = H / 2;
       nodes.forEach(n => {
@@ -821,20 +891,61 @@
       });
     }
 
-    function onNodePick(ev, d, nodeG) {
-      if (ev.cancelable) ev.preventDefault();
-      ev.stopPropagation();
-      if (ev.type === 'click' && Date.now() - onNodePick.lastTouch < 450) return;
-      if (ev.type === 'touchend') onNodePick.lastTouch = Date.now();
-      selectedId = d.id;
-      showDetail(d);
-      nodeG.classed('selected', n => n.id === d.id);
-      updateDimming();
-      nodeG.filter(n => n.id === d.id).select('.node-core')
-        .transition().duration(180).attr('r', nodeRadius(d) * 1.15)
-        .transition().duration(220).attr('r', nodeRadius(d));
+    function bindNodeInteraction(nodeG) {
+      const TAP_MS = 360;
+      const TAP_DIST = 14;
+      bindNodeInteraction.lastTouch = 0;
+
+      function pickNode(ev, d, coreSel) {
+        ev.stopPropagation();
+        selectedId = d.id;
+        showDetail(d);
+        nodeG.classed('selected', n => n.id === d.id);
+        updateDimming();
+        const r0 = nodeRadius(d);
+        coreSel.transition().duration(180).attr('r', r0 * 1.18)
+          .transition().duration(240).attr('r', r0);
+        if (g) {
+          const conn = getConnectedIds(d.id);
+          g.selectAll('.link-node').each(function(ld) {
+            const s = ld.source.id || ld.source;
+            const t = ld.target.id || ld.target;
+            const hi = conn.has(s) && conn.has(t);
+            const el = d3.select(this);
+            if (hi) {
+              el.transition().duration(180).attr('stroke-width', 2.2)
+                .transition().duration(320).attr('stroke-width', 1.4);
+            }
+          });
+        }
+      }
+
+      nodeG.each(function(d) {
+        const wrap = d3.select(this);
+        const core = wrap.select('.node-core');
+        if (core.empty()) return;
+        let down = null;
+
+        core
+          .on('click', function(ev) {
+            if (Date.now() - bindNodeInteraction.lastTouch < 450) return;
+            pickNode(ev, d, d3.select(this));
+          })
+          .on('pointerdown', function(ev) {
+            down = { x: ev.clientX, y: ev.clientY, t: Date.now() };
+          })
+          .on('pointerup', function(ev) {
+            if (!down) return;
+            const moved = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > TAP_DIST;
+            const dt = Date.now() - down.t;
+            down = null;
+            if (!moved && dt < TAP_MS) {
+              bindNodeInteraction.lastTouch = Date.now();
+              pickNode(ev, d, d3.select(this));
+            }
+          });
+      });
     }
-    onNodePick.lastTouch = 0;
 
     function initGraph(restart) {
       const shell = document.querySelector('.graph-shell');
@@ -843,6 +954,9 @@
         setTimeout(() => initGraph(restart), 80);
         return;
       }
+      graphLayoutW = W;
+      graphLayoutH = H;
+      layoutSettling = true;
       if (simulation) simulation.stop();
       d3.select('#graphSvg').selectAll('*').remove();
 
@@ -869,13 +983,16 @@
       }
 
       g = svg.append('g');
-      zoomBehavior = d3.zoom().scaleExtent([0.3, 3.5]).on('zoom', ev => {
-        g.attr('transform', ev.transform);
-        document.getElementById('zoomLabel').textContent = Math.round(ev.transform.k * 100) + '%';
-      });
+      zoomBehavior = d3.zoom()
+        .scaleExtent([0.3, 3.5])
+        .on('zoom', ev => {
+          g.attr('transform', ev.transform);
+          document.getElementById('zoomLabel').textContent = Math.round(ev.transform.k * 100) + '%';
+        });
       svg.call(zoomBehavior);
 
       const nodes = graphData.nodes.map(n => ({ ...n }));
+      layoutNodes = nodes;
       const links = graphData.links.map(l => ({ ...l }));
       seedNodePositions(nodes, W, H);
 
@@ -926,14 +1043,15 @@
 
       const nodeG = g.append('g').selectAll('g').data(nodes).join('g')
         .attr('class', 'node')
-        .attr('opacity', 0)
-        .call(d3.drag()
-          .on('start', (ev, d) => { if (!ev.active) simulation.alphaTarget(0.25).restart(); d.fx = d.x; d.fy = d.y; })
-          .on('drag', (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
-          .on('end', (ev, d) => { if (!ev.active) simulation.alphaTarget(0); if (d.type !== 'center') { d.fx = null; d.fy = null; } })
-        )
-        .on('click', (ev, d) => onNodePick(ev, d, nodeG))
-        .on('touchend', (ev, d) => onNodePick(ev, d, nodeG));
+        .attr('opacity', 0);
+
+      const nodeDrag = d3.drag()
+        .filter(ev => ev.type === 'mousedown' && ev.button === 0)
+        .on('start', (ev, d) => { if (!ev.active) simulation.alphaTarget(0.25).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag', (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+        .on('end', (ev, d) => { if (!ev.active) simulation.alphaTarget(0); if (d.type !== 'center') { d.fx = null; d.fy = null; } });
+      nodeG.call(nodeDrag);
+      bindNodeInteraction(nodeG);
 
       nodeG.each(function(d) { drawNode(d3.select(this), d); });
 
@@ -941,15 +1059,14 @@
         link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
           .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
         nodeG.attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
-        if (simulation.alpha() > 0.15) {
+        if (layoutSettling && simulation.alpha() > 0.12) {
           nodeG.attr('opacity', d => d.type === 'center' ? 1 : 0.35 + (1 - simulation.alpha()) * 0.65);
-        } else {
-          nodeG.attr('opacity', 1);
         }
       });
 
       simulation.on('end', () => {
-        nodeG.transition().duration(300).attr('opacity', 1);
+        layoutSettling = false;
+        updateDimming();
         getHubClusters().forEach(dim => {
           const members = nodes.filter(n => n.cluster === dim);
           if (members.length < 2) return;
@@ -990,20 +1107,27 @@
     function updateDimming() {
       if (!g) return;
       const conn = selectedId ? getConnectedIds(selectedId) : null;
-      g.selectAll('.node')
-        .transition().duration(320)
-        .classed('dimmed', d => {
-          if (currentFilter !== 'all' && d.cluster !== currentFilter && d.type !== 'center') return true;
-          if (selectedId && conn && !conn.has(d.id) && d.type !== 'center') return true;
-          return false;
-        });
-      g.selectAll('.link-node')
-        .transition().duration(320)
-        .classed('highlight', d => {
-          if (!selectedId) return (typeof d.target === 'object' ? d.target.state : '') === 'strong';
-          const s = d.source.id || d.source, t = d.target.id || d.target;
-          return conn.has(s) && conn.has(t);
-        });
+      g.selectAll('.node').each(function(d) {
+        const dim = (currentFilter !== 'all' && d.cluster !== currentFilter && d.type !== 'center')
+          || (selectedId && conn && !conn.has(d.id) && d.type !== 'center');
+        d3.select(this).transition().duration(320).attr('opacity', dim ? 0.1 : 1);
+        d3.select(this).selectAll('text').transition().duration(320)
+          .attr('fill-opacity', dim ? 0.35 : 1);
+      });
+      g.selectAll('.link-node').each(function(d) {
+        let hi = false;
+        if (!selectedId) {
+          const tgt = typeof d.target === 'object' ? d.target : null;
+          hi = tgt && tgt.state === 'strong';
+        } else {
+          const s = d.source.id || d.source;
+          const t = d.target.id || d.target;
+          hi = conn.has(s) && conn.has(t);
+        }
+        d3.select(this).transition().duration(320)
+          .attr('stroke-opacity', hi ? 0.65 : (selectedId ? 0.06 : 0.1))
+          .attr('stroke-width', hi ? 1.2 : 0.5);
+      });
     }
 
     function showNotifyToast(title, body, node) {
@@ -1050,11 +1174,13 @@
         currentAgeBand = data.ageBand || 'upper';
         graphMeta = {
           strongCount: data.strongCount || 0,
-          observeDays: data.rules?.observeDays || 0
+          observeDays: data.rules?.observeDays || 0,
+          weeklyInstantCap: data.rules?.weeklyInstantCap || 2
         };
         graphData = mapApiToGraph(data);
         currentFilter = 'all';
         selectedId = null;
+        renderLightRules();
         showApp();
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
@@ -1071,8 +1197,15 @@
 
     function bindTap(el, handler) {
       if (!el) return;
-      el.addEventListener('click', handler);
-      el.addEventListener('touchend', (ev) => { ev.preventDefault(); handler(ev); });
+      let lastTouch = 0;
+      el.addEventListener('touchend', (ev) => {
+        lastTouch = Date.now();
+        handler(ev);
+      }, { passive: true });
+      el.addEventListener('click', (ev) => {
+        if (Date.now() - lastTouch < 400) return;
+        handler(ev);
+      });
     }
 
     function bindUi() {
@@ -1080,14 +1213,7 @@
         document.getElementById('helpPanel').classList.toggle('open');
       });
       document.querySelectorAll('.mode-tabs button').forEach(btn => {
-        bindTap(btn, () => {
-          document.querySelectorAll('.mode-tabs button').forEach(b => b.classList.remove('on'));
-          btn.classList.add('on');
-          const isGraph = btn.dataset.mode === 'graph';
-          document.getElementById('graphPanel').style.display = isGraph ? 'flex' : 'none';
-          document.getElementById('lightPanel').style.display = isGraph ? 'none' : 'block';
-          document.getElementById('helpPanel').classList.remove('open');
-        });
+        bindTap(btn, () => switchViewMode(btn.dataset.mode));
       });
       bindTap(document.getElementById('toastView'), () => {
         const n = pendingToastNode || graphData.nodes.find(x => x.state === 'strong' && x.type !== 'center');

@@ -223,14 +223,17 @@
     .state-chip.on { border-color: rgba(255,184,64,0.5); color: #ffd591; background: rgba(255,184,64,0.1); }
     .tip { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08); font-size: 0.7rem; color: #c5d0e8; }
 
-    .link-node { stroke-opacity: 0.12; transition: stroke-opacity 0.25s; }
+    .link-node { stroke-opacity: 0.18; transition: stroke-opacity 0.25s; }
     .link-node.highlight { stroke-opacity: 0.65; }
     .node { cursor: pointer; }
     .node.dimmed { opacity: 0.28; }
     .node-label { fill: rgba(255,255,255,0.72); font-size: 7.5px; pointer-events: none; text-anchor: middle; }
     .node-label.hub { font-size: 9px; font-weight: 600; fill: rgba(255,255,255,0.95); }
+    .node-label.locked { fill: rgba(255,255,255,0.38); font-size: 7px; }
+    .node-label.hub.locked { fill: rgba(255,255,255,0.62); }
     .node-label.strong-label { fill: #ffe7ba; font-weight: 700; font-size: 8px; }
     .node-desc { fill: rgba(255,255,255,0.42); font-size: 6px; pointer-events: none; text-anchor: middle; }
+    .node-desc.locked { fill: rgba(255,255,255,0.28); }
     .node-type-tag { fill: rgba(255,255,255,0.38); font-size: 6px; text-anchor: middle; }
 
     @keyframes pulse-strong {
@@ -488,10 +491,17 @@
     function normalizeNode(raw) {
       const n = { ...raw };
       n.id = String(n.id || '');
-      n.type = String(n.type || '').toLowerCase();
+      n.type = String(n.type || n.nodeType || '').toLowerCase();
+      if (!n.type && n.level === 1) n.type = 'hub';
+      if (!n.type && n.level === 2) n.type = 'sub';
+      if (!n.type && n.level === 3) n.type = 'signal';
       if (n.type === 'hub' && !n.level) n.level = 1;
       if (n.type === 'sub' && !n.level) n.level = 2;
       if (n.type === 'signal' && !n.level) n.level = 3;
+      n.strength = Number(n.strength) || 0;
+      n.evidenceCount = Number(n.evidenceCount) || 0;
+      n.requiredCount = Number(n.requiredCount) || 0;
+      n.state = n.state || 'locked';
       return n;
     }
 
@@ -594,7 +604,11 @@
     function showDetail(node) {
       const sheet = document.getElementById('detailSheet');
       if (!node || node.type === 'center') {
-        sheet.innerHTML = '<p style="color:#6b7a99;font-size:0.74rem;">点击任意节点 · <strong style="color:#d3adf7">大紫圆=维度 Hub</strong> · 金闪=强烈亮点</p>';
+        const pending = graphData.nodes.filter(n => n.type === 'sub' || n.type === 'signal').length;
+        const hint = pending > 0
+          ? '灰色虚线节点 = 待观测 · 点击可查看将收集什么'
+          : '点击维度 Hub（紫圈）查看说明 · 子能力需后端模板完整下发';
+        sheet.innerHTML = `<p style="color:#6b7a99;font-size:0.74rem;">点击任意节点 · <strong style="color:#d3adf7">大紫圆=维度 Hub</strong> · 金闪=强烈亮点<br><span style="opacity:0.85">${hint}</span></p>`;
         return;
       }
       const meta = TYPE_META[node.type];
@@ -615,23 +629,34 @@
         <div class="tip">${node.suggest || ''}</div>`;
     }
 
+    function nodeStrength(d) {
+      return Number(d && d.strength) || 0;
+    }
+
     function nodeRadius(d) {
+      const s = nodeStrength(d);
       if (d.type === 'center') return 32;
-      if (d.type === 'hub') return 13 + d.strength / 12;
-      if (d.type === 'sub') return 5 + d.strength / 16;
-      return 4 + d.strength / 18;
+      if (d.type === 'hub') return Math.max(14, 13 + s / 12);
+      if (d.type === 'sub') return Math.max(7, 5 + s / 16);
+      return Math.max(5.5, 4 + s / 18);
     }
 
     function appendNodeLabels(el, d, r) {
       if (d.type === 'center') return;
-      if (d.state === 'locked') return;
       const main = d.shortLabel || d.label;
-      const desc = d.shortDesc || '';
+      if (!main) return;
+      const desc = d.shortDesc || (d.state === 'locked' ? '待观测' : '');
       const isStrongLook = d.visualTier === 'high' || (d.visualTier === 'mid' && d.state === 'strong');
-      const labelClass = 'node-label' + (d.type === 'hub' ? ' hub' : '') + (isStrongLook ? ' strong-label' : '');
-      el.append('text').attr('class', labelClass).attr('dy', r + 11).text(main);
+      const isLocked = d.state === 'locked';
+      const labelClass = 'node-label'
+        + (d.type === 'hub' ? ' hub' : '')
+        + (isStrongLook ? ' strong-label' : '')
+        + (isLocked ? ' locked' : '');
+      const labelText = d.type === 'signal' && isLocked && main.length > 5 ? main.slice(0, 5) : main;
+      el.append('text').attr('class', labelClass).attr('dy', r + 11).text(labelText);
       if (desc) {
-        el.append('text').attr('class', 'node-desc').attr('dy', r + 19).text(desc.length > 10 ? desc.slice(0, 10) + '…' : desc);
+        el.append('text').attr('class', 'node-desc' + (isLocked ? ' locked' : '')).attr('dy', r + 19)
+          .text(desc.length > 10 ? desc.slice(0, 10) + '…' : desc);
       }
     }
 
@@ -657,7 +682,10 @@
       el.append('circle').attr('r', r + 3).attr('fill', c).attr('opacity', 0.06 + v * 0.1);
     }
 
+    const IN_MINI_PROGRAM = !!(window.wx && wx.miniProgram);
+
     function nodeBloomFilter(d) {
+      if (IN_MINI_PROGRAM) return null;
       const tier = d.visualTier || 'none';
       if (tier === 'high' && d.type === 'hub') return 'url(#bloomStrong)';
       if (tier === 'high' || tier === 'mid') return 'url(#bloom)';
@@ -725,26 +753,39 @@
       }
 
       if (d.type === 'hub') {
+        const hubLocked = st === 'locked';
         el.append('circle').attr('r', r + 5).attr('fill', 'none')
-          .attr('stroke', c).attr('stroke-opacity', 0.45).attr('stroke-width', 2);
+          .attr('stroke', c).attr('stroke-opacity', hubLocked ? 0.38 : 0.45).attr('stroke-width', 2);
         el.append('circle').attr('r', r).attr('fill', c)
           .attr('stroke', '#efdbff').attr('stroke-width', 2.5)
+          .attr('fill-opacity', hubLocked ? 0.42 : 1)
+          .attr('stroke-opacity', hubLocked ? 0.7 : 1)
           .attr('filter', st !== 'locked' ? nodeBloomFilter(d) : null);
         el.append('text').attr('class', 'node-type-tag').attr('dy', -r - 6).text('维度');
         appendNodeLabels(el, d, r);
         return;
       }
 
-      const fill = st === 'locked' ? '#2a3142' : (st === 'collecting' ? d3.color(c).darker(0.6) : c);
+      if (st === 'locked') {
+        el.append('circle').attr('r', r + 2.5).attr('fill', 'none')
+          .attr('stroke', c).attr('stroke-opacity', 0.32).attr('stroke-width', 1)
+          .attr('stroke-dasharray', '3 4');
+        el.append('circle').attr('r', r).attr('fill', c).attr('fill-opacity', 0.3)
+          .attr('stroke', c).attr('stroke-opacity', 0.55).attr('stroke-width', 1.2);
+        appendNodeLabels(el, d, r);
+        return;
+      }
+
       if (st === 'collecting') {
         el.append('circle').attr('r', r + 3).attr('fill', 'none')
-          .attr('stroke', '#597ef7').attr('stroke-opacity', 0.35).attr('stroke-width', 1)
+          .attr('stroke', c).attr('stroke-opacity', 0.45).attr('stroke-width', 1)
           .attr('stroke-dasharray', `${Math.PI * r * 0.6} ${Math.PI * r * 1.4}`);
       }
+      const fill = st === 'collecting' ? d3.color(c).darker(0.45) : c;
       const strongLook = tier === 'high' || (tier === 'mid' && st === 'strong');
       el.append('circle').attr('r', r).attr('fill', fill)
-        .attr('stroke', strongLook ? '#ffe7ba' : 'rgba(255,255,255,0.25)')
-        .attr('stroke-width', selectedId === d.id ? 2.5 : (strongLook ? 1.2 : 0.8))
+        .attr('stroke', strongLook ? '#ffe7ba' : 'rgba(255,255,255,0.35)')
+        .attr('stroke-width', selectedId === d.id ? 2.5 : (strongLook ? 1.2 : 1))
         .attr('filter', nodeBloomFilter(d));
       appendNodeLabels(el, d, r);
     }
@@ -835,8 +876,9 @@
           const tgt = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
           const vi = tgt?.visualIntensity || 0;
           if (vi >= 0.62) return 0.38;
-          if (vi >= 0.32) return 0.22;
-          return 0.1;
+          if (vi >= 0.32) return 0.24;
+          if (tgt?.state === 'locked') return 0.16;
+          return 0.14;
         });
 
       const nodeG = g.append('g').selectAll('g').data(nodes).join('g')

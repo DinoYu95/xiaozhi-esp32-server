@@ -36,6 +36,9 @@ RUN fc-cache -f -v
 # 配置Nginx
 COPY docs/docker/nginx.conf /etc/nginx/nginx.conf
 
+# 成长星图 H5（小程序 web-view）
+COPY main/manager-api/src/main/resources/static/growth-portrait /usr/share/nginx/growth-portrait
+
 # 复制前端构建产物
 COPY --from=web-builder /app/dist /usr/share/nginx/html
 

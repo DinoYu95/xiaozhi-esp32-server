@@ -15,6 +15,8 @@ COPY main/manager-api/src ./src
 RUN mvn clean package -Dmaven.test.skip=true
 
 FROM ${RUNTIME_BASE}
+COPY docs/docker/nginx.conf /etc/nginx/nginx.conf
+COPY main/manager-api/src/main/resources/static/growth-portrait /usr/share/nginx/growth-portrait
 COPY --from=web-builder /app/dist /usr/share/nginx/html
 COPY --from=api-builder /app/target/xiaozhi-esp32-api.jar /app/xiaozhi-esp32-api.jar
 CMD ["/start.sh"]

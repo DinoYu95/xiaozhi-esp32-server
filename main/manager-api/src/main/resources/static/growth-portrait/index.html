@@ -587,6 +587,61 @@
       return graphShell ? d3.select(graphShell) : d3.select('#graphSvg');
     }
 
+    function focusOnNode(d) {
+      if (!zoomBehavior || !layoutNodes.length) return;
+      const W = graphLayoutW, H = graphLayoutH;
+      if (!W || !H) return;
+
+      const layoutNode = layoutNodes.find(n => String(n.id) === String(d.id));
+      if (!layoutNode || layoutNode.x == null || isNaN(layoutNode.x)) {
+        if (simulation) {
+          simulation.on('end.focusNode', () => {
+            simulation.on('end.focusNode', null);
+            focusOnNode(d);
+          });
+        }
+        return;
+      }
+
+      let members;
+      if (d.type === 'hub') {
+        members = layoutNodes.filter(n => n.cluster === d.cluster);
+      } else if (d.type === 'sub' || d.type === 'signal') {
+        const conn = getConnectedIds(String(d.id));
+        members = layoutNodes.filter(n =>
+          conn.has(String(n.id)) || (n.cluster === d.cluster && n.type !== 'center')
+        );
+      } else {
+        members = [layoutNode];
+      }
+
+      const xs = members.map(n => n.x).filter(v => v != null && !isNaN(v));
+      const ys = members.map(n => n.y).filter(v => v != null && !isNaN(v));
+      if (!xs.length) { xs.push(layoutNode.x); ys.push(layoutNode.y); }
+
+      const cx = (d3.min(xs) + d3.max(xs)) / 2;
+      const cy = (d3.min(ys) + d3.max(ys)) / 2;
+      const spread = Math.max(d3.max(xs) - d3.min(xs), d3.max(ys) - d3.min(ys), 60);
+
+      const viewMin = Math.min(W, H);
+      let scale;
+      if (d.type === 'signal') {
+        scale = Math.min(2.8, Math.max(1.6, (viewMin * 0.55) / spread));
+      } else if (d.type === 'sub') {
+        scale = Math.min(2.4, Math.max(1.45, (viewMin * 0.62) / spread));
+      } else if (d.type === 'hub') {
+        scale = Math.min(2.0, Math.max(1.25, (viewMin * 0.72) / spread));
+      } else {
+        scale = Math.min(2.2, Math.max(1.3, (viewMin * 0.65) / spread));
+      }
+
+      const tx = W / 2 - cx * scale;
+      const ty = H / 2 - cy * scale;
+      getZoomSelection()
+        .transition().duration(520).ease(d3.easeCubicInOut)
+        .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+    }
+
     function renderLightRules() {
       const days = graphMeta.observeDays || 0;
       const cap = graphMeta.weeklyInstantCap || 2;
@@ -838,7 +893,10 @@
       selectedId = String(node.id);
       showDetail(node);
       updateDimming();
-      if (pulse) pulseSelectedNode(selectedId);
+      if (pulse) {
+        pulseSelectedNode(selectedId);
+        focusOnNode(node);
+      }
     }
 
     function updateNodeSelection() {

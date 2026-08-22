@@ -226,7 +226,7 @@
     .link-node { stroke-opacity: 0.12; transition: stroke-opacity 0.25s; }
     .link-node.highlight { stroke-opacity: 0.65; }
     .node { cursor: pointer; }
-    .node.dimmed { opacity: 0.1; }
+    .node.dimmed { opacity: 0.28; }
     .node-label { fill: rgba(255,255,255,0.72); font-size: 7.5px; pointer-events: none; text-anchor: middle; }
     .node-label.hub { font-size: 9px; font-weight: 600; fill: rgba(255,255,255,0.95); }
     .node-label.strong-label { fill: #ffe7ba; font-weight: 700; font-size: 8px; }
@@ -485,6 +485,16 @@
       document.getElementById('app').classList.add('ready');
     }
 
+    function normalizeNode(raw) {
+      const n = { ...raw };
+      n.id = String(n.id || '');
+      n.type = String(n.type || '').toLowerCase();
+      if (n.type === 'hub' && !n.level) n.level = 1;
+      if (n.type === 'sub' && !n.level) n.level = 2;
+      if (n.type === 'signal' && !n.level) n.level = 3;
+      return n;
+    }
+
     function mapApiToGraph(data) {
       const centerNode = {
         id: 'center',
@@ -499,8 +509,16 @@
         requiredCount: 0,
         state: 'visible'
       };
-      const nodes = [centerNode, ...(data.nodes || []).map(n => ({ ...n }))];
-      const links = (data.links || []).map(l => ({ ...l }));
+      const apiNodes = (data.nodes || [])
+        .map(normalizeNode)
+        .filter(n => n.type !== 'center' && n.id !== 'center');
+      const nodes = [centerNode, ...apiNodes];
+      const nodeIds = new Set(nodes.map(n => n.id));
+      const links = (data.links || []).map(l => {
+        const source = typeof l.source === 'object' ? l.source.id : l.source;
+        const target = typeof l.target === 'object' ? l.target.id : l.target;
+        return { source: String(source), target: String(target), strength: l.strength || 20 };
+      }).filter(l => nodeIds.has(l.source) && nodeIds.has(l.target));
       const hubNodes = nodes.filter(n => n.type === 'hub');
       const linkedHubs = new Set();
       links.forEach(l => {
@@ -731,10 +749,17 @@
       appendNodeLabels(el, d, r);
     }
 
+    let graphInitToken = 0;
+
     function initGraph(restart) {
       const shell = document.querySelector('.graph-shell');
       const W = shell.clientWidth, H = shell.clientHeight;
-      if (restart && svg) svg.selectAll('*').remove();
+      if (!W || !H) return;
+
+      graphInitToken += 1;
+      const myToken = graphInitToken;
+      if (simulation) simulation.stop();
+      d3.select('#graphSvg').selectAll('*').remove();
 
       svg = d3.select('#graphSvg').attr('viewBox', [0, 0, W, H]);
       const defs = svg.append('defs');
@@ -786,8 +811,12 @@
         .force('center', d3.forceCenter(W / 2, H / 2))
         .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + (d.type === 'signal' ? 2 : 8)));
 
-      const cNode = nodes.find(n => n.type === 'center');
-      cNode.fx = W / 2; cNode.fy = H / 2;
+      nodes.filter(n => n.type === 'center').forEach(n => {
+        n.fx = W / 2;
+        n.fy = H / 2;
+        n.x = W / 2;
+        n.y = H / 2;
+      });
 
       const clusterLayer = g.append('g');
       const linkG = g.append('g');
@@ -834,6 +863,7 @@
       });
 
       simulation.on('end', () => {
+        if (myToken !== graphInitToken) return;
         getHubClusters().forEach(dim => {
           const members = nodes.filter(n => n.cluster === dim);
           if (members.length < 4) return;
@@ -844,10 +874,6 @@
             .attr('stroke', CLUSTER_COLORS[dim]).attr('stroke-opacity', 0.15)
             .attr('stroke-width', 1).attr('stroke-dasharray', '8 6');
         });
-        if (!selectedId) {
-          const hub = nodes.find(n => n.type === 'hub' && n.cluster === 'logic') || nodes.find(n => n.type === 'hub');
-          if (hub) { selectedId = hub.id; showDetail(hub); updateDimming(); }
-        }
       });
 
       svg.on('click', () => { selectedId = null; showDetail(null); updateDimming(); });
@@ -949,9 +975,11 @@
         currentFilter = 'all';
         selectedId = null;
         showApp();
+        selectedId = null;
         requestAnimationFrame(() => {
-          initGraph(false);
+          initGraph(true);
           showDetail(null);
+          updateDimming();
           fetchUnreadNotification();
         });
       } catch (e) {

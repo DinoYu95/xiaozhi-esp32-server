@@ -21,36 +21,11 @@
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
-      background: #f7f4ef;
-      background-image: linear-gradient(180deg, #faf8f5 0%, #f7f4ef 35%, #f0ebe4 100%);
+      background: var(--graph-bg);
       color: var(--text);
       line-height: 1.5;
       display: flex;
       flex-direction: column;
-    }
-
-    .subnav {
-      display: flex;
-      margin: 8px 16px 0;
-      background: rgba(84, 110, 122, 0.08);
-      border-radius: 8px;
-      overflow: hidden;
-      flex-shrink: 0;
-    }
-    .subnav-item {
-      flex: 1;
-      text-align: center;
-      padding: 10px 0;
-      font-size: 13px;
-      color: #78909c;
-      border: none;
-      background: transparent;
-      cursor: pointer;
-    }
-    .subnav-item.on {
-      background: rgba(84, 110, 122, 0.18);
-      color: #37474f;
-      font-weight: 600;
     }
 
     .screen {
@@ -58,14 +33,12 @@
       display: flex;
       flex-direction: column;
       min-height: 0;
-      margin: 8px 0 0;
       overflow: hidden;
       background: var(--graph-bg);
-      border-top: 1px solid #151c2e;
     }
 
     .topbar {
-      padding: 8px 14px 6px;
+      padding: 6px 14px 8px;
       background: linear-gradient(180deg, rgba(14,20,36,0.98), rgba(8,12,22,0.5));
       border-bottom: 1px solid rgba(255,255,255,0.05);
       flex-shrink: 0;
@@ -94,16 +67,6 @@
       border: 1px solid rgba(255,184,64,0.35);
     }
 
-    .quick-links {
-      display: flex; gap: 8px; padding: 6px 12px 0;
-      flex-shrink: 0;
-    }
-    .quick-link {
-      flex: 1; border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.04); color: #9aa8c4;
-      font-size: 0.66rem; padding: 6px 8px; border-radius: 10px;
-      cursor: pointer; text-align: center;
-    }
 
     .mode-tabs {
       display: flex; gap: 6px; padding: 8px 12px 0;
@@ -226,18 +189,15 @@
     .state-chip.on { border-color: rgba(255,184,64,0.5); color: #ffd591; background: rgba(255,184,64,0.1); }
     .tip { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08); font-size: 0.7rem; color: #c5d0e8; }
 
-    .link-node { stroke-opacity: 0.18; transition: stroke-opacity 0.25s; }
+    .link-node { stroke-opacity: 0.12; transition: stroke-opacity 0.25s; }
     .link-node.highlight { stroke-opacity: 0.65; }
     .node { cursor: pointer; touch-action: manipulation; }
     .node .hit-area { fill: rgba(0,0,0,0.001); stroke: none; pointer-events: all; }
-    .node.dimmed { opacity: 0.28; }
+    .node.dimmed { opacity: 0.1; }
     .node-label { fill: rgba(255,255,255,0.72); font-size: 7.5px; pointer-events: none; text-anchor: middle; }
     .node-label.hub { font-size: 9px; font-weight: 600; fill: rgba(255,255,255,0.95); }
-    .node-label.locked { fill: rgba(255,255,255,0.38); font-size: 7px; }
-    .node-label.hub.locked { fill: rgba(255,255,255,0.62); }
     .node-label.strong-label { fill: #ffe7ba; font-weight: 700; font-size: 8px; }
     .node-desc { fill: rgba(255,255,255,0.42); font-size: 6px; pointer-events: none; text-anchor: middle; }
-    .node-desc.locked { fill: rgba(255,255,255,0.28); }
     .node-type-tag { fill: rgba(255,255,255,0.38); font-size: 6px; text-anchor: middle; }
 
     @keyframes pulse-strong {
@@ -297,29 +257,18 @@
   </div>
 
   <div id="app">
-    <div class="subnav">
-      <button type="button" class="subnav-item on">成长星图</button>
-      <button type="button" class="subnav-item" id="goMasteryMap">掌握地图</button>
-    </div>
-
     <div class="screen">
       <div class="topbar">
         <div class="topbar-row">
           <div>
-            <h2 id="childNameTitle">成长星图</h2>
+            <h2>成长星图</h2>
             <div class="meta" id="profileMeta">—</div>
           </div>
           <div class="top-actions">
             <button type="button" class="icon-btn" id="helpBtn" title="读图说明">?</button>
-            <button type="button" class="icon-btn" id="bellBtn" title="亮点通知">🔔</button>
             <span class="stat-pill" id="observePill">强烈 0</span>
           </div>
         </div>
-      </div>
-
-      <div class="quick-links">
-        <button type="button" class="quick-link" id="goWeekly">成长周报</button>
-        <button type="button" class="quick-link" id="goSettings">通知设置</button>
       </div>
 
       <div class="mode-tabs">
@@ -608,120 +557,21 @@
           `<button type="button" class="filter-chip ${currentFilter===h.cluster?'on':''}" data-f="${h.cluster}">${h.label || DIM_LABELS[h.cluster] || h.cluster}</button>`
         ).join('');
       bar.querySelectorAll('.filter-chip').forEach(btn => {
-        btn.onclick = () => { currentFilter = btn.dataset.f; renderFilters(); updateDimming(); };
+        bindTap(btn, () => { currentFilter = btn.dataset.f; renderFilters(); updateDimming(); });
       });
     }
 
     function updateMeta() {
       const bandLabel = AGE_BAND_LABELS[currentAgeBand] || currentAgeBand;
       const days = graphMeta.observeDays || '—';
-      const ns = graphMeta.nodeStats || {};
-      const abilityCount = (ns.sub || 0) + (ns.signal || 0);
-      const statPart = ns.hub ? ` · ${ns.hub}维度 · ${abilityCount}能力点` : '';
-      document.getElementById('childNameTitle').textContent = childName;
-      document.getElementById('profileMeta').textContent = `${bandLabel} · 观测 ${days} 天${statPart}`;
+      document.getElementById('profileMeta').textContent = `${childName} · ${bandLabel} · 观测 ${days} 天`;
       document.getElementById('observePill').textContent = `强烈 ${graphMeta.strongCount || 0}`;
     }
-
-    /** 微信 web-view 下力导向不稳定，改用放射状固定布局 */
-    function applyRadialLayout(nodes, W, H) {
-      const cx = W / 2, cy = H / 2;
-      const minDim = Math.min(W, H);
-      const center = nodes.find(n => n.type === 'center');
-      if (center) {
-        center.x = cx; center.y = cy;
-        center.fx = cx; center.fy = cy;
-      }
-      const hubs = nodes.filter(n => n.type === 'hub');
-      const hubOrbit = minDim * 0.33;
-      hubs.forEach((hub, i) => {
-        const a = (i / Math.max(hubs.length, 1)) * Math.PI * 2 - Math.PI / 2;
-        hub.x = cx + Math.cos(a) * hubOrbit;
-        hub.y = cy + Math.sin(a) * hubOrbit;
-      });
-      const subsByHub = {};
-      nodes.filter(n => n.type === 'sub').forEach(sub => {
-        const hub = nodes.find(h => h.id === sub.parentHub) || hubs.find(h => h.cluster === sub.cluster) || hubs[0];
-        if (!hub) return;
-        if (!subsByHub[hub.id]) subsByHub[hub.id] = [];
-        subsByHub[hub.id].push(sub);
-      });
-      Object.keys(subsByHub).forEach(hubId => {
-        const hub = nodes.find(h => h.id === hubId);
-        const subs = subsByHub[hubId];
-        if (!hub || !subs.length) return;
-        const base = Math.atan2(hub.y - cy, hub.x - cx);
-        const spread = Math.min(Math.PI / 2, subs.length * 0.22);
-        subs.forEach((sub, i) => {
-          const t = subs.length === 1 ? 0 : (i / (subs.length - 1) - 0.5) * spread;
-          const a = base + t;
-          const r = minDim * 0.13;
-          sub.x = hub.x + Math.cos(a) * r;
-          sub.y = hub.y + Math.sin(a) * r;
-        });
-      });
-      nodes.filter(n => n.type === 'signal').forEach((sig, i) => {
-        const sub = nodes.find(s => s.id === sig.parentSub);
-        const hub = nodes.find(h => h.id === sig.parentHub) || nodes.find(h => h.id === sub?.parentHub);
-        const anchor = sub || hub || center;
-        if (!anchor) return;
-        const base = Math.atan2(anchor.y - cy, anchor.x - cx);
-        const a = base + ((i % 5) - 2) * 0.16;
-        const dist = sub ? minDim * 0.075 : minDim * 0.1;
-        sig.x = anchor.x + Math.cos(a) * dist;
-        sig.y = anchor.y + Math.sin(a) * dist;
-      });
-    }
-
-    function resolveLinkEndpoints(links, nodes) {
-      const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
-      return links.map(l => {
-        const sid = typeof l.source === 'object' ? l.source.id : l.source;
-        const tid = typeof l.target === 'object' ? l.target.id : l.target;
-        const source = byId[sid];
-        const target = byId[tid];
-        if (!source || !target) return null;
-        return { source, target, strength: l.strength || 20 };
-      }).filter(Boolean);
-    }
-
-    function fitGraphTransform(nodes, W, H) {
-      const pad = 40;
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      nodes.forEach(n => {
-        if (n.x == null || isNaN(n.x)) return;
-        const r = nodeRadius(n) + 16;
-        minX = Math.min(minX, n.x - r); maxX = Math.max(maxX, n.x + r);
-        minY = Math.min(minY, n.y - r); maxY = Math.max(maxY, n.y + r);
-      });
-      if (!isFinite(minX)) return d3.zoomIdentity;
-      const bw = maxX - minX + pad * 2;
-      const bh = maxY - minY + pad * 2;
-      const scale = Math.min(W / bw, H / bh, 1.1);
-      const tx = W / 2 - ((minX + maxX) / 2) * scale;
-      const ty = H / 2 - ((minY + maxY) / 2) * scale;
-      return d3.zoomIdentity.translate(tx, ty).scale(scale);
-    }
-
-    function activateNode(ev, d) {
-      if (ev.cancelable) ev.preventDefault();
-      ev.stopPropagation();
-      if (ev.type === 'click' && Date.now() - activateNode.lastTouch < 450) return;
-      if (ev.type === 'touchend') activateNode.lastTouch = Date.now();
-      selectedId = d.id;
-      showDetail(d);
-      updateDimming();
-    }
-    activateNode.lastTouch = 0;
 
     function showDetail(node) {
       const sheet = document.getElementById('detailSheet');
       if (!node || node.type === 'center') {
-        const pending = graphData.nodes.filter(n => n.type === 'sub' || n.type === 'signal').length;
-        const hint = pending > 0
-          ? '灰色虚线节点 = 待观测 · 点击可查看将收集什么'
-          : '点击维度 Hub（紫圈）查看说明 · 子能力需后端模板完整下发';
-        sheet.innerHTML = `<p style="color:#6b7a99;font-size:0.74rem;">点击任意节点 · <strong style="color:#d3adf7">大紫圆=维度 Hub</strong> · 金闪=强烈亮点<br><span style="opacity:0.85">${hint}</span></p>`;
+        sheet.innerHTML = '<p style="color:#6b7a99;font-size:0.74rem;">点击任意节点 · <strong style="color:#d3adf7">大紫圆=维度 Hub</strong> · 金闪=强烈亮点</p>';
         return;
       }
       const meta = TYPE_META[node.type];
@@ -749,27 +599,21 @@
     function nodeRadius(d) {
       const s = nodeStrength(d);
       if (d.type === 'center') return 32;
-      if (d.type === 'hub') return Math.max(14, 13 + s / 12);
-      if (d.type === 'sub') return Math.max(7, 5 + s / 16);
-      return Math.max(5.5, 4 + s / 18);
+      if (d.type === 'hub') return 13 + s / 12;
+      if (d.type === 'sub') return 5 + s / 16;
+      return 4 + s / 18;
     }
 
     function appendNodeLabels(el, d, r) {
       if (d.type === 'center') return;
+      if (d.state === 'locked') return;
       const main = d.shortLabel || d.label;
-      if (!main) return;
-      const desc = d.shortDesc || (d.state === 'locked' ? '待观测' : '');
+      const desc = d.shortDesc || '';
       const isStrongLook = d.visualTier === 'high' || (d.visualTier === 'mid' && d.state === 'strong');
-      const isLocked = d.state === 'locked';
-      const labelClass = 'node-label'
-        + (d.type === 'hub' ? ' hub' : '')
-        + (isStrongLook ? ' strong-label' : '')
-        + (isLocked ? ' locked' : '');
-      const labelText = d.type === 'signal' && isLocked && main.length > 5 ? main.slice(0, 5) : main;
-      el.append('text').attr('class', labelClass).attr('dy', r + 11).text(labelText);
+      const labelClass = 'node-label' + (d.type === 'hub' ? ' hub' : '') + (isStrongLook ? ' strong-label' : '');
+      el.append('text').attr('class', labelClass).attr('dy', r + 11).text(main);
       if (desc) {
-        el.append('text').attr('class', 'node-desc' + (isLocked ? ' locked' : '')).attr('dy', r + 19)
-          .text(desc.length > 10 ? desc.slice(0, 10) + '…' : desc);
+        el.append('text').attr('class', 'node-desc').attr('dy', r + 19).text(desc.length > 10 ? desc.slice(0, 10) + '…' : desc);
       }
     }
 
@@ -795,10 +639,7 @@
       el.append('circle').attr('r', r + 3).attr('fill', c).attr('opacity', 0.06 + v * 0.1);
     }
 
-    const IN_MINI_PROGRAM = !!(window.wx && wx.miniProgram);
-
     function nodeBloomFilter(d) {
-      if (IN_MINI_PROGRAM) return null;
       const tier = d.visualTier || 'none';
       if (tier === 'high' && d.type === 'hub') return 'url(#bloomStrong)';
       if (tier === 'high' || tier === 'mid') return 'url(#bloom)';
@@ -866,39 +707,26 @@
       }
 
       if (d.type === 'hub') {
-        const hubLocked = st === 'locked';
         el.append('circle').attr('r', r + 5).attr('fill', 'none')
-          .attr('stroke', c).attr('stroke-opacity', hubLocked ? 0.38 : 0.45).attr('stroke-width', 2);
+          .attr('stroke', c).attr('stroke-opacity', 0.45).attr('stroke-width', 2);
         el.append('circle').attr('r', r).attr('fill', c)
           .attr('stroke', '#efdbff').attr('stroke-width', 2.5)
-          .attr('fill-opacity', hubLocked ? 0.58 : 1)
-          .attr('stroke-opacity', hubLocked ? 0.7 : 1)
           .attr('filter', st !== 'locked' ? nodeBloomFilter(d) : null);
         el.append('text').attr('class', 'node-type-tag').attr('dy', -r - 6).text('维度');
         appendNodeLabels(el, d, r);
         return;
       }
 
-      if (st === 'locked') {
-        el.append('circle').attr('r', r + 2.5).attr('fill', 'none')
-          .attr('stroke', c).attr('stroke-opacity', 0.32).attr('stroke-width', 1)
-          .attr('stroke-dasharray', '3 4');
-        el.append('circle').attr('r', r).attr('fill', c).attr('fill-opacity', 0.3)
-          .attr('stroke', c).attr('stroke-opacity', 0.55).attr('stroke-width', 1.2);
-        appendNodeLabels(el, d, r);
-        return;
-      }
-
+      const fill = st === 'locked' ? '#2a3142' : (st === 'collecting' ? d3.color(c).darker(0.6) : c);
       if (st === 'collecting') {
         el.append('circle').attr('r', r + 3).attr('fill', 'none')
-          .attr('stroke', c).attr('stroke-opacity', 0.45).attr('stroke-width', 1)
+          .attr('stroke', '#597ef7').attr('stroke-opacity', 0.35).attr('stroke-width', 1)
           .attr('stroke-dasharray', `${Math.PI * r * 0.6} ${Math.PI * r * 1.4}`);
       }
-      const fill = st === 'collecting' ? d3.color(c).darker(0.45) : c;
       const strongLook = tier === 'high' || (tier === 'mid' && st === 'strong');
       el.append('circle').attr('r', r).attr('fill', fill)
-        .attr('stroke', strongLook ? '#ffe7ba' : 'rgba(255,255,255,0.35)')
-        .attr('stroke-width', selectedId === d.id ? 2.5 : (strongLook ? 1.2 : 1))
+        .attr('stroke', strongLook ? '#ffe7ba' : 'rgba(255,255,255,0.25)')
+        .attr('stroke-width', selectedId === d.id ? 2.5 : (strongLook ? 1.2 : 0.8))
         .attr('filter', nodeBloomFilter(d));
       appendNodeLabels(el, d, r);
       if (d.type !== 'center') {
@@ -909,14 +737,28 @@
       }
     }
 
-    function initGraph() {
+    let simulation;
+
+    function onNodePick(ev, d, nodeG) {
+      if (ev.cancelable) ev.preventDefault();
+      ev.stopPropagation();
+      if (ev.type === 'click' && Date.now() - onNodePick.lastTouch < 450) return;
+      if (ev.type === 'touchend') onNodePick.lastTouch = Date.now();
+      selectedId = d.id;
+      showDetail(d);
+      updateDimming();
+      nodeG.each(function(n) { if (n.id === d.id) d3.select(this).selectAll('circle').last().attr('stroke-width', 2.5); });
+    }
+    onNodePick.lastTouch = 0;
+
+    function initGraph(restart) {
       const shell = document.querySelector('.graph-shell');
       const W = shell.clientWidth, H = shell.clientHeight;
       if (!W || !H) {
-        setTimeout(initGraph, 80);
+        setTimeout(() => initGraph(restart), 80);
         return;
       }
-
+      if (simulation) simulation.stop();
       d3.select('#graphSvg').selectAll('*').remove();
 
       svg = d3.select('#graphSvg').attr('viewBox', [0, 0, W, H]);
@@ -942,62 +784,96 @@
       }
 
       g = svg.append('g');
-      zoomBehavior = d3.zoom().scaleExtent([0.25, 3.5]).on('zoom', ev => {
+      zoomBehavior = d3.zoom().scaleExtent([0.3, 3.5]).on('zoom', ev => {
         g.attr('transform', ev.transform);
         document.getElementById('zoomLabel').textContent = Math.round(ev.transform.k * 100) + '%';
       });
       svg.call(zoomBehavior);
 
       const nodes = graphData.nodes.map(n => ({ ...n }));
-      const links = resolveLinkEndpoints(graphData.links, nodes);
-      applyRadialLayout(nodes, W, H);
+      const links = graphData.links.map(l => ({ ...l }));
+
+      simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(d => d.id)
+          .distance(l => {
+            const t = typeof l.target === 'object' ? l.target : nodes.find(n => n.id === l.target);
+            if (!t) return 30;
+            if (t.level === 1) return 82;
+            if (t.level === 2) return 44;
+            return 26;
+          }).strength(l => 0.16 + (l.strength || 20) / 320))
+        .force('charge', d3.forceManyBody().strength(d => {
+          if (d.type === 'center') return -220;
+          if (d.type === 'hub') return -100;
+          if (d.type === 'sub') return -32;
+          return -10;
+        }))
+        .force('center', d3.forceCenter(W / 2, H / 2))
+        .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + (d.type === 'signal' ? 2 : 8)));
+
+      const cNode = nodes.find(n => n.type === 'center');
+      if (cNode) { cNode.fx = W / 2; cNode.fy = H / 2; }
 
       const clusterLayer = g.append('g');
       const linkG = g.append('g');
       const link = linkG.selectAll('line').data(links).join('line')
         .attr('class', 'link-node')
-        .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-        .attr('x2', d => d.target.x).attr('y2', d => d.target.y)
-        .attr('stroke', d => CLUSTER_COLORS[d.target?.cluster] || '#3d4a63')
+        .attr('stroke', d => {
+          const t = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          return CLUSTER_COLORS[t?.cluster] || '#3d4a63';
+        })
         .attr('stroke-width', d => {
-          const vi = d.target?.visualIntensity || 0;
-          return vi >= 0.62 ? 0.9 + (d.strength || 15) / 80 : 0.45 + (d.strength || 15) / 90;
+          const tgt = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          const vi = tgt?.visualIntensity || 0;
+          return vi >= 0.62 ? 0.9 + (d.strength || 15) / 80 : 0.35 + (d.strength || 15) / 90;
         })
         .attr('stroke-opacity', d => {
-          const vi = d.target?.visualIntensity || 0;
+          const tgt = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          const vi = tgt?.visualIntensity || 0;
           if (vi >= 0.62) return 0.38;
-          if (vi >= 0.32) return 0.24;
-          if (d.target?.state === 'locked') return 0.2;
-          return 0.16;
+          if (vi >= 0.32) return 0.22;
+          return 0.1;
         });
 
       const nodeG = g.append('g').selectAll('g').data(nodes).join('g')
         .attr('class', 'node')
-        .attr('transform', d => `translate(${d.x},${d.y})`)
-        .on('click', activateNode)
-        .on('touchend', activateNode);
+        .call(d3.drag()
+          .on('start', (ev, d) => { if (!ev.active) simulation.alphaTarget(0.25).restart(); d.fx = d.x; d.fy = d.y; })
+          .on('drag', (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+          .on('end', (ev, d) => { if (!ev.active) simulation.alphaTarget(0); if (d.type !== 'center') { d.fx = null; d.fy = null; } })
+        )
+        .on('click', (ev, d) => onNodePick(ev, d, nodeG))
+        .on('touchend', (ev, d) => onNodePick(ev, d, nodeG));
 
       nodeG.each(function(d) { drawNode(d3.select(this), d); });
 
-      getHubClusters().forEach(dim => {
-        const members = nodes.filter(n => n.cluster === dim && n.type !== 'center');
-        if (members.length < 2) return;
-        const cx = d3.mean(members, d => d.x), cy = d3.mean(members, d => d.y);
-        const r = d3.max(members, d => Math.hypot(d.x - cx, d.y - cy)) + 36;
-        clusterLayer.append('circle').attr('cx', cx).attr('cy', cy).attr('r', r)
-          .attr('fill', CLUSTER_COLORS[dim]).attr('fill-opacity', 0.04)
-          .attr('stroke', CLUSTER_COLORS[dim]).attr('stroke-opacity', 0.18)
-          .attr('stroke-width', 1).attr('stroke-dasharray', '8 6');
+      simulation.on('tick', () => {
+        link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        nodeG.attr('transform', d => `translate(${d.x},${d.y})`);
       });
 
-      const fitT = fitGraphTransform(nodes, W, H);
-      svg.call(zoomBehavior.transform, fitT);
-      document.getElementById('zoomLabel').textContent = Math.round(fitT.k * 100) + '%';
+      simulation.on('end', () => {
+        getHubClusters().forEach(dim => {
+          const members = nodes.filter(n => n.cluster === dim);
+          if (members.length < 4) return;
+          const cx = d3.mean(members, d => d.x), cy = d3.mean(members, d => d.y);
+          const r = d3.max(members, d => Math.hypot(d.x - cx, d.y - cy)) + 40;
+          clusterLayer.append('circle').attr('cx', cx).attr('cy', cy).attr('r', r)
+            .attr('fill', CLUSTER_COLORS[dim]).attr('fill-opacity', 0.035)
+            .attr('stroke', CLUSTER_COLORS[dim]).attr('stroke-opacity', 0.15)
+            .attr('stroke-width', 1).attr('stroke-dasharray', '8 6');
+        });
+        if (!selectedId) {
+          const hub = nodes.find(n => n.type === 'hub' && n.cluster === 'logic') || nodes.find(n => n.type === 'hub');
+          if (hub) { selectedId = hub.id; showDetail(hub); updateDimming(); }
+        }
+      });
 
       svg.on('click', () => { selectedId = null; showDetail(null); updateDimming(); });
       document.getElementById('zoomIn').onclick = () => svg.transition().duration(200).call(zoomBehavior.scaleBy, 1.25);
       document.getElementById('zoomOut').onclick = () => svg.transition().duration(200).call(zoomBehavior.scaleBy, 0.8);
-      document.getElementById('zoomReset').onclick = () => svg.transition().duration(300).call(zoomBehavior.transform, fitT);
+      document.getElementById('zoomReset').onclick = () => svg.transition().duration(300).call(zoomBehavior.transform, d3.zoomIdentity);
       renderFilters();
       updateMeta();
     }
@@ -1046,19 +922,6 @@
         });
         const json = await resp.json();
         if (json.code !== 0 || !json.data) return;
-        const unread = json.data.unreadCount || 0;
-        const bell = document.getElementById('bellBtn');
-        let badge = bell.querySelector('.badge');
-        if (unread > 0) {
-          if (!badge) {
-            badge = document.createElement('span');
-            badge.className = 'badge';
-            bell.appendChild(badge);
-          }
-          badge.textContent = unread > 99 ? '99+' : String(unread);
-        } else if (badge) {
-          badge.remove();
-        }
         const item = (json.data.items || []).find(i => i.isRead === 0 && i.notifyType === 'instant');
         if (item) {
           const node = graphData.nodes.find(n => n.id === item.nodeCode);
@@ -1090,16 +953,11 @@
           observeDays: data.rules?.observeDays || 0
         };
         graphData = mapApiToGraph(data);
-        graphMeta.nodeStats = {
-          hub: graphData.nodes.filter(n => n.type === 'hub').length,
-          sub: graphData.nodes.filter(n => n.type === 'sub').length,
-          signal: graphData.nodes.filter(n => n.type === 'signal').length
-        };
         currentFilter = 'all';
         selectedId = null;
         showApp();
         requestAnimationFrame(() => {
-          initGraph();
+          initGraph(false);
           showDetail(null);
           updateDimming();
           fetchUnreadNotification();
@@ -1109,44 +967,34 @@
       }
     }
 
-    function bindNavigation() {
-      const encName = encodeURIComponent(childName);
-      document.getElementById('goMasteryMap').onclick = () => {
-        miniNavigate(`/pages/learning/mastery-map?childId=${encodeURIComponent(childId)}&childName=${encName}&grade=${encodeURIComponent(grade)}`);
-      };
-      document.getElementById('goWeekly').onclick = () => {
-        miniNavigate(`/pages/growth-portrait/weekly-digest?childId=${encodeURIComponent(childId)}&childName=${encName}`);
-      };
-      document.getElementById('goSettings').onclick = () => {
-        miniNavigate(`/pages/growth-portrait/settings?childId=${encodeURIComponent(childId)}&childName=${encName}`);
-      };
-      document.getElementById('bellBtn').onclick = () => {
-        miniNavigate(`/pages/growth-portrait/notifications?childId=${encodeURIComponent(childId)}&childName=${encName}`);
-      };
+    function bindTap(el, handler) {
+      if (!el) return;
+      el.addEventListener('click', handler);
+      el.addEventListener('touchend', (ev) => { ev.preventDefault(); handler(ev); });
     }
 
     function bindUi() {
-      document.getElementById('helpBtn').onclick = () => {
+      bindTap(document.getElementById('helpBtn'), () => {
         document.getElementById('helpPanel').classList.toggle('open');
-      };
+      });
       document.querySelectorAll('.mode-tabs button').forEach(btn => {
-        btn.onclick = () => {
+        bindTap(btn, () => {
           document.querySelectorAll('.mode-tabs button').forEach(b => b.classList.remove('on'));
           btn.classList.add('on');
           const isGraph = btn.dataset.mode === 'graph';
           document.getElementById('graphPanel').style.display = isGraph ? 'flex' : 'none';
           document.getElementById('lightPanel').style.display = isGraph ? 'none' : 'block';
           document.getElementById('helpPanel').classList.remove('open');
-        };
+        });
       });
-      document.getElementById('toastView').onclick = () => {
+      bindTap(document.getElementById('toastView'), () => {
         const n = pendingToastNode || graphData.nodes.find(x => x.state === 'strong' && x.type !== 'center');
         if (n) { selectedId = n.id; showDetail(n); updateDimming(); }
         document.getElementById('notifyToast').classList.remove('show');
-      };
-      document.getElementById('retryBtn').onclick = () => loadGraph();
+      });
+      bindTap(document.getElementById('retryBtn'), () => loadGraph());
       window.addEventListener('resize', () => {
-        if (document.getElementById('app').classList.contains('ready')) initGraph();
+        if (document.getElementById('app').classList.contains('ready')) initGraph(true);
       });
     }
 
@@ -1157,7 +1005,6 @@
       grade = q.grade || '1';
       token = q.token || '';
       apiBase = q.apiBase || deriveApiBase();
-      bindNavigation();
       bindUi();
       loadGraph();
     }

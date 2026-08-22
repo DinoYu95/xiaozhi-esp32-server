@@ -245,6 +245,14 @@ async def startToChat(conn, text):
             except Exception:
                 pass
 
+    # 成长星图：主孩子发言仅缓存 transcript，会话结束再 batch 分析
+    try:
+        from core.growth_portrait.growth_portrait_api_client import append_user_turn
+
+        append_user_turn(conn, actual_text)
+    except Exception:
+        pass
+
     # 意图未被处理，继续常规聊天流程，使用实际文本内容
     await send_stt_message(conn, actual_text)
     if is_zhiban_connection(conn) and will_photo_capture:

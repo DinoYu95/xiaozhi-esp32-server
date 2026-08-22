@@ -34,6 +34,7 @@ import xiaozhi.modules.growthportrait.dao.GpTemplateReleaseDao;
 import xiaozhi.modules.growthportrait.dao.LearnerGrowthEvidenceDao;
 import xiaozhi.modules.growthportrait.dao.LearnerGrowthStateDao;
 import xiaozhi.modules.growthportrait.dto.GrowthEvidenceIngestDTO;
+import xiaozhi.modules.growthportrait.dto.GrowthEvidenceSessionDTO;
 import xiaozhi.modules.growthportrait.dto.TeachingGpPublishDTO;
 import xiaozhi.modules.growthportrait.entity.GpParentNotificationEntity;
 import xiaozhi.modules.growthportrait.entity.GpParentSettingsEntity;
@@ -42,6 +43,7 @@ import xiaozhi.modules.growthportrait.entity.GpTemplateNodeEntity;
 import xiaozhi.modules.growthportrait.entity.GpTemplateReleaseEntity;
 import xiaozhi.modules.growthportrait.entity.LearnerGrowthEvidenceEntity;
 import xiaozhi.modules.growthportrait.entity.LearnerGrowthStateEntity;
+import xiaozhi.modules.growthportrait.service.GrowthPortraitClassifyService;
 import xiaozhi.modules.growthportrait.service.GrowthPortraitService;
 import xiaozhi.modules.growthportrait.util.GrowthAgeBandUtil;
 import xiaozhi.modules.growthportrait.util.GrowthStateEngine;
@@ -72,6 +74,7 @@ public class GrowthPortraitServiceImpl implements GrowthPortraitService {
     private final GpParentSettingsDao settingsDao;
     private final DeviceChildDao deviceChildDao;
     private final ParentDeviceBindingDao parentDeviceBindingDao;
+    private final GrowthPortraitClassifyService classifyService;
 
     @Override
     @Transactional
@@ -275,6 +278,61 @@ public class GrowthPortraitServiceImpl implements GrowthPortraitService {
         if (after != null && "strong".equals(after.getState()) && !"strong".equals(prevSignalState)) {
             maybeNotifyInstant(body.getChildId(), after, signalNode);
         }
+    }
+
+    @Override
+    public void ingestSession(GrowthEvidenceSessionDTO body) {
+        if (body == null || body.getChildId() == null) {
+            throw new RenException("childId 必填");
+        }
+        DeviceChildEntity child = ParentChildAccessHelper.requireChild(deviceChildDao, body.getChildId());
+        String ageBand = GrowthAgeBandUtil.resolveAgeBand(child);
+        GpTemplateReleaseEntity release = findPublishedRelease(ageBand);
+        if (release == null) {
+            return;
+        }
+        String transcript = buildSessionTranscript(body);
+        if (StringUtils.isBlank(transcript)) {
+            return;
+        }
+        List<GpTemplateNodeEntity> allNodes = nodeDao.selectList(
+                new LambdaQueryWrapper<GpTemplateNodeEntity>()
+                        .eq(GpTemplateNodeEntity::getReleaseId, release.getId()));
+        List<GrowthPortraitClassifyService.ClassifiedSignal> hits =
+                classifyService.classify(transcript, allNodes);
+        if (hits.isEmpty()) {
+            return;
+        }
+        String sourceRef = StringUtils.defaultIfBlank(body.getSourceRef(), "session");
+        for (GrowthPortraitClassifyService.ClassifiedSignal hit : hits) {
+            GrowthEvidenceIngestDTO ev = new GrowthEvidenceIngestDTO();
+            ev.setChildId(body.getChildId());
+            ev.setSourceType(StringUtils.defaultIfBlank(body.getSourceType(), "conversation_session"));
+            ev.setSourceRef(sourceRef);
+            ev.setNodeCode(hit.getSignalCode());
+            ev.setText(StringUtils.defaultIfBlank(hit.getSnippet(), transcript));
+            ev.setConfidence(hit.getConfidence());
+            ingestEvidence(ev);
+        }
+    }
+
+    private String buildSessionTranscript(GrowthEvidenceSessionDTO body) {
+        if (StringUtils.isNotBlank(body.getTranscript())) {
+            return body.getTranscript().trim();
+        }
+        if (body.getTurns() == null || body.getTurns().isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (GrowthEvidenceSessionDTO.Turn t : body.getTurns()) {
+            if (t == null || StringUtils.isBlank(t.getText())) {
+                continue;
+            }
+            String role = StringUtils.defaultIfBlank(t.getRole(), "user").trim().toLowerCase();
+            String label = "assistant".equals(role) ? "机器人" : "孩子";
+            sb.append(label).append("：").append(t.getText().trim()).append('\n');
+        }
+        return sb.toString().trim();
     }
 
     @Override

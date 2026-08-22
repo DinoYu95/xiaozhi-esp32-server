@@ -1,6 +1,7 @@
 package xiaozhi.modules.growthportrait.service;
 
 import xiaozhi.modules.growthportrait.dto.GrowthEvidenceIngestDTO;
+import xiaozhi.modules.growthportrait.dto.GrowthEvidenceSessionDTO;
 import xiaozhi.modules.growthportrait.dto.TeachingGpPublishDTO;
 import xiaozhi.modules.growthportrait.vo.GrowthGraphVO;
 import xiaozhi.modules.growthportrait.vo.GrowthNotificationPageVO;
@@ -15,6 +16,8 @@ public interface GrowthPortraitService {
     GrowthGraphVO getGraphByChildId(Long childId);
 
     void ingestEvidence(GrowthEvidenceIngestDTO body);
+
+    void ingestSession(GrowthEvidenceSessionDTO body);
 
     GrowthNotificationPageVO listNotifications(Long parentUserId, Long childId, int page, int pageSize);
 

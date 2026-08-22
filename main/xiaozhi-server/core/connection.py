@@ -197,6 +197,8 @@ class ConnectionHandler:
         self.learning_last_turn_ts = None
         self.learning_longest_silence = 0
         self._learning_pending_photo_user_text = None
+        self.growth_portrait_turns = []
+        self.growth_portrait_session_ref = None
 
         self.timeout_seconds = (
             int(self.config.get("close_connection_no_voice_time", 120)) + 60
@@ -1520,6 +1522,13 @@ class ConnectionHandler:
             text_buff = "".join(response_message)
             self.tts_MessageText = text_buff
             self.dialogue.put(Message(role="assistant", content=text_buff))
+            if depth == 0:
+                try:
+                    from core.growth_portrait.growth_portrait_api_client import append_assistant_turn
+
+                    append_assistant_turn(self, text_buff)
+                except Exception:
+                    pass
         if depth == 0:
             self.tts.tts_text_queue.put(
                 TTSMessageDTO(
@@ -1635,6 +1644,13 @@ class ConnectionHandler:
     async def close(self, ws=None):
         """资源清理方法"""
         try:
+            try:
+                from core.growth_portrait.growth_portrait_api_client import flush_session
+
+                flush_session(self)
+            except Exception:
+                pass
+
             from core.zhibanAgent.zhiban_connection_hooks import (
                 maybe_unregister_connection,
             )

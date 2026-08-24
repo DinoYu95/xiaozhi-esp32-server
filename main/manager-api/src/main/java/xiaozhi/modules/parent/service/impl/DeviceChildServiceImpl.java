@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import xiaozhi.common.exception.RenException;
 import xiaozhi.common.utils.ConvertUtils;
 import xiaozhi.modules.agent.service.AgentVoicePrintService;
+import xiaozhi.modules.learning.util.ChildGradeOptionsUtil;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dto.DeviceChildSaveDTO;
@@ -39,22 +40,24 @@ public class DeviceChildServiceImpl implements DeviceChildService {
         Date now = new Date();
         if (existing != null) {
             copyDtoToEntity(dto, existing);
+            ChildGradeOptionsUtil.normalizeGradeProfile(existing);
             existing.setUpdateTime(now);
             deviceChildDao.updateById(existing);
-            return ConvertUtils.sourceToTarget(existing, DeviceChildVO.class);
+            return toVo(existing);
         }
         DeviceChildEntity entity = ConvertUtils.sourceToTarget(dto, DeviceChildEntity.class);
+        ChildGradeOptionsUtil.normalizeGradeProfile(entity);
         entity.setCreateTime(now);
         entity.setUpdateTime(now);
         deviceChildDao.insert(entity);
-        return ConvertUtils.sourceToTarget(entity, DeviceChildVO.class);
+        return toVo(entity);
     }
 
     @Override
     public DeviceChildVO getByDeviceId(Long parentUserId, String deviceId) {
         ParentDeviceAccessHelper.requireActiveBinding(parentDeviceBindingDao, parentUserId, deviceId);
         DeviceChildEntity entity = ParentDeviceAccessHelper.findDeviceChild(deviceChildDao, deviceId);
-        return entity != null ? ConvertUtils.sourceToTarget(entity, DeviceChildVO.class) : null;
+        return entity != null ? toVo(entity) : null;
     }
 
     @Override
@@ -65,8 +68,15 @@ public class DeviceChildServiceImpl implements DeviceChildService {
         }
         ParentDeviceAccessHelper.requireOwnerWrite(parentDeviceBindingDao, parentUserId, entity.getDeviceId());
         copyUpdateDtoToEntity(dto, entity);
+        ChildGradeOptionsUtil.normalizeGradeProfile(entity);
         entity.setUpdateTime(new Date());
         deviceChildDao.updateById(entity);
+    }
+
+    private DeviceChildVO toVo(DeviceChildEntity entity) {
+        DeviceChildVO vo = ConvertUtils.sourceToTarget(entity, DeviceChildVO.class);
+        ChildGradeOptionsUtil.enrichChildVo(entity, vo);
+        return vo;
     }
 
     @Override

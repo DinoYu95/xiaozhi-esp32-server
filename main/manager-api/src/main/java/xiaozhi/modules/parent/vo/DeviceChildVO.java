@@ -46,8 +46,20 @@ public class DeviceChildVO {
     @Schema(description = "学校/幼儿园")
     private String school;
 
-    @Schema(description = "当前年级1-12")
+    @Schema(description = "当前年级：0=幼小衔接3-6岁，1-12=小学及以上")
     private Integer currentGrade;
+
+    @Schema(description = "年级展示文案，如「幼小衔接 3-6岁」「小学3年级」")
+    private String gradeLabel;
+
+    @Schema(description = "成长星图年龄段：preschool|lower|upper|middle")
+    private String growthAgeBand;
+
+    @Schema(description = "是否为幼小衔接/学前档案")
+    private Boolean preschoolProfile;
+
+    @Schema(description = "是否已设置年级（含幼小衔接0）")
+    private Boolean gradeConfigured;
 
     @Schema(description = "省/地区代码")
     private String provinceCode;

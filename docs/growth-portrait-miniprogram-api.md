@@ -224,9 +224,11 @@ Authorization: Bearer <server_secret>
 
 后端按 `device_child` 自动解析 `ageBand`：
 
-1. 优先 `ageStage` 字段（preschool/lower/upper/middle）
-2. 否则 `currentGrade`
+1. 优先 `ageStage`（含「幼小衔接」「3-6」等 → preschool）
+2. 否则 `currentGrade`（**0 或负数 → preschool**；1–2 → lower；3–6 → upper；7+ → middle）
 3. 否则 `birthday` 推算
+
+**档案年级 Picker** 请使用 `GET /parent-api/learning/meta/profile-options` 返回的 `grades`，首项为「幼小衔接 3-6岁」（`value: 0`），保存时写 `currentGrade: 0` 即可对应成长星图 **幼儿 3–6 岁** 区域。
 
 小程序 **无需传 ageBand**，只传 `childId`。
 

@@ -40,6 +40,7 @@ import xiaozhi.modules.learning.entity.LearnerSkillStateEntity;
 import xiaozhi.modules.learning.entity.LearningEvidenceEventEntity;
 import xiaozhi.modules.learning.service.LearningKgService;
 import xiaozhi.modules.learning.service.LearningMasteryService;
+import xiaozhi.modules.learning.util.ChildGradeOptionsUtil;
 import xiaozhi.modules.learning.util.LearningChildProfileUtil;
 import xiaozhi.modules.learning.util.LearningMasteryModuleLabels;
 import xiaozhi.modules.learning.util.LearningMasteryStatusUtil;
@@ -85,7 +86,9 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         Set<String> observedThisWeekCodes = loadObservedSkillCodesInRange(childId, week.from, week.toExclusive);
         Set<String> consolidatePeriodCodes = loadSuggestedConsolidateSkillCodes(childId);
 
-        List<SkillRow> rows = loadSkillRowsForGrade(ctx.releaseId, ctx.grade);
+        List<SkillRow> rows = ctx.releaseId != null
+                ? loadSkillRowsForGrade(ctx.releaseId, ctx.grade)
+                : List.of();
         boolean gradeSupported = isGradeSupported(ctx, rows);
 
         Map<Long, LearnerSkillStateEntity> stateByNodeId = gradeSupported
@@ -255,6 +258,18 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
             throw new RenException("孩子不存在");
         }
         String sub = LearningChildProfileUtil.resolveSubject(subject);
+        if (ChildGradeOptionsUtil.isPreschoolProfile(child)) {
+            ChildRelease ctx = new ChildRelease();
+            ctx.subject = sub;
+            ctx.grade = 0;
+            ctx.childMaxGrade = 0;
+            ctx.gradeConfigured = true;
+            ctx.releaseId = null;
+            ctx.versionLabel = null;
+            ctx.graphGradeMin = null;
+            ctx.graphGradeMax = null;
+            return ctx;
+        }
         String province = LearningChildProfileUtil.resolveProvince(child);
         String city = LearningChildProfileUtil.resolveCity(child);
         String semester = LearningChildProfileUtil.resolveSemester(child);
@@ -264,7 +279,7 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         LearningChildProfileUtil.validateGraphGradeVisible(child, grade);
         Long releaseId = learningKgService.requireActiveReleaseId(sub, province, city, textbook, semester, grade);
         KgGraphReleaseEntity release = kgGraphReleaseDao.selectById(releaseId);
-        boolean gradeConfigured = child.getCurrentGrade() != null && child.getCurrentGrade() > 0;
+        boolean gradeConfigured = ChildGradeOptionsUtil.isGradeConfigured(child);
         ChildRelease ctx = new ChildRelease();
         ctx.subject = sub;
         ctx.releaseId = releaseId;

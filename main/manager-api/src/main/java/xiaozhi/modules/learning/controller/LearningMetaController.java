@@ -18,6 +18,7 @@ import xiaozhi.common.utils.Result;
 import xiaozhi.modules.learning.entity.KgGraphReleaseEntity;
 import xiaozhi.modules.learning.service.LearningKgService;
 import xiaozhi.modules.learning.service.impl.LearningKgServiceImpl;
+import xiaozhi.modules.learning.util.ChildGradeOptionsUtil;
 import xiaozhi.modules.learning.util.LearningChildProfileUtil;
 import xiaozhi.modules.learning.util.LearningGeoConstants;
 import xiaozhi.modules.learning.util.LearningProfileConstants;
@@ -42,7 +43,7 @@ public class LearningMetaController {
     private final KgNodeRevisionDao kgNodeRevisionDao;
 
     @GetMapping("/profile-options")
-    @Operation(summary = "孩子档案下拉：省/市/上下册/教材（与教研后台一致）")
+    @Operation(summary = "孩子档案下拉：省/市/上下册/教材/年级（与教研后台一致）")
     public Result<Map<String, Object>> profileOptions() {
         try {
             Map<String, Object> body = new LinkedHashMap<>();
@@ -54,13 +55,15 @@ public class LearningMetaController {
                     LearningProfileConstants.TEXTBOOKS.entrySet().stream()
                             .map(e -> Map.of("code", e.getKey(), "label", e.getValue()))
                             .collect(Collectors.toList()));
+            body.put("grades", ChildGradeOptionsUtil.profileGradeOptions());
             body.put(
                     "defaults",
                     Map.of(
                             "provinceCode", LearningProfileConstants.DEFAULT_PROVINCE,
                             "cityCode", "CN_all",
                             "semester", LearningGeoConstants.SEMESTER_UPPER,
-                            "textbookEdition", LearningProfileConstants.DEFAULT_TEXTBOOK));
+                            "textbookEdition", LearningProfileConstants.DEFAULT_TEXTBOOK,
+                            "currentGrade", 1));
             return new Result<Map<String, Object>>().ok(body);
         } catch (Exception e) {
             return new Result<Map<String, Object>>().error("加载省市区选项失败: " + e.getMessage());

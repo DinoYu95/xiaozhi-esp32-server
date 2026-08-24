@@ -7,10 +7,16 @@ import lombok.Data;
 @Schema(description = "学习洞察首页聚合")
 public class LearningOverviewVO {
 
-    @Schema(description = "是否已设置 currentGrade")
+    @Schema(description = "是否已设置年级（含幼小衔接 currentGrade=0）")
     private Boolean gradeConfigured;
     @Schema(description = "是否已发布数学图谱")
     private Boolean graphReady;
+    @Schema(description = "幼小衔接/学前档案")
+    private Boolean preschoolProfile;
+    @Schema(description = "年级展示文案")
+    private String gradeLabel;
+    @Schema(description = "成长星图年龄段")
+    private String growthAgeBand;
     @Schema(description = "排查：匹配到的 kg_graph_release.id，null 表示未匹配")
     private Long graphReleaseId;
     @Schema(description = "排查：匹配 release 在当前年级可展示的 SKILL 数")

@@ -43,6 +43,7 @@ import xiaozhi.modules.learning.service.LearningKgService;
 import xiaozhi.modules.learning.service.LearningRemedialService;
 import xiaozhi.modules.learning.service.LearningSessionService;
 import xiaozhi.modules.learning.entity.KgGraphReleaseEntity;
+import xiaozhi.modules.learning.util.ChildGradeOptionsUtil;
 import xiaozhi.modules.learning.util.LearningChildProfileUtil;
 import xiaozhi.modules.learning.vo.LearningOverviewVO;
 import xiaozhi.modules.learning.vo.LearningRemedialMissionBriefVO;
@@ -315,12 +316,22 @@ public class LearningSessionServiceImpl implements LearningSessionService {
         }
         LearningOverviewVO ov = new LearningOverviewVO();
         ov.setCurrentGrade(child.getCurrentGrade());
+        ov.setGradeLabel(ChildGradeOptionsUtil.resolveGradeLabel(child));
+        ov.setGrowthAgeBand(ChildGradeOptionsUtil.resolveGrowthAgeBand(child));
+        ov.setPreschoolProfile(ChildGradeOptionsUtil.isPreschoolProfile(child));
         ov.setProvinceCode(LearningChildProfileUtil.resolveProvince(child));
         ov.setTextbookEdition(LearningChildProfileUtil.resolveTextbook(child));
-        ov.setGradeConfigured(child.getCurrentGrade() != null && child.getCurrentGrade() > 0);
+        ov.setGradeConfigured(ChildGradeOptionsUtil.isGradeConfigured(child));
         ov.setTextbookSeries(child.getTextbookSeries());
         ov.setSubjectsEnabled(child.getSubjectsEnabled());
         ov.setProfileProvinceRaw(child.getProvinceCode());
+        if (ChildGradeOptionsUtil.isPreschoolProfile(child)) {
+            ov.setGraphReady(false);
+            ov.setGraphReleaseId(null);
+            ov.setGraphSkillCountAtGrade(0);
+            ov.setWeeklyDigest(weeklyDigest(parentUserId, childId, weekStart));
+            return ov;
+        }
         int g = LearningChildProfileUtil.clampGraphGrade(child, child.getCurrentGrade());
         KgGraphReleaseEntity release = learningKgService.findActivePublishedRelease(
                 "math",

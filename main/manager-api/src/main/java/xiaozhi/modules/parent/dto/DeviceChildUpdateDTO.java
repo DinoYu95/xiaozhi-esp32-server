@@ -43,7 +43,7 @@ public class DeviceChildUpdateDTO {
     @Schema(description = "学校/幼儿园")
     private String school;
 
-    @Schema(description = "当前年级1-12")
+    @Schema(description = "当前年级：0=幼小衔接3-6岁，1-12=小学及以上")
     private Integer currentGrade;
 
     @Schema(description = "省/地区代码")

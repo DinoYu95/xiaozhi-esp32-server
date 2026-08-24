@@ -40,7 +40,10 @@ public final class LearningChildProfileUtil {
     }
 
     public static int resolveChildMaxGrade(DeviceChildEntity child) {
-        if (child != null && child.getCurrentGrade() != null && child.getCurrentGrade() > 0) {
+        if (child != null && child.getCurrentGrade() != null) {
+            if (child.getCurrentGrade() <= 0) {
+                return 0;
+            }
             return child.getCurrentGrade();
         }
         return 1;
@@ -48,6 +51,9 @@ public final class LearningChildProfileUtil {
 
     public static int clampGraphGrade(DeviceChildEntity child, Integer requestedGrade) {
         int max = resolveChildMaxGrade(child);
+        if (max <= 0) {
+            return 0;
+        }
         int g = requestedGrade != null && requestedGrade > 0 ? requestedGrade : max;
         return Math.min(g, max);
     }

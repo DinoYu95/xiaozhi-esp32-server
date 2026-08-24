@@ -59,7 +59,8 @@ public final class GrowthAgeBandUtil {
             return null;
         }
         String s = stage.toLowerCase();
-        if (s.contains("幼儿") || s.contains("学龄前") || s.contains("3-6") || s.contains("3～6")
+        if (s.contains("幼儿") || s.contains("学龄前") || s.contains("幼小衔接") || s.contains("学前")
+                || s.contains("3-6") || s.contains("3～6")
                 || s.contains("3~6") || s.contains("preschool")) {
             return "preschool";
         }

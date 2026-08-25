@@ -74,7 +74,7 @@
     }
     .mode-tabs button {
       flex: 1; border: none; border-radius: 10px 10px 0 0;
-      padding: 7px 4px; font-size: 0.68rem; cursor: pointer;
+      padding: 7px 2px; font-size: 0.64rem; cursor: pointer;
       background: rgba(255,255,255,0.04); color: #7d8cab;
     }
     .mode-tabs button.on {
@@ -252,6 +252,78 @@
       color: #9aa8c4; font-size: 0.72rem;
     }
     #lightPanel.active { display: flex; }
+    #summaryPanel {
+      display: none; flex: 1; flex-direction: column; min-height: 0;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      padding: 10px 14px 18px;
+      background: rgba(10,14,24,0.95);
+      color: #9aa8c4; font-size: 0.72rem;
+    }
+    #summaryPanel.active { display: flex; }
+    .summary-hero {
+      padding: 14px 14px 12px;
+      border-radius: 14px;
+      background: linear-gradient(145deg, rgba(99,102,241,0.2), rgba(146,84,222,0.1));
+      border: 1px solid rgba(129,140,248,0.22);
+      margin-bottom: 12px;
+    }
+    .summary-hero .eyebrow { font-size: 0.58rem; color: #8b9cc8; margin-bottom: 4px; }
+    .summary-hero h3 { font-size: 0.92rem; color: #f0f4ff; font-weight: 700; margin-bottom: 6px; }
+    .summary-hero .lead { font-size: 0.72rem; color: #c5d0e8; line-height: 1.6; }
+    .summary-hero .hero-row { display: flex; align-items: baseline; gap: 8px; margin-top: 10px; }
+    .summary-hero .hero-num { font-size: 1.75rem; font-weight: 800; color: #ffd591; line-height: 1; }
+    .summary-hero .hero-num-label { font-size: 0.68rem; color: #ffe7ba; }
+    .summary-stats {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+      margin-bottom: 14px;
+    }
+    .summary-stat {
+      text-align: center; padding: 8px 2px; border-radius: 10px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+    }
+    .summary-stat b { display: block; font-size: 0.95rem; color: #f0f4ff; font-weight: 700; }
+    .summary-stat span { font-size: 0.52rem; color: #7d8cab; line-height: 1.2; }
+    .summary-stat.strong b { color: #ffd591; }
+    .summary-stat.visible b { color: #5cdbd3; }
+    .summary-section { margin-bottom: 14px; }
+    .summary-section-title {
+      font-size: 0.68rem; font-weight: 700; color: #c7d2fe;
+      margin-bottom: 8px; letter-spacing: 0.02em;
+    }
+    .summary-card {
+      padding: 10px 12px; border-radius: 12px; margin-bottom: 8px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+      cursor: pointer; touch-action: manipulation;
+    }
+    .summary-card:active { background: rgba(255,255,255,0.06); }
+    .summary-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .summary-card-head strong { font-size: 0.78rem; color: #f0f4ff; font-weight: 600; }
+    .summary-card-meta { font-size: 0.62rem; color: #7d8cab; line-height: 1.45; }
+    .summary-card .mini-bar {
+      height: 4px; background: rgba(255,255,255,0.08); border-radius: 999px;
+      overflow: hidden; margin-top: 6px;
+    }
+    .summary-card .mini-bar span {
+      display: block; height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, #6366f1, #9254de);
+    }
+    .sum-badge {
+      flex-shrink: 0; font-size: 0.52rem; padding: 2px 7px; border-radius: 999px; font-weight: 600;
+    }
+    .sum-badge-strong { background: rgba(255,176,32,0.14); color: #ffd591; border: 1px solid rgba(255,176,32,0.35); }
+    .sum-badge-visible { background: rgba(54,207,201,0.1); color: #5cdbd3; border: 1px solid rgba(54,207,201,0.28); }
+    .sum-badge-collecting { background: rgba(89,126,247,0.1); color: #91caff; border: 1px solid rgba(89,126,247,0.22); }
+    .sum-badge-locked { background: rgba(255,255,255,0.04); color: #6b7a99; border: 1px solid rgba(255,255,255,0.08); }
+    .summary-empty {
+      font-size: 0.68rem; color: #6b7a99; padding: 14px 10px; text-align: center;
+      border-radius: 10px; background: rgba(255,255,255,0.02);
+      border: 1px dashed rgba(255,255,255,0.08); line-height: 1.55;
+    }
+    .summary-foot {
+      margin-top: 4px; padding: 10px 12px; border-radius: 10px;
+      background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.15);
+      font-size: 0.64rem; color: #9aa8c4; line-height: 1.55;
+    }
     .mode-tabs button { touch-action: manipulation; }
   </style>
 </head>
@@ -283,6 +355,7 @@
 
       <div class="mode-tabs">
         <button type="button" class="on" data-mode="graph">星图</button>
+        <button type="button" data-mode="summary">成长概览</button>
         <button type="button" data-mode="light">点亮规则</button>
       </div>
 
@@ -297,6 +370,7 @@
           <div class="graph-overlay">
             <div class="float-legend">
               <b>节点含义</b>
+              <div style="font-size:0.55rem;color:#6b7a99;margin-bottom:3px">颜色表示层级</div>
               <div><i style="background:#6366f1;border:2px solid #c7d2fe"></i> 孩子中心</div>
               <div><i style="background:#9254de;border:2px solid #efdbff"></i> 维度 Hub</div>
               <div><i style="background:#597ef7"></i> 子能力</div>
@@ -326,6 +400,8 @@
           <div><strong>观测信号</strong> · 最小证据点。强烈时会闪，并可能触发家长通知。</div>
         </div>
       </div>
+
+      <div id="summaryPanel"></div>
 
       <div id="lightPanel">
         <p id="lightIntro" style="margin-bottom:10px;color:#c5d0e8;">能力不会「一键点亮」，而是随与小智互动自动累积证据：</p>
@@ -357,6 +433,13 @@
     let token = '';
     let apiBase = '';
 
+    const TYPE_COLORS = {
+      center: '#6366f1',
+      hub: '#9254de',
+      sub: '#597ef7',
+      signal: '#ffb020'
+    };
+    /** 模块 cluster 仅用于布局分组，不参与节点配色 */
     const CLUSTER_COLORS = {
       logic:'#ffb020', create:'#ff7a45', study:'#597ef7', lang:'#9254de',
       social:'#36cfc9', curious:'#ffc53d', interest:'#ff85c0', meta:'#95de64',
@@ -364,10 +447,10 @@
       read:'#9e86ff', emotion:'#ff9c6e'
     };
     const TYPE_META = {
-      center: { badge: '成长中心', desc: '代表孩子本人，所有成长维度连在这里', color: '#6366f1' },
-      hub:    { badge: '成长维度 Hub', desc: '大方向能力区，类似掌握地图「模块」。你截图里的紫圆就是这一层', color: '#9254de' },
-      sub:    { badge: '子能力', desc: '维度下的具体表现，如「拆解问题」「书面表达」', color: '#597ef7' },
-      signal: { badge: '观测信号', desc: '来自对话/任务的单条证据，是最小的「点亮」单位', color: '#ffb020' }
+      center: { badge: '成长中心', desc: '代表孩子本人，所有成长维度连在这里', color: TYPE_COLORS.center },
+      hub:    { badge: '成长维度 Hub', desc: '大方向能力区，如「语言表达」「探究好奇」', color: TYPE_COLORS.hub },
+      sub:    { badge: '子能力', desc: '维度下的具体表现，如「拆解问题」「书面表达」', color: TYPE_COLORS.sub },
+      signal: { badge: '观测信号', desc: '来自对话/任务的单条证据，是最小的「点亮」单位', color: TYPE_COLORS.signal }
     };
     const LIGHT_STATES = [
       { id: 'locked', label: '未解锁' },
@@ -579,6 +662,15 @@
       return { tier: pickTier, intensity };
     }
 
+    function nodeColor(d) {
+      if (!d) return TYPE_COLORS.sub;
+      return TYPE_COLORS[d.type] || TYPE_COLORS.sub;
+    }
+
+    function clusterLabel(cluster) {
+      return DIM_LABELS[cluster] || cluster || '';
+    }
+
     function getParentNode(n, byId) {
       if (n.parentSub) return byId[n.parentSub];
       if (n.parentHub) return byId[n.parentHub];
@@ -672,6 +764,11 @@
         .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
     }
 
+    const STATE_LABELS = {
+      locked: '待观测', collecting: '收集中', visible: '已显现', strong: '强烈亮点'
+    };
+    const STATE_ORDER = { strong: 0, visible: 1, collecting: 2, locked: 3 };
+
     function renderLightRules() {
       const days = graphMeta.observeDays || 0;
       const cap = graphMeta.weeklyInstantCap || 2;
@@ -683,14 +780,168 @@
       }
     }
 
+    function countByState(nodes) {
+      return {
+        strong: nodes.filter(n => n.state === 'strong').length,
+        visible: nodes.filter(n => n.state === 'visible').length,
+        collecting: nodes.filter(n => n.state === 'collecting').length,
+        locked: nodes.filter(n => n.state === 'locked').length
+      };
+    }
+
+    function hubChildSummary(hub) {
+      const subs = graphData.nodes.filter(n => n.parentHub === hub.id && n.type === 'sub');
+      const st = countByState(subs);
+      const parts = [];
+      if (st.strong) parts.push(`${st.strong} 个强烈亮点`);
+      if (st.visible) parts.push(`${st.visible} 个已显现`);
+      if (st.collecting) parts.push(`${st.collecting} 个收集中`);
+      if (!parts.length) return subs.length ? `${subs.length} 个子能力待观测` : '暂无子能力数据';
+      return parts.join(' · ');
+    }
+
+    function buildSummaryLead(stats, hubs) {
+      const strongHubs = hubs.filter(h => h.state === 'strong').map(h => h.label);
+      const visibleHubs = hubs.filter(h => h.state === 'visible').map(h => h.label);
+      const names = [...strongHubs, ...visibleHubs].slice(0, 3);
+      if (stats.strong > 0 && names.length) {
+        return `孩子在「${names.join('」「')}」等方向表现突出，继续日常互动即可积累更多证据。`;
+      }
+      if (stats.visible > 0) {
+        return `已有 ${stats.visible} 处能力倾向显现，星图正在慢慢点亮。`;
+      }
+      if (stats.collecting > 0) {
+        return `已有 ${stats.collecting} 处正在收集中，和小智多聊相关话题会加快显现。`;
+      }
+      return '星图刚刚开始记录，继续和小智聊天、做任务，证据会自动累积。';
+    }
+
+    function summaryBadge(state) {
+      return `<span class="sum-badge sum-badge-${state}">${STATE_LABELS[state] || state}</span>`;
+    }
+
+    function summaryMiniBar(node) {
+      const pct = evidenceProgressPct(node);
+      return `<div class="mini-bar"><span style="width:${pct}%"></span></div>`;
+    }
+
+    function renderSummaryPanel() {
+      const panel = document.getElementById('summaryPanel');
+      if (!panel) return;
+      const nodes = (graphData.nodes || []).filter(n => n.type !== 'center');
+      const hubs = nodes.filter(n => n.type === 'hub')
+        .sort((a, b) => (STATE_ORDER[a.state] ?? 9) - (STATE_ORDER[b.state] ?? 9)
+          || (b.evidenceCount || 0) - (a.evidenceCount || 0));
+      const stats = countByState(nodes);
+      const days = graphMeta.observeDays || 0;
+      const bandLabel = AGE_BAND_LABELS[currentAgeBand] || currentAgeBand;
+
+      const strongNodes = nodes.filter(n => n.state === 'strong' && n.type !== 'hub')
+        .sort((a, b) => (b.evidenceCount || 0) - (a.evidenceCount || 0));
+      const watchNodes = nodes.filter(n => n.state === 'collecting' && n.type !== 'hub' && (n.evidenceCount || 0) >= 2)
+        .sort((a, b) => {
+          const ra = (a.evidenceCount || 0) / Math.max(1, a.requiredCount || 3);
+          const rb = (b.evidenceCount || 0) / Math.max(1, b.requiredCount || 3);
+          return rb - ra;
+        })
+        .slice(0, 5);
+
+      const hubCards = hubs.length ? hubs.map(hub => {
+        const remain = Math.max(0, (hub.requiredCount || 6) - (hub.evidenceCount || 0));
+        const prog = hub.state === 'collecting' && remain > 0
+          ? ` · 还差 ${remain} 条证据可显现`
+          : (hub.state === 'visible' ? ' · 维度已显现' : '');
+        return `
+          <div class="summary-card" data-node-id="${hub.id}">
+            <div class="summary-card-head">
+              <strong>${hub.label}</strong>
+              ${summaryBadge(hub.state)}
+            </div>
+            <div class="summary-card-meta">${hubChildSummary(hub)}${prog}</div>
+            ${summaryMiniBar(hub)}
+          </div>`;
+      }).join('') : '<div class="summary-empty">暂无维度数据</div>';
+
+      const strongCards = strongNodes.length ? strongNodes.slice(0, 6).map(n => {
+        const typeName = TYPE_META[n.type]?.badge || n.type;
+        const dim = n.cluster ? ` · ${clusterLabel(n.cluster)}` : '';
+        return `
+          <div class="summary-card" data-node-id="${n.id}">
+            <div class="summary-card-head">
+              <strong>${n.label}</strong>
+              ${summaryBadge('strong')}
+            </div>
+            <div class="summary-card-meta">${typeName}${dim} · ${n.suggest || '表现突出'}</div>
+          </div>`;
+      }).join('') : '<div class="summary-empty">还没有强烈亮点，继续日常互动即可</div>';
+
+      const watchCards = watchNodes.length ? watchNodes.map(n => {
+        const remain = Math.max(1, (n.requiredCount || 3) - (n.evidenceCount || 0));
+        return `
+          <div class="summary-card" data-node-id="${n.id}">
+            <div class="summary-card-head">
+              <strong>${n.label}</strong>
+              ${summaryBadge('collecting')}
+            </div>
+            <div class="summary-card-meta">${TYPE_META[n.type]?.badge || ''} · 再积累 ${remain} 条证据可显现</div>
+            ${summaryMiniBar(n)}
+          </div>`;
+      }).join('') : '<div class="summary-empty">暂无接近显现的观察点</div>';
+
+      panel.innerHTML = `
+        <div class="summary-hero">
+          <div class="eyebrow">${childName} · ${bandLabel}${days ? ` · 已观测 ${days} 天` : ''}</div>
+          <h3>成长概览</h3>
+          <p class="lead">${buildSummaryLead(stats, hubs)}</p>
+          <div class="hero-row">
+            <span class="hero-num">${stats.strong}</span>
+            <span class="hero-num-label">个强烈亮点</span>
+          </div>
+        </div>
+        <div class="summary-stats">
+          <div class="summary-stat strong"><b>${stats.strong}</b><span>强烈亮点</span></div>
+          <div class="summary-stat visible"><b>${stats.visible}</b><span>已显现</span></div>
+          <div class="summary-stat"><b>${stats.collecting}</b><span>收集中</span></div>
+          <div class="summary-stat"><b>${stats.locked}</b><span>待观测</span></div>
+        </div>
+        <div class="summary-section">
+          <div class="summary-section-title">各维度进展</div>
+          ${hubCards}
+        </div>
+        <div class="summary-section">
+          <div class="summary-section-title">近期亮点</div>
+          ${strongCards}
+        </div>
+        <div class="summary-section">
+          <div class="summary-section-title">值得继续观察</div>
+          ${watchCards}
+        </div>
+        <div class="summary-foot">💡 无需刻意「刷点亮」，日常和小智聊天、做任务即可。点击条目可跳转到星图查看详情。</div>`;
+
+      panel.querySelectorAll('.summary-card[data-node-id]').forEach(card => {
+        bindTap(card, () => jumpToNodeFromSummary(card.dataset.nodeId));
+      });
+    }
+
+    function jumpToNodeFromSummary(nodeId) {
+      switchViewMode('graph');
+      const node = graphData.nodes.find(n => String(n.id) === String(nodeId));
+      if (node) selectNode(node, true);
+    }
+
     function switchViewMode(mode) {
       const isGraph = mode === 'graph';
+      const isSummary = mode === 'summary';
+      const isLight = mode === 'light';
       document.querySelectorAll('.mode-tabs button').forEach(b => {
         b.classList.toggle('on', b.dataset.mode === mode);
       });
       document.getElementById('graphPanel').style.display = isGraph ? 'flex' : 'none';
-      document.getElementById('lightPanel').classList.toggle('active', !isGraph);
+      document.getElementById('summaryPanel').classList.toggle('active', isSummary);
+      document.getElementById('lightPanel').classList.toggle('active', isLight);
+      document.getElementById('detailSheet').style.display = isGraph ? 'block' : 'none';
       document.getElementById('helpPanel').classList.remove('open');
+      if (isSummary) renderSummaryPanel();
       if (isGraph && layoutNodes.length) {
         requestAnimationFrame(() => initGraph(true));
       }
@@ -729,6 +980,9 @@
       }
       const meta = TYPE_META[node.type];
       const pct = evidenceProgressPct(node);
+      const dimHint = node.cluster && node.type !== 'center'
+        ? `<p style="margin:4px 0 0;font-size:0.68rem;color:#8b9cc8">所属维度 · ${clusterLabel(node.cluster)}</p>`
+        : '';
       const statesHtml = LIGHT_STATES.map(s =>
         `<span class="state-chip ${s.id === node.state ? 'on' : ''}">${s.label}</span>`
       ).join('');
@@ -736,6 +990,7 @@
         <span class="type-badge" style="background:${meta.color}22;color:${meta.color};border-color:${meta.color}55">${meta.badge}</span>
         <h3>${node.label}</h3>
         <p>${meta.desc}</p>
+        ${dimHint}
         <div class="light-track">
           <div class="label">点亮进度 · ${evidenceProgressLabel(node)}</div>
           <div class="progress-bar"><span style="width:${pct}%"></span></div>
@@ -880,7 +1135,7 @@
     function drawNode(el, d) {
       const body = el.append('g').attr('class', 'node-body');
       const r = nodeRadius(d);
-      const c = CLUSTER_COLORS[d.cluster] || '#597ef7';
+      const c = nodeColor(d);
       const st = d.state || 'locked';
 
       addNodeGlow(body, r, c, d);
@@ -989,7 +1244,7 @@
       if (!d) return;
       const nodeEl = g.selectAll('.node').filter(n => String(n.id) === String(id));
       const body = nodeEl.select('.node-body');
-      const c = CLUSTER_COLORS[d.cluster] || '#597ef7';
+      const c = nodeColor(d);
       const r0 = nodeRadius(d);
 
       if (!body.empty()) {
@@ -1162,8 +1417,8 @@
       const link = linkG.selectAll('line').data(links).join('line')
         .attr('class', 'link-node')
         .attr('stroke', d => {
-          const t = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
-          return CLUSTER_COLORS[t?.cluster] || '#3d4a63';
+          const tgt = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          return nodeColor(tgt);
         })
         .attr('stroke-width', d => {
           const tgt = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
@@ -1219,8 +1474,8 @@
           const cx = d3.mean(members, d => d.x), cy = d3.mean(members, d => d.y);
           const r = d3.max(members, d => Math.hypot(d.x - cx, d.y - cy)) + 40;
           clusterLayer.append('circle').attr('cx', cx).attr('cy', cy).attr('r', r)
-            .attr('fill', CLUSTER_COLORS[dim]).attr('fill-opacity', 0.035)
-            .attr('stroke', CLUSTER_COLORS[dim]).attr('stroke-opacity', 0.15)
+            .attr('fill', TYPE_COLORS.hub).attr('fill-opacity', 0.025)
+            .attr('stroke', TYPE_COLORS.hub).attr('stroke-opacity', 0.1)
             .attr('stroke-width', 1).attr('stroke-dasharray', '8 6');
         });
       });
@@ -1320,6 +1575,7 @@
         graphData = mapApiToGraph(data);
         selectedId = null;
         renderLightRules();
+        renderSummaryPanel();
         showApp();
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {

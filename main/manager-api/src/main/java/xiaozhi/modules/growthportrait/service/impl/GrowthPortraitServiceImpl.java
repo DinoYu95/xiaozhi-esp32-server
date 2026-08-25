@@ -496,9 +496,12 @@ public class GrowthPortraitServiceImpl implements GrowthPortraitService {
         LearnerGrowthStateEntity st = stateByCode.computeIfAbsent(node.getCode(), k -> newState(childId, releaseId, k));
         st.setEvidenceCount(evidenceCount);
         st.setStrength(strength);
-        String newState = GrowthStateEngine.lightState(
-                strength, Math.max(evidenceCount, 0),
-                node.getVisibleThreshold(), node.getStrongThreshold());
+        int required = node.getRequiredEvidence() != null ? node.getRequiredEvidence() : defaultRequired(node.getNodeType());
+        String newState = "hub".equals(node.getNodeType())
+                ? GrowthStateEngine.rollupHubState(childCodes, stateByCode, evidenceCount, required)
+                : GrowthStateEngine.lightState(
+                        strength, Math.max(evidenceCount, 0), required,
+                        node.getStrongThreshold() != null ? node.getStrongThreshold() : 72);
         updateStateTransition(st, newState);
         st.setUpdateTime(new Date());
     }
@@ -520,10 +523,20 @@ public class GrowthPortraitServiceImpl implements GrowthPortraitService {
         LearnerGrowthStateEntity st = stateByCode.computeIfAbsent(node.getCode(), k -> newState(childId, releaseId, k));
         st.setEvidenceCount(count);
         st.setStrength(strength);
+        int required = node.getRequiredEvidence() != null ? node.getRequiredEvidence() : defaultRequired(node.getNodeType());
         String newState = GrowthStateEngine.lightState(
-                strength, count, node.getVisibleThreshold(), node.getStrongThreshold());
+                strength, count, required,
+                node.getStrongThreshold() != null ? node.getStrongThreshold() : 72);
         updateStateTransition(st, newState);
         st.setUpdateTime(new Date());
+    }
+
+    private static int defaultRequired(String nodeType) {
+        return switch (String.valueOf(nodeType)) {
+            case "hub" -> 6;
+            case "sub" -> 5;
+            default -> 3;
+        };
     }
 
     private LearnerGrowthStateEntity newState(Long childId, Long releaseId, String code) {
@@ -770,13 +783,7 @@ public class GrowthPortraitServiceImpl implements GrowthPortraitService {
             }
         }
         n.setEvidence("已收集 " + n.getEvidenceCount() + " 条观测证据");
-        n.setSuggest(switch (n.getState()) {
-            case "strong" -> "强烈亮点 · 可查看详情并安排亲子活动";
-            case "visible" -> "倾向显现 · 继续观察同场景表现";
-            case "collecting" -> "收集中 · 再积累 "
-                    + Math.max(0, 2 - n.getEvidenceCount()) + " 条证据可解锁";
-            default -> "尚未解锁";
-        });
+        n.setSuggest(GrowthStateEngine.buildSuggest(n.getState(), n.getEvidenceCount(), n.getRequiredCount()));
         return n;
     }
 

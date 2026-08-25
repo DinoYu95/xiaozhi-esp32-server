@@ -103,10 +103,14 @@ interface GrowthNodeVO {
 
 | state | 业务含义 |
 |-------|---------|
-| locked | 证据 < 2，灰点 |
-| collecting | 收集中，虚线环 |
-| visible | 已显现 |
-| strong | 强烈亮点（可触发家长通知） |
+| locked | 证据 < 2 条，灰点 |
+| collecting | 已有 ≥2 条证据，未达 `requiredCount` |
+| visible | 证据 ≥ `requiredCount` |
+| strong | 证据 ≥ `requiredCount` 且（超额 ≥120% 或 `strength` ≥ 强阈值） |
+
+**Hub 节点**：`state` 由子能力汇聚——汇总证据 ≥ 目标即「已显现」；有子能力「强烈亮点」且汇总证据达标则为「强烈亮点」。
+
+**进度展示**：`evidenceCount` 可超过 `requiredCount`；前端应显示「已达标」而非裸 `4/3`。
 
 **重要**：`state === 'strong'` 但 `visualTier` 可能低于父节点 —— 这是产品设计（子节点业务上亮，视觉上不超过父节点）。
 

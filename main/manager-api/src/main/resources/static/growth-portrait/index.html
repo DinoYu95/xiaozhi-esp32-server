@@ -196,12 +196,16 @@
     .node-type-tag { fill: rgba(255,255,255,0.38); font-size: 6px; text-anchor: middle; }
 
     @keyframes pulse-strong {
-      0%, 100% { opacity: 0.18; transform: scale(1); }
-      50% { opacity: 0.42; transform: scale(1.15); }
+      0%, 100% { opacity: 0.28; transform: scale(1); }
+      50% { opacity: 0.72; transform: scale(1.18); }
     }
     @keyframes pulse-mid {
-      0%, 100% { opacity: 0.12; transform: scale(1); }
-      50% { opacity: 0.32; transform: scale(1.1); }
+      0%, 100% { opacity: 0.2; transform: scale(1); }
+      50% { opacity: 0.55; transform: scale(1.12); }
+    }
+    @keyframes pulse-visible {
+      0%, 100% { opacity: 0.22; transform: scale(1); }
+      50% { opacity: 0.48; transform: scale(1.08); }
     }
     @keyframes center-glow {
       0%, 100% { opacity: 0.35; transform: scale(1); }
@@ -210,6 +214,9 @@
     .halo-strong { animation: pulse-strong 1.8s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
     .halo-strong-2 { animation: pulse-strong 1.8s ease-in-out 0.5s infinite; transform-origin: center; transform-box: fill-box; }
     .halo-mid { animation: pulse-mid 2.2s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+    .halo-visible { animation: pulse-visible 2.6s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+    .node-core.lit-strong { filter: url(#bloomStrong); }
+    .node-core.lit-visible { filter: url(#bloom); }
     .center-glow { animation: center-glow 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
 
     .state-overlay {
@@ -308,7 +315,7 @@
       <div class="help-panel" id="helpPanel">
         <div class="row">
           <div class="dot-sample" style="background:#9254de;border:3px solid #efdbff"></div>
-          <div><strong>维度 Hub（你圈的大紫圆）</strong><br>8 个成长大方向，类似掌握地图「加法模块」。本身不闪，子节点亮它才跟着变亮。</div>
+          <div><strong>维度 Hub（你圈的大紫圆）</strong><br>8 个成长大方向。证据达标后会<strong style="color:#d3adf7">整圆变亮</strong>，强烈亮点时金色脉冲。</div>
         </div>
         <div class="row">
           <div class="dot-sample" style="background:#597ef7;width:14px;height:14px;margin:4px"></div>
@@ -324,16 +331,16 @@
         <p id="lightIntro" style="margin-bottom:10px;color:#c5d0e8;">能力不会「一键点亮」，而是随与小智互动自动累积证据：</p>
         <div style="display:flex;flex-direction:column;gap:8px;">
           <div style="padding:8px 10px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06)">
-            <span style="color:#6b7a99">① 未解锁</span> · 本年龄段暂不评估，或证据 &lt; 2 条 → 灰点
+            <span style="color:#6b7a99">① 未解锁</span> · 证据 &lt; 2 条 → 灰点
           </div>
           <div style="padding:8px 10px;border-radius:10px;background:rgba(89,126,247,0.08);border:1px solid rgba(89,126,247,0.2)">
-            <span style="color:#91caff">② 收集中</span> · 已有互动，未达展示阈值 → 蓝灰 + 进度环
+            <span style="color:#91caff">② 收集中</span> · 已有互动，未达目标条数 → 蓝灰 + 进度环
           </div>
           <div style="padding:8px 10px;border-radius:10px;background:rgba(54,207,201,0.08);border:1px solid rgba(54,207,201,0.2)">
-            <span style="color:#5cdbd3">③ 已显现</span> · 同场景重复 ≥3 次 · 置信 ≥52% → 常亮
+            <span style="color:#5cdbd3">③ 已显现</span> · 证据达到目标条数 → 常亮
           </div>
           <div style="padding:8px 10px;border-radius:10px;background:rgba(255,176,32,0.1);border:1px solid rgba(255,176,32,0.35)">
-            <span style="color:#ffd591">④ 强烈亮点</span> · 置信 ≥72% · 跨 ≥2 天重复 → <strong style="color:#ffb020">闪烁 + 可通知家长</strong>
+            <span style="color:#ffd591">④ 强烈亮点</span> · 超额达标或表现突出 → <strong style="color:#ffb020">闪烁 + 可通知家长</strong>
           </div>
         </div>
       </div>
@@ -544,9 +551,32 @@
           links.push({ source: 'center', target: hub.id, strength: (hub.strength || 50) * 0.55 });
         }
       });
-      const needsHierarchy = nodes.some(n => n.type !== 'center' && (n.visualTier == null || n.visualIntensity == null));
-      if (needsHierarchy) applyVisualHierarchy(nodes);
+      applyVisualHierarchy(nodes);
       return { nodes, links };
+    }
+
+    /** 点亮渲染：以 state 为主（用户能看懂），visualIntensity 仅作辅助 */
+    function stateDisplayVisual(state, type) {
+      switch (state) {
+        case 'strong':
+          return { tier: 'high', intensity: type === 'hub' ? 0.92 : 0.78 };
+        case 'visible':
+          return { tier: 'mid', intensity: type === 'hub' ? 0.68 : 0.52 };
+        case 'collecting':
+          return { tier: 'low', intensity: 0.16 };
+        default:
+          return { tier: 'none', intensity: 0 };
+      }
+    }
+
+    function displayVisualForNode(d) {
+      const st = d.state || 'locked';
+      const fromState = stateDisplayVisual(st, d.type);
+      const backendTier = d.visualTier || 'none';
+      const rank = { none: 0, low: 1, mid: 2, high: 3 };
+      const pickTier = rank[fromState.tier] >= rank[backendTier] ? fromState.tier : backendTier;
+      const intensity = Math.max(fromState.intensity, Number(d.visualIntensity) || 0);
+      return { tier: pickTier, intensity };
     }
 
     function getParentNode(n, byId) {
@@ -674,6 +704,23 @@
       document.getElementById('observePill').textContent = `强烈 ${graphMeta.strongCount || 0}`;
     }
 
+    function evidenceProgressLabel(node) {
+      const count = Number(node.evidenceCount) || 0;
+      const target = Math.max(1, Number(node.requiredCount) || 3);
+      if (count >= target) {
+        return count > target
+          ? `证据 ${count} 条 · 已达标（目标 ${target}）`
+          : `证据 ${count}/${target} 条 · 已达标`;
+      }
+      return `证据 ${count}/${target} 条`;
+    }
+
+    function evidenceProgressPct(node) {
+      const count = Number(node.evidenceCount) || 0;
+      const target = Math.max(1, Number(node.requiredCount) || 3);
+      return Math.min(100, Math.round((Math.min(count, target) / target) * 100));
+    }
+
     function showDetail(node) {
       const sheet = document.getElementById('detailSheet');
       if (!node || node.type === 'center') {
@@ -681,7 +728,7 @@
         return;
       }
       const meta = TYPE_META[node.type];
-      const pct = Math.min(100, Math.round((node.evidenceCount / (node.requiredCount || 1)) * 100));
+      const pct = evidenceProgressPct(node);
       const statesHtml = LIGHT_STATES.map(s =>
         `<span class="state-chip ${s.id === node.state ? 'on' : ''}">${s.label}</span>`
       ).join('');
@@ -690,7 +737,7 @@
         <h3>${node.label}</h3>
         <p>${meta.desc}</p>
         <div class="light-track">
-          <div class="label">点亮进度 · 证据 ${node.evidenceCount}/${node.requiredCount || '—'} 条</div>
+          <div class="label">点亮进度 · ${evidenceProgressLabel(node)}</div>
           <div class="progress-bar"><span style="width:${pct}%"></span></div>
           <div class="states">${statesHtml}</div>
         </div>
@@ -714,9 +761,11 @@
       if (d.type === 'center') return;
       const main = d.shortLabel || d.label;
       if (!main) return;
-      const desc = d.shortDesc || (d.state === 'locked' ? '待观测' : '');
-      const isStrongLook = d.visualTier === 'high' || (d.visualTier === 'mid' && d.state === 'strong');
-      const isPending = d.state === 'locked' || d.state === 'collecting';
+      const st = d.state || 'locked';
+      const desc = d.shortDesc || (st === 'locked' ? '待观测' : (st === 'visible' ? '已显现' : (st === 'strong' ? '强烈亮点' : '')));
+      const isStrongLook = st === 'strong';
+      const isVisibleLook = st === 'visible';
+      const isPending = st === 'locked' || st === 'collecting';
       const labelClass = 'node-label'
         + (d.type === 'hub' ? ' hub' : '')
         + (isStrongLook ? ' strong-label' : '')
@@ -724,7 +773,9 @@
       const text = d.type === 'signal' && main.length > 6 ? main.slice(0, 6) : main;
       el.append('text').attr('class', labelClass).attr('dy', r + 11).text(text);
       if (desc) {
-        el.append('text').attr('class', 'node-desc' + (isPending ? ' pending' : '')).attr('dy', r + 19)
+        el.append('text').attr('class', 'node-desc' + (isPending ? ' pending' : '') + (isVisibleLook ? ' visible-desc' : ''))
+          .attr('dy', r + 19)
+          .attr('fill', isStrongLook ? '#ffe7ba' : (isVisibleLook ? 'rgba(255,255,255,0.62)' : null))
           .text(desc.length > 10 ? desc.slice(0, 10) + '…' : desc);
       }
     }
@@ -746,29 +797,32 @@
     }
 
     function addNodeGlow(el, r, c, d) {
-      const v = d.visualIntensity || 0;
-      const tier = d.visualTier || 'none';
-      if (tier === 'none') return;
+      const st = d.state || 'locked';
+      const { tier, intensity } = displayVisualForNode(d);
+      if (tier === 'none' || st === 'locked') return;
 
-      if (tier === 'high') {
-        el.append('circle').attr('r', r + 7).attr('fill', c)
-          .attr('opacity', 0.14 + v * 0.1).attr('class', 'halo-strong');
-        if (d.type === 'hub') {
-          el.append('circle').attr('r', r + 11).attr('fill', c)
-            .attr('opacity', 0.08).attr('class', 'halo-strong-2');
-        }
+      if (st === 'strong' || tier === 'high') {
+        el.append('circle').attr('r', r + (d.type === 'hub' ? 10 : 7)).attr('fill', c)
+          .attr('opacity', 0.22 + intensity * 0.18).attr('class', 'halo-strong');
+        el.append('circle').attr('r', r + (d.type === 'hub' ? 14 : 10)).attr('fill', st === 'strong' ? '#ffe7ba' : c)
+          .attr('opacity', d.type === 'hub' ? 0.12 : 0.08).attr('class', 'halo-strong-2');
         return;
       }
-      if (tier === 'mid') {
-        el.append('circle').attr('r', r + 5).attr('fill', c)
-          .attr('opacity', 0.1 + v * 0.12).attr('class', 'halo-mid');
+      if (st === 'visible' || tier === 'mid') {
+        el.append('circle').attr('r', r + (d.type === 'hub' ? 8 : 5)).attr('fill', c)
+          .attr('opacity', 0.16 + intensity * 0.2).attr('class', 'halo-mid');
+        el.append('circle').attr('r', r + (d.type === 'hub' ? 11 : 7)).attr('fill', c)
+          .attr('opacity', 0.08).attr('class', 'halo-visible');
         return;
       }
-      el.append('circle').attr('r', r + 3).attr('fill', c).attr('opacity', 0.06 + v * 0.1);
+      el.append('circle').attr('r', r + 3).attr('fill', c).attr('opacity', 0.1 + intensity * 0.15);
     }
 
     function nodeBloomFilter(d) {
-      const tier = d.visualTier || 'none';
+      const st = d.state || 'locked';
+      if (st === 'strong') return d.type === 'hub' ? 'url(#bloomStrong)' : 'url(#bloomStrong)';
+      if (st === 'visible') return 'url(#bloom)';
+      const { tier } = displayVisualForNode(d);
       if (tier === 'high' && d.type === 'hub') return 'url(#bloomStrong)';
       if (tier === 'high' || tier === 'mid') return 'url(#bloom)';
       return null;
@@ -827,8 +881,7 @@
       const body = el.append('g').attr('class', 'node-body');
       const r = nodeRadius(d);
       const c = CLUSTER_COLORS[d.cluster] || '#597ef7';
-      const st = d.state;
-      const tier = d.visualTier || 'none';
+      const st = d.state || 'locked';
 
       addNodeGlow(body, r, c, d);
 
@@ -841,12 +894,20 @@
         if (st === 'locked' || st === 'collecting') {
           drawPendingNode(body, d, r, c);
         } else {
-          body.append('circle').attr('r', r + 5).attr('fill', 'none')
-            .attr('stroke', c).attr('stroke-opacity', 0.45).attr('stroke-width', 2);
-          body.append('circle').attr('class', 'node-core').attr('r', r).attr('fill', c)
-            .attr('stroke', '#efdbff').attr('stroke-width', 2.5)
+          body.append('circle').attr('r', r + 6).attr('fill', 'none')
+            .attr('stroke', st === 'strong' ? '#ffe7ba' : c)
+            .attr('stroke-opacity', st === 'strong' ? 0.72 : 0.52)
+            .attr('stroke-width', st === 'strong' ? 2.5 : 2)
+            .attr('class', st === 'strong' ? 'halo-mid' : 'halo-visible');
+          body.append('circle').attr('class', 'node-core' + (st === 'strong' ? ' lit-strong' : ' lit-visible'))
+            .attr('r', r).attr('fill', c)
+            .attr('fill-opacity', st === 'strong' ? 1 : 0.88)
+            .attr('stroke', st === 'strong' ? '#ffe7ba' : '#efdbff')
+            .attr('stroke-width', st === 'strong' ? 3 : 2.5)
             .attr('filter', nodeBloomFilter(d));
-          body.append('text').attr('class', 'node-type-tag').attr('dy', -r - 6).text('维度');
+          body.append('text').attr('class', 'node-type-tag').attr('dy', -r - 6)
+            .attr('fill', st === 'strong' ? '#ffe7ba' : 'rgba(255,255,255,0.55)')
+            .text(st === 'strong' ? '亮点' : '维度');
           appendNodeLabels(body, d, r);
         }
         appendHitArea(body, d, r);
@@ -864,11 +925,20 @@
           .attr('stroke', '#597ef7').attr('stroke-opacity', 0.35).attr('stroke-width', 1)
           .attr('stroke-dasharray', `${Math.PI * r * 0.6} ${Math.PI * r * 1.4}`);
       }
+      if (st === 'visible' || st === 'strong') {
+        body.append('circle').attr('r', r + (st === 'strong' ? 4.5 : 3)).attr('fill', 'none')
+          .attr('stroke', st === 'strong' ? '#ffe7ba' : c)
+          .attr('stroke-opacity', st === 'strong' ? 0.85 : 0.58)
+          .attr('stroke-width', st === 'strong' ? 1.8 : 1.2)
+          .attr('class', st === 'strong' ? 'halo-mid' : null);
+      }
       const fill = st === 'collecting' ? d3.color(c).darker(0.6) : c;
-      const strongLook = tier === 'high' || (tier === 'mid' && st === 'strong');
-      body.append('circle').attr('class', 'node-core').attr('r', r).attr('fill', fill)
-        .attr('stroke', strongLook ? '#ffe7ba' : 'rgba(255,255,255,0.25)')
-        .attr('stroke-width', selectedId === d.id ? 2.5 : (strongLook ? 1.2 : 0.8))
+      const coreClass = 'node-core'
+        + (st === 'strong' ? ' lit-strong' : (st === 'visible' ? ' lit-visible' : ''));
+      body.append('circle').attr('class', coreClass).attr('r', r).attr('fill', fill)
+        .attr('fill-opacity', st === 'collecting' ? 0.85 : 1)
+        .attr('stroke', st === 'strong' ? '#ffe7ba' : (st === 'visible' ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.25)'))
+        .attr('stroke-width', selectedId === d.id ? 2.5 : (st === 'strong' ? 1.6 : (st === 'visible' ? 1.1 : 0.8)))
         .attr('filter', nodeBloomFilter(d));
       appendNodeLabels(body, d, r);
       appendHitArea(body, d, r);
@@ -1026,10 +1096,10 @@
       svg = d3.select('#graphSvg').attr('viewBox', [0, 0, W, H]);
       const defs = svg.append('defs');
       defs.append('filter').attr('id', 'bloom').html(`
-        <feGaussianBlur stdDeviation="2.5" result="b"/>
+        <feGaussianBlur stdDeviation="3.2" result="b"/>
         <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>`);
       defs.append('filter').attr('id', 'bloomStrong').html(`
-        <feGaussianBlur stdDeviation="3" result="b"/>
+        <feGaussianBlur stdDeviation="4.5" result="b"/>
         <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>`);
       const cg = defs.append('radialGradient').attr('id', 'centerGrad');
       cg.append('stop').attr('offset', '0%').attr('stop-color', '#818cf8');
@@ -1097,11 +1167,15 @@
         })
         .attr('stroke-width', d => {
           const tgt = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          if (tgt?.state === 'strong') return 1.1 + (d.strength || 15) / 70;
+          if (tgt?.state === 'visible') return 0.85 + (d.strength || 15) / 80;
           const vi = tgt?.visualIntensity || 0;
           return vi >= 0.62 ? 0.9 + (d.strength || 15) / 80 : 0.35 + (d.strength || 15) / 90;
         })
         .attr('stroke-opacity', d => {
           const tgt = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          if (tgt?.state === 'strong') return 0.52;
+          if (tgt?.state === 'visible') return 0.32;
           const vi = tgt?.visualIntensity || 0;
           if (vi >= 0.62) return 0.38;
           if (vi >= 0.32) return 0.22;
@@ -1187,7 +1261,7 @@
       g.selectAll('.link-node').classed('highlight', d => {
         if (!selectedId) {
           const tgt = typeof d.target === 'object' ? d.target : null;
-          return !!(tgt && tgt.state === 'strong');
+          return !!(tgt && (tgt.state === 'strong' || tgt.state === 'visible'));
         }
         const s = String(d.source.id || d.source);
         const t = String(d.target.id || d.target);

@@ -13,17 +13,77 @@ public final class GrowthStateEngine {
     private GrowthStateEngine() {
     }
 
-    public static String lightState(int strength, int evidenceCount, int visibleThreshold, int strongThreshold) {
+    /**
+     * 点亮状态：以证据条数为主（与前端进度条一致），strength 仅用于「强烈亮点」的质量加成。
+     */
+    public static String lightState(int strength, int evidenceCount, int requiredCount, int strongThreshold) {
+        int target = normalizeRequired(requiredCount);
         if (evidenceCount < 2) {
             return "locked";
         }
-        if (strength >= strongThreshold) {
+        int strongByCount = (int) Math.ceil(target * 1.2);
+        if (evidenceCount >= target
+                && (evidenceCount >= strongByCount || strength >= normalizeStrongThreshold(strongThreshold))) {
             return "strong";
         }
-        if (strength >= visibleThreshold) {
+        if (evidenceCount >= target) {
             return "visible";
         }
         return "collecting";
+    }
+
+    /** Hub 维度：状态由子能力汇聚，避免「证据满格但仍收集中」 */
+    public static String rollupHubState(
+            List<String> childCodes,
+            Map<String, LearnerGrowthStateEntity> stateByCode,
+            int evidenceCount,
+            int requiredCount) {
+        int target = normalizeRequired(requiredCount <= 0 ? 6 : requiredCount);
+        if (evidenceCount < 2) {
+            return "locked";
+        }
+        int strongChildren = 0;
+        int visibleChildren = 0;
+        for (String cc : childCodes) {
+            LearnerGrowthStateEntity cs = stateByCode.get(cc);
+            if (cs == null) {
+                continue;
+            }
+            String s = String.valueOf(cs.getState());
+            if ("strong".equals(s)) {
+                strongChildren++;
+            }
+            if ("visible".equals(s) || "strong".equals(s)) {
+                visibleChildren++;
+            }
+        }
+        if (strongChildren > 0 && evidenceCount >= target) {
+            return "strong";
+        }
+        if (evidenceCount >= target) {
+            return "visible";
+        }
+        int childTotal = childCodes.size();
+        if (childTotal > 0 && visibleChildren * 2 >= childTotal) {
+            return "visible";
+        }
+        return "collecting";
+    }
+
+    public static String buildSuggest(String state, int evidenceCount, int requiredCount) {
+        int target = normalizeRequired(requiredCount);
+        return switch (String.valueOf(state)) {
+            case "strong" -> "强烈亮点 · 可查看详情并安排亲子活动";
+            case "visible" -> "倾向显现 · 继续观察同场景表现";
+            case "collecting" -> {
+                int remain = target - evidenceCount;
+                yield "收集中 · 再积累 " + Math.max(1, remain) + " 条证据可「显现」";
+            }
+            default -> {
+                int need = Math.max(0, 2 - evidenceCount);
+                yield need > 0 ? "尚未解锁 · 再积累 " + need + " 条证据可开始观测" : "尚未解锁";
+            }
+        };
     }
 
     public static int computeStrength(int evidenceCount, int avgConfidence) {
@@ -62,6 +122,14 @@ public final class GrowthStateEngine {
             st.setVisualTier(visualTier(v));
             intensityByCode.put(tn.getCode(), v);
         }
+    }
+
+    private static int normalizeRequired(int requiredCount) {
+        return Math.max(1, requiredCount <= 0 ? 3 : requiredCount);
+    }
+
+    private static int normalizeStrongThreshold(int strongThreshold) {
+        return strongThreshold <= 0 ? 72 : strongThreshold;
     }
 
     private static int typeLevel(String type) {

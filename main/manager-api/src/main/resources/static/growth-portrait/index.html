@@ -293,12 +293,18 @@
     .summary-card {
       padding: 10px 12px; border-radius: 12px; margin-bottom: 8px;
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
-      cursor: pointer; touch-action: manipulation;
+      touch-action: pan-y;
     }
-    .summary-card:active { background: rgba(255,255,255,0.06); }
     .summary-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
     .summary-card-head strong { font-size: 0.78rem; color: #f0f4ff; font-weight: 600; }
     .summary-card-meta { font-size: 0.62rem; color: #7d8cab; line-height: 1.45; }
+    .summary-card-action {
+      display: inline-flex; align-items: center; gap: 2px;
+      margin-top: 8px; padding: 0; border: none; background: none;
+      font-size: 0.62rem; color: #a5b4fc; cursor: pointer;
+      touch-action: manipulation;
+    }
+    .summary-card-action:active { color: #c7d2fe; }
     .summary-card .mini-bar {
       height: 4px; background: rgba(255,255,255,0.08); border-radius: 999px;
       overflow: hidden; margin-top: 6px;
@@ -485,8 +491,10 @@
     let graphLayoutW = 0, graphLayoutH = 0;
     let graphShell = null;
     let currentZoomTransform = d3.zoomIdentity;
-    let lastNodeTouch = 0;
-    let graphData = { nodes: [], links: [] };
+    let graphTouchMoved = false;
+    let graphMultiTouch = false;
+    let suppressNodeSelectUntil = 0;
+    let userAdjustedZoom = false;
     let pendingToastNode = null;
 
     function parseQuery() {
@@ -709,8 +717,26 @@
       return graphShell ? d3.select(graphShell) : d3.select('#graphSvg');
     }
 
-    function focusOnNode(d) {
+    function cancelPendingFocus() {
+      if (simulation) simulation.on('end.focusNode', null);
+      getZoomSelection().interrupt();
+    }
+
+    function markUserZoom() {
+      userAdjustedZoom = true;
+      cancelPendingFocus();
+    }
+
+    function shouldIgnoreNodeTap() {
+      if (graphMultiTouch) return true;
+      if (Date.now() < suppressNodeSelectUntil) return true;
+      if (graphTouchMoved) return true;
+      return false;
+    }
+
+    function focusOnNode(d, force) {
       if (!zoomBehavior || !layoutNodes.length) return;
+      if (userAdjustedZoom && !force) return;
       const W = graphLayoutW, H = graphLayoutH;
       if (!W || !H) return;
 
@@ -719,11 +745,12 @@
         if (simulation) {
           simulation.on('end.focusNode', () => {
             simulation.on('end.focusNode', null);
-            focusOnNode(d);
+            if (!userAdjustedZoom || force) focusOnNode(d, force);
           });
         }
         return;
       }
+      simulation.on('end.focusNode', null);
 
       let members;
       if (d.type === 'hub') {
@@ -825,6 +852,10 @@
       return `<div class="mini-bar"><span style="width:${pct}%"></span></div>`;
     }
 
+    function summaryCardAction(nodeId) {
+      return `<button type="button" class="summary-card-action" data-node-id="${nodeId}">在星图中查看 ›</button>`;
+    }
+
     function renderSummaryPanel() {
       const panel = document.getElementById('summaryPanel');
       if (!panel) return;
@@ -852,13 +883,14 @@
           ? ` · 还差 ${remain} 条证据可显现`
           : (hub.state === 'visible' ? ' · 维度已显现' : '');
         return `
-          <div class="summary-card" data-node-id="${hub.id}">
+          <div class="summary-card">
             <div class="summary-card-head">
               <strong>${hub.label}</strong>
               ${summaryBadge(hub.state)}
             </div>
             <div class="summary-card-meta">${hubChildSummary(hub)}${prog}</div>
             ${summaryMiniBar(hub)}
+            ${summaryCardAction(hub.id)}
           </div>`;
       }).join('') : '<div class="summary-empty">暂无维度数据</div>';
 
@@ -866,25 +898,27 @@
         const typeName = TYPE_META[n.type]?.badge || n.type;
         const dim = n.cluster ? ` · ${clusterLabel(n.cluster)}` : '';
         return `
-          <div class="summary-card" data-node-id="${n.id}">
+          <div class="summary-card">
             <div class="summary-card-head">
               <strong>${n.label}</strong>
               ${summaryBadge('strong')}
             </div>
             <div class="summary-card-meta">${typeName}${dim} · ${n.suggest || '表现突出'}</div>
+            ${summaryCardAction(n.id)}
           </div>`;
       }).join('') : '<div class="summary-empty">还没有强烈亮点，继续日常互动即可</div>';
 
       const watchCards = watchNodes.length ? watchNodes.map(n => {
         const remain = Math.max(1, (n.requiredCount || 3) - (n.evidenceCount || 0));
         return `
-          <div class="summary-card" data-node-id="${n.id}">
+          <div class="summary-card">
             <div class="summary-card-head">
               <strong>${n.label}</strong>
               ${summaryBadge('collecting')}
             </div>
             <div class="summary-card-meta">${TYPE_META[n.type]?.badge || ''} · 再积累 ${remain} 条证据可显现</div>
             ${summaryMiniBar(n)}
+            ${summaryCardAction(n.id)}
           </div>`;
       }).join('') : '<div class="summary-empty">暂无接近显现的观察点</div>';
 
@@ -916,17 +950,20 @@
           <div class="summary-section-title">值得继续观察</div>
           ${watchCards}
         </div>
-        <div class="summary-foot">💡 无需刻意「刷点亮」，日常和小智聊天、做任务即可。点击条目可跳转到星图查看详情。</div>`;
+        <div class="summary-foot">💡 无需刻意「刷点亮」，日常和小智聊天、做任务即可。需要看详情时点「在星图中查看」。</div>`;
 
-      panel.querySelectorAll('.summary-card[data-node-id]').forEach(card => {
-        bindTap(card, () => jumpToNodeFromSummary(card.dataset.nodeId));
+      panel.querySelectorAll('.summary-card-action[data-node-id]').forEach(btn => {
+        bindTap(btn, (ev) => {
+          ev.stopPropagation();
+          jumpToNodeFromSummary(btn.dataset.nodeId);
+        });
       });
     }
 
     function jumpToNodeFromSummary(nodeId) {
       switchViewMode('graph');
       const node = graphData.nodes.find(n => String(n.id) === String(nodeId));
-      if (node) selectNode(node, true);
+      if (node) selectNode(node, true, { forceFocus: true });
     }
 
     function switchViewMode(mode) {
@@ -1206,7 +1243,8 @@
         .attr('fill', 'rgba(0,0,0,0.001)');
     }
 
-    function selectNode(d, pulse) {
+    function selectNode(d, pulse, opts) {
+      opts = opts || {};
       if (pulse === undefined) pulse = true;
       if (!d || d.type === 'center') {
         selectedId = null;
@@ -1215,12 +1253,19 @@
         return;
       }
       const node = graphData.nodes.find(n => String(n.id) === String(d.id)) || d;
-      selectedId = String(node.id);
+      const nodeId = String(node.id);
+      const isNewSelection = selectedId !== nodeId;
+      if (opts.forceFocus) userAdjustedZoom = false;
+      else if (isNewSelection) userAdjustedZoom = false;
+      selectedId = nodeId;
       showDetail(node);
       updateDimming();
-      if (pulse) {
+      const shouldFocus = (opts.forceFocus || isNewSelection) && opts.focus !== false;
+      if (pulse && (isNewSelection || opts.forceFocus)) {
         pulseSelectedNode(selectedId);
-        focusOnNode(node);
+      }
+      if (shouldFocus) {
+        focusOnNode(node, !!opts.forceFocus);
       }
     }
 
@@ -1298,8 +1343,17 @@
       if (!shell || shell._touchPanBound) return;
       shell._touchPanBound = true;
       let start = null;
-      shell.addEventListener('touchstart', (ev) => {
-        if (ev.touches.length !== 1) return;
+
+      const onTouchStart = (ev) => {
+        if (ev.touches.length >= 2) {
+          graphMultiTouch = true;
+          graphTouchMoved = true;
+          markUserZoom();
+          start = null;
+          return;
+        }
+        graphMultiTouch = false;
+        graphTouchMoved = false;
         const onNode = ev.target.closest && ev.target.closest('.node');
         start = {
           x: ev.touches[0].clientX,
@@ -1309,17 +1363,27 @@
           moved: false,
           onNode: !!onNode
         };
-      }, { passive: true });
-      shell.addEventListener('touchmove', (ev) => {
+      };
+
+      const onTouchMove = (ev) => {
+        if (ev.touches.length >= 2) {
+          graphMultiTouch = true;
+          graphTouchMoved = true;
+          markUserZoom();
+          start = null;
+          return;
+        }
         if (!start || ev.touches.length !== 1) return;
         const dx = ev.touches[0].clientX - start.x;
         const dy = ev.touches[0].clientY - start.y;
         const dist = Math.hypot(dx, dy);
+        if (dist > 8) graphTouchMoved = true;
         if (!start.moved) {
           if (start.onNode && dist < 14) return;
           if (dist < 6) return;
           start.moved = true;
         }
+        markUserZoom();
         ev.preventDefault();
         const t = d3.zoomIdentity
           .translate(start.tx + dx, start.ty + dy)
@@ -1329,8 +1393,23 @@
         getZoomSelection().property('__zoom', t);
         const label = document.getElementById('zoomLabel');
         if (label) label.textContent = Math.round(t.k * 100) + '%';
-      }, { passive: false });
-      shell.addEventListener('touchend', () => { start = null; }, { passive: true });
+      };
+
+      const onTouchEnd = (ev) => {
+        if (graphMultiTouch && ev.touches.length === 0) {
+          suppressNodeSelectUntil = Date.now() + 480;
+          graphMultiTouch = false;
+        }
+        if (ev.touches.length === 0) {
+          setTimeout(() => { graphTouchMoved = false; }, 0);
+        }
+        start = null;
+      };
+
+      shell.addEventListener('touchstart', onTouchStart, { passive: true, capture: true });
+      shell.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+      shell.addEventListener('touchend', onTouchEnd, { passive: true, capture: true });
+      shell.addEventListener('touchcancel', onTouchEnd, { passive: true, capture: true });
     }
 
     function initGraph(restart) {
@@ -1343,7 +1422,7 @@
       graphLayoutW = W;
       graphLayoutH = H;
       layoutSettling = true;
-      currentZoomTransform = d3.zoomIdentity;
+      const savedTransform = restart && currentZoomTransform ? currentZoomTransform : d3.zoomIdentity;
       if (simulation) simulation.stop();
       d3.select('#graphSvg').selectAll('*').remove();
 
@@ -1378,9 +1457,16 @@
           g.attr('transform', ev.transform);
           const label = document.getElementById('zoomLabel');
           if (label) label.textContent = Math.round(ev.transform.k * 100) + '%';
+          if (ev.sourceEvent) markUserZoom();
         });
 
       d3.select(shell).call(zoomBehavior);
+      if (restart && savedTransform && (savedTransform.k !== 1 || savedTransform.x || savedTransform.y)) {
+        d3.select(shell).call(zoomBehavior.transform, savedTransform);
+        currentZoomTransform = savedTransform;
+      } else if (!restart) {
+        currentZoomTransform = d3.zoomIdentity;
+      }
       bindGraphTouchPan(shell);
 
       const nodes = graphData.nodes.map(n => ({ ...n }));
@@ -1446,12 +1532,12 @@
           .on('end', (ev, d) => { if (!ev.active) simulation.alphaTarget(0); if (d.type !== 'center') { d.fx = null; d.fy = null; } })
         )
         .on('click', (ev, d) => {
-          if (Date.now() - lastNodeTouch < 450) return;
+          if (shouldIgnoreNodeTap()) return;
           ev.stopPropagation();
           selectNode(d);
         })
         .on('touchend', (ev, d) => {
-          lastNodeTouch = Date.now();
+          if (shouldIgnoreNodeTap()) return;
           ev.preventDefault();
           ev.stopPropagation();
           selectNode(d);

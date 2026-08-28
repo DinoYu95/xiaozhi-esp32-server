@@ -199,6 +199,8 @@ class ConnectionHandler:
         self._learning_pending_photo_user_text = None
         self.growth_portrait_turns = []
         self.growth_portrait_session_ref = None
+        self.mind_portrait_turns = []
+        self.mind_portrait_session_ref = None
 
         self.timeout_seconds = (
             int(self.config.get("close_connection_no_voice_time", 120)) + 60
@@ -1525,8 +1527,10 @@ class ConnectionHandler:
             if depth == 0:
                 try:
                     from core.growth_portrait.growth_portrait_api_client import append_assistant_turn
+                    from core.mind_portrait.mind_portrait_api_client import append_assistant_turn as append_mind_assistant_turn
 
                     append_assistant_turn(self, text_buff)
+                    append_mind_assistant_turn(self, text_buff)
                 except Exception:
                     pass
         if depth == 0:
@@ -1646,8 +1650,10 @@ class ConnectionHandler:
         try:
             try:
                 from core.growth_portrait.growth_portrait_api_client import flush_session
+                from core.mind_portrait.mind_portrait_api_client import flush_session as flush_mind_session
 
                 flush_session(self)
+                flush_mind_session(self)
             except Exception:
                 pass
 

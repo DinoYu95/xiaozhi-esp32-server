@@ -1,0 +1,1867 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>心绪图谱 · 原型</title>
+  <script src="https://res.wx.qq.com/open/libs/jweixin-1.6.0.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <style>
+    :root {
+      --surface: #fff;
+      --text: #1c2434;
+      --muted: #6b778c;
+      --brand: #6366f1;
+      --graph-bg: #060912;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+      background: var(--graph-bg);
+      color: var(--text);
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+      background: var(--graph-bg);
+    }
+
+    .topbar {
+      padding: 6px 14px 8px;
+      background: linear-gradient(180deg, rgba(14,20,36,0.98), rgba(8,12,22,0.5));
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      flex-shrink: 0;
+    }
+    .topbar-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .topbar h2 { font-size: 0.98rem; color: #f3f6ff; font-weight: 700; }
+    .topbar .meta { font-size: 0.66rem; color: #7d8cab; margin-top: 2px; }
+    .top-actions { display: flex; gap: 6px; align-items: center; }
+    .icon-btn {
+      width: 28px; height: 28px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.05);
+      color: #a5b4fc; font-size: 0.78rem; cursor: pointer;
+      position: relative;
+    }
+    .icon-btn .badge {
+      position: absolute; top: -4px; right: -4px;
+      min-width: 14px; height: 14px; padding: 0 3px;
+      border-radius: 999px; background: #ff4d4f; color: #fff;
+      font-size: 9px; line-height: 14px; text-align: center;
+      font-weight: 700;
+    }
+    .stat-pill {
+      font-size: 0.6rem; padding: 4px 8px; border-radius: 999px;
+      background: rgba(255,184,64,0.12); color: #ffd591;
+      border: 1px solid rgba(255,184,64,0.35);
+    }
+
+
+    .mode-tabs {
+      display: flex; gap: 6px; padding: 8px 12px 0;
+      flex-shrink: 0;
+    }
+    .mode-tabs button {
+      flex: 1; border: none; border-radius: 10px 10px 0 0;
+      padding: 7px 2px; font-size: 0.64rem; cursor: pointer;
+      background: rgba(255,255,255,0.04); color: #7d8cab;
+    }
+    .mode-tabs button.on {
+      background: rgba(99,102,241,0.2); color: #c7d2fe; font-weight: 700;
+    }
+
+    .graph-shell { position: relative; flex: 1; min-height: 0; min-height: 52vh; touch-action: none; }
+    #graphSvg { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+    #graphSvg:active { cursor: grabbing; }
+    .graph-overlay {
+      position: absolute; inset: 0; pointer-events: none; z-index: 2;
+    }
+
+    .float-legend {
+      position: absolute; left: 10px; top: 10px;
+      background: rgba(8,12,22,0.82);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px; padding: 8px 10px;
+      font-size: 0.58rem; color: #9aa8c4;
+      pointer-events: none; backdrop-filter: blur(8px);
+      max-width: 130px; z-index: 1;
+    }
+    .float-legend b { color: #e2e8f0; display: block; margin-bottom: 4px; font-size: 0.62rem; }
+    .float-legend div { margin: 3px 0; display: flex; align-items: center; gap: 5px; }
+    .float-legend i { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    .graph-overlay .corner { position: absolute; font-size: 0.58rem; color: rgba(255,255,255,0.3); padding: 8px; pointer-events: none; }
+    .graph-overlay .tr { top: 0; right: 0; }
+    .zoom-btns { position: absolute; right: 8px; bottom: 8px; display: flex; flex-direction: column; gap: 5px; pointer-events: auto; }
+    .zoom-btns button {
+      width: 30px; height: 30px; border-radius: 9px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(10,14,24,0.88); color: #c5d0e8; cursor: pointer;
+    }
+
+    .help-panel {
+      display: none;
+      padding: 10px 12px;
+      background: rgba(10,14,24,0.95);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      font-size: 0.68rem; color: #9aa8c4;
+      flex-shrink: 0;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+    .help-panel.open { display: block; }
+    .help-panel .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+    .help-panel .dot-sample { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; }
+    .help-panel strong { color: #e2e8f0; font-size: 0.72rem; }
+
+    .notify-toast {
+      position: absolute; left: 12px; right: 12px; top: 12px;
+      background: linear-gradient(135deg, rgba(255,184,64,0.95), rgba(255,140,40,0.92));
+      border-radius: 14px; padding: 10px 12px;
+      color: #1a1208; font-size: 0.72rem;
+      box-shadow: 0 8px 32px rgba(255,159,10,0.35);
+      transform: translateY(-120%); opacity: 0;
+      transition: transform 0.35s cubic-bezier(.2,.8,.2,1), opacity 0.3s;
+      pointer-events: auto; z-index: 10;
+    }
+    .notify-toast.show { transform: translateY(0); opacity: 1; }
+    .notify-toast b { display: block; font-size: 0.78rem; margin-bottom: 3px; }
+    .notify-toast button {
+      margin-top: 6px; border: none; background: rgba(0,0,0,0.15);
+      color: #1a1208; padding: 4px 10px; border-radius: 8px; font-size: 0.65rem; cursor: pointer;
+    }
+
+    .sheet {
+      background: rgba(10,14,24,0.97);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 10px 14px 14px; min-height: 110px;
+      flex-shrink: 0;
+      max-height: 28vh;
+      overflow-y: auto;
+    }
+    .type-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.6rem; font-weight: 600; padding: 2px 8px;
+      border-radius: 6px; margin-bottom: 5px;
+      background: rgba(146,84,222,0.2); color: #d3adf7;
+      border: 1px solid rgba(146,84,222,0.35);
+    }
+    .sheet h3 { font-size: 0.9rem; color: #f0f4ff; margin-bottom: 4px; }
+    .sheet p { font-size: 0.72rem; color: #9aa8c4; }
+    .light-track {
+      margin: 8px 0; padding: 8px 10px;
+      background: rgba(255,255,255,0.04); border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .light-track .label { font-size: 0.62rem; color: #7d8cab; margin-bottom: 4px; }
+    .progress-bar {
+      height: 5px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden;
+    }
+    .progress-bar span {
+      display: block; height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, #597ef7, #ffb020);
+    }
+    .states { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+    .state-chip {
+      font-size: 0.58rem; padding: 2px 6px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.08); color: #6b7a99;
+    }
+    .state-chip.on { border-color: rgba(255,184,64,0.5); color: #ffd591; background: rgba(255,184,64,0.1); }
+    .tip { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08); font-size: 0.7rem; color: #c5d0e8; }
+
+    .link-node { stroke-opacity: 0.12; transition: stroke-opacity 0.3s, stroke-width 0.3s; }
+    .link-node.highlight { stroke-opacity: 0.65 !important; stroke-width: 1.2 !important; }
+    .node { cursor: pointer; transition: opacity 0.35s ease; }
+    .node-body { transform-box: fill-box; transform-origin: center; }
+    .node.dimmed { opacity: 0.1; }
+    .node.selected .node-core { stroke-width: 2.5 !important; }
+    .node-label { fill: rgba(255,255,255,0.72); font-size: 7.5px; pointer-events: none; text-anchor: middle; }
+    .node-label.hub { font-size: 9px; font-weight: 600; fill: rgba(255,255,255,0.95); }
+    .node-label.pending { fill: rgba(255,255,255,0.42); font-size: 7px; }
+    .node-label.hub.pending { fill: rgba(255,255,255,0.72); }
+    .node-label.strong-label { fill: #ffe7ba; font-weight: 700; font-size: 8px; }
+    .node-desc { fill: rgba(255,255,255,0.42); font-size: 6px; pointer-events: none; text-anchor: middle; }
+    .node-desc.pending { fill: rgba(255,255,255,0.28); }
+    .node-type-tag { fill: rgba(255,255,255,0.38); font-size: 6px; text-anchor: middle; }
+
+    @keyframes pulse-strong {
+      0%, 100% { opacity: 0.28; transform: scale(1); }
+      50% { opacity: 0.72; transform: scale(1.18); }
+    }
+    @keyframes pulse-mid {
+      0%, 100% { opacity: 0.2; transform: scale(1); }
+      50% { opacity: 0.55; transform: scale(1.12); }
+    }
+    @keyframes pulse-visible {
+      0%, 100% { opacity: 0.22; transform: scale(1); }
+      50% { opacity: 0.48; transform: scale(1.08); }
+    }
+    @keyframes center-glow {
+      0%, 100% { opacity: 0.35; transform: scale(1); }
+      50% { opacity: 0.9; transform: scale(1.12); }
+    }
+    .halo-strong { animation: pulse-strong 1.8s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+    .halo-strong-2 { animation: pulse-strong 1.8s ease-in-out 0.5s infinite; transform-origin: center; transform-box: fill-box; }
+    .halo-mid { animation: pulse-mid 2.2s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+    .halo-visible { animation: pulse-visible 2.6s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+    .node-core.lit-strong { filter: url(#bloomStrong); }
+    .node-core.lit-visible { filter: url(#bloom); }
+    .center-glow { animation: center-glow 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+
+    .state-overlay {
+      position: fixed; inset: 0; z-index: 100;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: #f7f4ef;
+      padding: 24px;
+      text-align: center;
+    }
+    .state-overlay.hidden { display: none; }
+    .state-overlay h2 { font-size: 1rem; color: #37474f; margin-bottom: 8px; }
+    .state-overlay p { font-size: 0.86rem; color: #78909c; margin-bottom: 16px; line-height: 1.6; }
+    .state-spinner {
+      width: 32px; height: 32px; border: 3px solid rgba(99,102,241,0.2);
+      border-top-color: #6366f1; border-radius: 50%;
+      animation: spin 0.8s linear infinite; margin-bottom: 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .retry-btn {
+      border: none; border-radius: 10px; padding: 10px 24px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: #fff; font-size: 0.86rem; font-weight: 600; cursor: pointer;
+    }
+
+    #app { display: none; flex: 1; flex-direction: column; min-height: 0; }
+    #app.ready { display: flex; }
+    #graphPanel { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; min-height: 52vh; overflow: hidden; }
+    #lightPanel {
+      display: none; flex: 1; flex-direction: column; min-height: 0;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      padding: 12px; background: rgba(10,14,24,0.95);
+      color: #9aa8c4; font-size: 0.72rem;
+    }
+    #lightPanel.active { display: flex; }
+    #summaryPanel {
+      display: none; flex: 1; flex-direction: column; min-height: 0;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      padding: 10px 14px 18px;
+      background: rgba(10,14,24,0.95);
+      color: #9aa8c4; font-size: 0.72rem;
+    }
+    #summaryPanel.active { display: flex; }
+    .summary-hero {
+      padding: 14px 14px 12px;
+      border-radius: 14px;
+      background: linear-gradient(145deg, rgba(99,102,241,0.2), rgba(146,84,222,0.1));
+      border: 1px solid rgba(129,140,248,0.22);
+      margin-bottom: 12px;
+    }
+    .summary-hero .eyebrow { font-size: 0.58rem; color: #8b9cc8; margin-bottom: 4px; }
+    .summary-hero h3 { font-size: 0.92rem; color: #f0f4ff; font-weight: 700; margin-bottom: 6px; }
+    .summary-hero .lead { font-size: 0.72rem; color: #c5d0e8; line-height: 1.6; }
+    .summary-hero .hero-row { display: flex; align-items: baseline; gap: 8px; margin-top: 10px; }
+    .summary-hero .hero-num { font-size: 1.75rem; font-weight: 800; color: #ffd591; line-height: 1; }
+    .summary-hero .hero-num-label { font-size: 0.68rem; color: #ffe7ba; }
+    .summary-stats {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+      margin-bottom: 14px;
+    }
+    .summary-stat {
+      text-align: center; padding: 8px 2px; border-radius: 10px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+    }
+    .summary-stat b { display: block; font-size: 0.95rem; color: #f0f4ff; font-weight: 700; }
+    .summary-stat span { font-size: 0.52rem; color: #7d8cab; line-height: 1.2; }
+    .summary-stat.strong b { color: #ffd591; }
+    .summary-stat.visible b { color: #5cdbd3; }
+    .summary-section { margin-bottom: 14px; }
+    .summary-section-title {
+      font-size: 0.68rem; font-weight: 700; color: #c7d2fe;
+      margin-bottom: 8px; letter-spacing: 0.02em;
+    }
+    .summary-card {
+      padding: 10px 12px; border-radius: 12px; margin-bottom: 8px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+      touch-action: pan-y;
+    }
+    .summary-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .summary-card-head strong { font-size: 0.78rem; color: #f0f4ff; font-weight: 600; }
+    .summary-card-meta { font-size: 0.62rem; color: #7d8cab; line-height: 1.45; }
+    .summary-card-action {
+      display: inline-flex; align-items: center; gap: 2px;
+      margin-top: 8px; padding: 0; border: none; background: none;
+      font-size: 0.62rem; color: #a5b4fc; cursor: pointer;
+      touch-action: manipulation;
+    }
+    .summary-card-action:active { color: #c7d2fe; }
+    .summary-card .mini-bar {
+      height: 4px; background: rgba(255,255,255,0.08); border-radius: 999px;
+      overflow: hidden; margin-top: 6px;
+    }
+    .summary-card .mini-bar span {
+      display: block; height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, #6366f1, #9254de);
+    }
+    .sum-badge {
+      flex-shrink: 0; font-size: 0.52rem; padding: 2px 7px; border-radius: 999px; font-weight: 600;
+    }
+    .sum-badge-strong { background: rgba(255,176,32,0.14); color: #ffd591; border: 1px solid rgba(255,176,32,0.35); }
+    .sum-badge-visible { background: rgba(54,207,201,0.1); color: #5cdbd3; border: 1px solid rgba(54,207,201,0.28); }
+    .sum-badge-collecting { background: rgba(89,126,247,0.1); color: #91caff; border: 1px solid rgba(89,126,247,0.22); }
+    .sum-badge-locked { background: rgba(255,255,255,0.04); color: #6b7a99; border: 1px solid rgba(255,255,255,0.08); }
+    .summary-empty {
+      font-size: 0.68rem; color: #6b7a99; padding: 14px 10px; text-align: center;
+      border-radius: 10px; background: rgba(255,255,255,0.02);
+      border: 1px dashed rgba(255,255,255,0.08); line-height: 1.55;
+    }
+    .summary-foot {
+      margin-top: 4px; padding: 10px 12px; border-radius: 10px;
+      background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.15);
+      font-size: 0.64rem; color: #9aa8c4; line-height: 1.55;
+    }
+    .mode-tabs button { touch-action: manipulation; }
+
+    @media (min-width: 480px) {
+      body.proto-preview { max-width: 390px; margin: 0 auto; box-shadow: 0 0 80px rgba(0,0,0,0.45); }
+    }
+  </style>
+</head>
+<body class="proto-preview">
+  <div id="loadingState" class="state-overlay">
+    <div class="state-spinner"></div>
+    <p>正在加载心绪图谱…</p>
+  </div>
+  <div id="errorState" class="state-overlay hidden">
+    <h2>无法打开心绪图谱</h2>
+    <p id="errorMsg">加载失败</p>
+    <button type="button" class="retry-btn" id="retryBtn">重试</button>
+  </div>
+
+  <div id="app">
+    <div class="screen">
+      <div class="topbar">
+        <div class="topbar-row">
+          <div>
+            <h2>心绪图谱</h2>
+            <div class="meta" id="profileMeta">—</div>
+            <div class="meta" style="margin-top:3px;opacity:0.85">基于对话观察，不构成医学或心理诊断</div>
+          </div>
+          <div class="top-actions">
+            <button type="button" class="icon-btn" id="helpBtn" title="读图说明">?</button>
+            <span class="stat-pill" id="observePill">积极 0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="mode-tabs">
+        <button type="button" class="on" data-mode="graph">心谱</button>
+        <button type="button" data-mode="summary">心绪概览</button>
+        <button type="button" data-mode="light">观察规则</button>
+      </div>
+
+      <div id="graphPanel">
+        <div class="graph-shell">
+          <div class="notify-toast" id="notifyToast">
+            <b id="toastTitle">新信号</b>
+            <span id="toastBody">点击查看依据与亲子建议</span>
+            <button type="button" id="toastView">查看</button>
+          </div>
+          <svg id="graphSvg"></svg>
+          <div class="graph-overlay">
+            <div class="float-legend">
+              <b>节点含义</b>
+              <div style="font-size:0.55rem;color:#6b7a99;margin-bottom:3px">颜色表示层级</div>
+              <div><i style="background:#6366f1;border:2px solid #c7d2fe"></i> 孩子中心</div>
+              <div><i style="background:#9254de;border:2px solid #efdbff"></i> 维度 Hub</div>
+              <div><i style="background:#597ef7"></i> 子能力</div>
+              <div><i style="background:#ffb020;box-shadow:0 0 6px #ffb020"></i> 观测信号</div>
+            </div>
+            <div class="corner tr" id="zoomLabel">100%</div>
+            <div class="zoom-btns">
+              <button type="button" id="zoomIn">+</button>
+              <button type="button" id="zoomOut">−</button>
+              <button type="button" id="zoomReset">◎</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="help-panel" id="helpPanel">
+        <div class="row">
+          <div class="dot-sample" style="background:#9254de;border:3px solid #efdbff"></div>
+          <div><strong>维度 Hub（你圈的大紫圆）</strong><br>6 个心绪维度。证据达标后会<strong style="color:#d3adf7">整圆变亮</strong>，积极信号时金色脉冲。</div>
+        </div>
+        <div class="row">
+          <div class="dot-sample" style="background:#597ef7;width:14px;height:14px;margin:4px"></div>
+          <div><strong>子维度</strong> · 如「挫折恢复」。收集够证据后从灰变亮。</div>
+        </div>
+        <div class="row">
+          <div class="dot-sample" style="background:#ffb020;box-shadow:0 0 8px #ffb020"></div>
+          <div><strong>对话信号</strong> · 最小观察点。积极时会闪，并可能触发家长通知。</div>
+        </div>
+      </div>
+
+      <div id="summaryPanel"></div>
+
+      <div id="lightPanel">
+        <p id="lightIntro" style="margin-bottom:10px;color:#c5d0e8;">心绪不会「一键判定」，而是随与小智互动自动累积观察证据：</p>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="padding:8px 10px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06)">
+            <span style="color:#6b7a99">① 未解锁</span> · 证据 &lt; 2 条 → 灰点
+          </div>
+          <div style="padding:8px 10px;border-radius:10px;background:rgba(89,126,247,0.08);border:1px solid rgba(89,126,247,0.2)">
+            <span style="color:#91caff">② 收集中</span> · 已有互动，未达目标条数 → 蓝灰 + 进度环
+          </div>
+          <div style="padding:8px 10px;border-radius:10px;background:rgba(54,207,201,0.08);border:1px solid rgba(54,207,201,0.2)">
+            <span style="color:#5cdbd3">③ 已显现</span> · 证据达到目标条数 → 常亮
+          </div>
+          <div style="padding:8px 10px;border-radius:10px;background:rgba(255,176,32,0.1);border:1px solid rgba(255,176,32,0.35)">
+            <span style="color:#ffd591">④ 积极信号</span> · 超额达标或表现突出 → <strong style="color:#ffb020">闪烁 + 可通知家长</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet" id="detailSheet"></div>
+    </div>
+  </div>
+
+  <script>
+    /* ── globals for navigation ── */
+    let childId = '';
+    let childName = '孩子';
+    let grade = '1';
+    let token = '';
+    let apiBase = '';
+
+    const TYPE_COLORS = {
+      center: '#6366f1',
+      hub: '#9254de',
+      sub: '#597ef7',
+      signal: '#ffb020'
+    };
+    /** 模块 cluster 仅用于布局分组，不参与节点配色 */
+    const CLUSTER_COLORS = {
+      logic:'#ffb020', create:'#ff7a45', study:'#597ef7', lang:'#9254de',
+      social:'#36cfc9', curious:'#ffc53d', interest:'#ff85c0', meta:'#95de64',
+      motor:'#69c0ff', fine:'#b37feb', math:'#ffd666', focus:'#5cdbd3',
+      read:'#9e86ff', emotion:'#ff9c6e'
+    };
+    const TYPE_META = {
+      center: { badge: '观察中心', desc: '代表孩子本人，所有心绪维度连在这里', color: TYPE_COLORS.center },
+      hub:    { badge: '心绪维度 Hub', desc: '心理适应大方向，如「情绪表达」「压力恢复」', color: TYPE_COLORS.hub },
+      sub:    { badge: '子维度', desc: '维度下的具体表现，如「挫折恢复」「命名感受」', color: TYPE_COLORS.sub },
+      signal: { badge: '对话信号', desc: '来自对话的单条观察线索，是最小的记录单位', color: TYPE_COLORS.signal }
+    };
+    const LIGHT_STATES = [
+      { id: 'locked', label: '未解锁' },
+      { id: 'collecting', label: '收集中' },
+      { id: 'visible', label: '已显现' },
+      { id: 'strong', label: '积极信号' }
+    ];
+    const MIND_DIMS = ['express','recover','self','peer','parent','stable'];
+    const DIM_LABELS = {
+      express:'情绪表达', recover:'压力恢复', self:'自我感受',
+      peer:'同伴互动', parent:'亲子沟通', stable:'状态稳定'
+    };
+    const SUB_TEMPLATES = {
+      express:['命名感受','主动倾诉','非暴力表达','情绪识别'],
+      recover:['挫折恢复','再尝试','求助时机','失败后平复'],
+      self:['自我肯定','接纳失败','合理期待','看到自己的好'],
+      peer:['发起互动','冲突修复','被排斥应对','合作分工'],
+      parent:['分享日常','表达需求','边界沟通','寻求安慰'],
+      stable:['睡眠提及','情绪波动','整体活力','节奏稳定']
+    };
+    const SIGNAL_VERBS = ['对话中','聊天时','游戏时','复盘时'];
+    const SIGNAL_DESC = ['主动表现','反复出现','跨场景','稳定趋势'];
+    const AVATAR_THEME = {
+      preschool: { hair: '#5c4033', skin: '#ffe0c2', accent: '#ffb020' },
+      lower: { hair: '#2d3748', skin: '#ffd9b8', accent: '#36cfc9' },
+      upper: { hair: '#4a3728', skin: '#ffdcb8', accent: '#ffb020' },
+      middle: { hair: '#1a202c', skin: '#f5d0b5', accent: '#818cf8' }
+    };
+    const AGE_BAND_LABELS = {
+      preschool: '幼儿 3–6 岁',
+      lower: '小学 1–2 年级',
+      upper: '小学 3–6 年级',
+      middle: '初中'
+    };
+
+    let currentAgeBand = 'upper';
+    let selectedId = null;
+    let graphMeta = { strongCount: 0, observeDays: 0, weeklyInstantCap: 2 };
+    let layoutSettling = false;
+    let svg, g, zoomBehavior, simulation, layoutNodes = [], nodeSelection = null;
+    let graphLayoutW = 0, graphLayoutH = 0;
+    let graphShell = null;
+    let currentZoomTransform = d3.zoomIdentity;
+    let graphTouchMoved = false;
+    let graphMultiTouch = false;
+    let suppressNodeSelectUntil = 0;
+    let userAdjustedZoom = false;
+    let pendingToastNode = null;
+
+    function parseQuery() {
+      const q = {};
+      const s = window.location.search.slice(1);
+      if (!s) return q;
+      s.split('&').forEach(pair => {
+        const eq = pair.indexOf('=');
+        if (eq < 0) {
+          q[decodeURIComponent(pair)] = '';
+        } else {
+          q[decodeURIComponent(pair.slice(0, eq))] = decodeURIComponent(pair.slice(eq + 1));
+        }
+      });
+      return q;
+    }
+
+    function deriveApiBase() {
+      const path = window.location.pathname || '';
+      for (const marker of ['/static/mind-portrait/', '/static/growth-portrait/']) {
+        const idx = path.indexOf(marker);
+        if (idx >= 0) return window.location.origin + path.slice(0, idx);
+      }
+      return window.location.origin;
+    }
+
+    function miniNavigate(url) {
+      if (window.wx && wx.miniProgram && wx.miniProgram.navigateTo) {
+        wx.miniProgram.navigateTo({ url });
+      }
+    }
+
+    function showLoading() {
+      document.getElementById('loadingState').classList.remove('hidden');
+      document.getElementById('errorState').classList.add('hidden');
+      document.getElementById('app').classList.remove('ready');
+    }
+
+    function showError(msg) {
+      document.getElementById('loadingState').classList.add('hidden');
+      document.getElementById('errorState').classList.remove('hidden');
+      document.getElementById('errorMsg').textContent = msg || '加载失败';
+      document.getElementById('app').classList.remove('ready');
+    }
+
+    function showApp() {
+      document.getElementById('loadingState').classList.add('hidden');
+      document.getElementById('errorState').classList.add('hidden');
+      document.getElementById('app').classList.add('ready');
+    }
+
+    const TYPE_ALIASES = {
+      dimension: 'hub', dimension_hub: 'hub', hub_node: 'hub',
+      sub_ability: 'sub', ability: 'sub', subability: 'sub',
+      signal_node: 'signal', evidence: 'signal'
+    };
+
+    function inferNodeType(n) {
+      let t = String(n.type ?? n.nodeType ?? '').toLowerCase();
+      if (TYPE_ALIASES[t]) t = TYPE_ALIASES[t];
+      if (t === '1') t = 'hub';
+      if (t === '2') t = 'sub';
+      if (t === '3') t = 'signal';
+      if (!['center', 'hub', 'sub', 'signal'].includes(t)) {
+        const lv = Number(n.level);
+        if (lv === 1) t = 'hub';
+        else if (lv === 2) t = 'sub';
+        else if (lv === 3) t = 'signal';
+        else if (/^hub[-_]/i.test(n.id)) t = 'hub';
+        else if (/^sig[-_]/i.test(n.id)) t = 'signal';
+        else if (/^sub[-_]/i.test(n.id)) t = 'sub';
+        else if (n.parentSub) t = 'signal';
+        else if (n.parentHub) t = 'sub';
+      }
+      return t || 'sub';
+    }
+
+    function normalizeNode(raw) {
+      const n = { ...raw };
+      n.id = String(n.id ?? n.nodeCode ?? n.code ?? '').trim();
+      n.type = inferNodeType(n);
+      if (n.type === 'hub' && !n.level) n.level = 1;
+      if (n.type === 'sub' && !n.level) n.level = 2;
+      if (n.type === 'signal' && !n.level) n.level = 3;
+      n.strength = Number(n.strength) || 0;
+      n.evidenceCount = Number(n.evidenceCount) || 0;
+      n.requiredCount = Number(n.requiredCount) || 0;
+      n.state = n.state || 'locked';
+      n.parentHub = String(n.parentHub || n.parentHubCode || n.parentId || '').trim();
+      n.parentSub = String(n.parentSub || n.parentSubCode || '').trim();
+      if (n.parentHub === 'undefined') n.parentHub = '';
+      if (n.parentSub === 'undefined') n.parentSub = '';
+      return n;
+    }
+
+    function ensureTreeLinks(nodes, links) {
+      const has = new Set(links.map(l => `${l.source}|${l.target}`));
+      const add = (source, target, strength) => {
+        if (!source || !target || source === target) return;
+        const key = `${source}|${target}`;
+        if (has.has(key)) return;
+        has.add(key);
+        links.push({ source, target, strength: strength || 25 });
+      };
+      nodes.filter(n => n.type === 'sub' && n.parentHub).forEach(n => add(n.parentHub, n.id, 42));
+      nodes.filter(n => n.type === 'signal' && n.parentSub).forEach(n => add(n.parentSub, n.id, 28));
+      nodes.filter(n => n.type === 'signal' && !n.parentSub && n.parentHub).forEach(n => add(n.parentHub, n.id, 22));
+      return links;
+    }
+
+    function mapApiToGraph(data) {
+      const centerNode = {
+        id: 'center',
+        type: 'center',
+        label: data.center?.label || childName,
+        shortDesc: data.center?.shortDesc || '观察枢纽',
+        avatarUrl: data.center?.avatarUrl || '',
+        cluster: 'center',
+        strength: 0,
+        level: 0,
+        evidenceCount: 0,
+        requiredCount: 0,
+        state: 'visible'
+      };
+      const apiNodes = (data.nodes || [])
+        .map(normalizeNode)
+        .filter(n => n.id && n.type !== 'center' && n.id !== 'center');
+      const nodes = [centerNode, ...apiNodes];
+      const nodeIds = new Set(nodes.map(n => n.id));
+      let links = (data.links || []).map(l => {
+        const source = typeof l.source === 'object' ? l.source.id : l.source;
+        const target = typeof l.target === 'object' ? l.target.id : l.target;
+        return { source: String(source), target: String(target), strength: l.strength || 20 };
+      }).filter(l => nodeIds.has(l.source) && nodeIds.has(l.target));
+      links = ensureTreeLinks(nodes, links);
+      const hubNodes = nodes.filter(n => n.type === 'hub');
+      const linkedHubs = new Set();
+      links.forEach(l => {
+        const sid = typeof l.source === 'object' ? l.source.id : l.source;
+        const tid = typeof l.target === 'object' ? l.target.id : l.target;
+        if (sid === 'center') linkedHubs.add(tid);
+        if (tid === 'center') linkedHubs.add(sid);
+      });
+      hubNodes.forEach(hub => {
+        if (!linkedHubs.has(hub.id)) {
+          links.push({ source: 'center', target: hub.id, strength: (hub.strength || 50) * 0.55 });
+        }
+      });
+      applyVisualHierarchy(nodes);
+      return { nodes, links };
+    }
+
+    /** 点亮渲染：以 state 为主（用户能看懂），visualIntensity 仅作辅助 */
+    function stateDisplayVisual(state, type) {
+      switch (state) {
+        case 'strong':
+          return { tier: 'high', intensity: type === 'hub' ? 0.92 : 0.78 };
+        case 'visible':
+          return { tier: 'mid', intensity: type === 'hub' ? 0.68 : 0.52 };
+        case 'collecting':
+          return { tier: 'low', intensity: 0.16 };
+        default:
+          return { tier: 'none', intensity: 0 };
+      }
+    }
+
+    function displayVisualForNode(d) {
+      const st = d.state || 'locked';
+      const fromState = stateDisplayVisual(st, d.type);
+      const backendTier = d.visualTier || 'none';
+      const rank = { none: 0, low: 1, mid: 2, high: 3 };
+      const pickTier = rank[fromState.tier] >= rank[backendTier] ? fromState.tier : backendTier;
+      const intensity = Math.max(fromState.intensity, Number(d.visualIntensity) || 0);
+      return { tier: pickTier, intensity };
+    }
+
+    function nodeColor(d) {
+      if (!d) return TYPE_COLORS.sub;
+      return TYPE_COLORS[d.type] || TYPE_COLORS.sub;
+    }
+
+    function clusterLabel(cluster) {
+      return DIM_LABELS[cluster] || cluster || '';
+    }
+
+    function getParentNode(n, byId) {
+      if (n.parentSub) return byId[n.parentSub];
+      if (n.parentHub) return byId[n.parentHub];
+      return null;
+    }
+
+    /** 视觉亮度：业务上可为「强烈」，但渲染强度受层级约束，子 ≤ 父 */
+    function applyVisualHierarchy(nodes) {
+      const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+      const TYPE_CAP = { center: 0, hub: 1, sub: 0.72, signal: 0.4 };
+      const STATE_BASE = { strong: 1, visible: 0.52, collecting: 0.12, locked: 0 };
+      [...nodes].sort((a, b) => a.level - b.level).forEach(n => {
+        let v = (STATE_BASE[n.state] || 0) * (TYPE_CAP[n.type] ?? 0.5);
+        const parent = getParentNode(n, byId);
+        if (parent && parent.type !== 'center') {
+          v = Math.min(v, (parent.visualIntensity || 0) * 0.92);
+        }
+        n.visualIntensity = v;
+        n.visualTier = v >= 0.62 ? 'high' : (v >= 0.32 ? 'mid' : (v > 0.08 ? 'low' : 'none'));
+      });
+    }
+
+    function getHubClusters() {
+      const seen = new Set();
+      const clusters = [];
+      graphData.nodes.filter(n => n.type === 'hub').forEach(h => {
+        if (h.cluster && !seen.has(h.cluster)) {
+          seen.add(h.cluster);
+          clusters.push(h.cluster);
+        }
+      });
+      return clusters;
+    }
+
+    function getZoomSelection() {
+      return graphShell ? d3.select(graphShell) : d3.select('#graphSvg');
+    }
+
+    function cancelPendingFocus() {
+      if (simulation) simulation.on('end.focusNode', null);
+      getZoomSelection().interrupt();
+    }
+
+    function markUserZoom() {
+      userAdjustedZoom = true;
+      cancelPendingFocus();
+    }
+
+    function shouldIgnoreNodeTap() {
+      if (graphMultiTouch) return true;
+      if (Date.now() < suppressNodeSelectUntil) return true;
+      if (graphTouchMoved) return true;
+      return false;
+    }
+
+    function focusOnNode(d, force) {
+      if (!zoomBehavior || !layoutNodes.length) return;
+      if (userAdjustedZoom && !force) return;
+      const W = graphLayoutW, H = graphLayoutH;
+      if (!W || !H) return;
+
+      const layoutNode = layoutNodes.find(n => String(n.id) === String(d.id));
+      if (!layoutNode || layoutNode.x == null || isNaN(layoutNode.x)) {
+        if (simulation) {
+          simulation.on('end.focusNode', () => {
+            simulation.on('end.focusNode', null);
+            if (!userAdjustedZoom || force) focusOnNode(d, force);
+          });
+        }
+        return;
+      }
+      simulation.on('end.focusNode', null);
+
+      let members;
+      if (d.type === 'hub') {
+        members = layoutNodes.filter(n => n.cluster === d.cluster);
+      } else if (d.type === 'sub' || d.type === 'signal') {
+        const conn = getConnectedIds(String(d.id));
+        members = layoutNodes.filter(n =>
+          conn.has(String(n.id)) || (n.cluster === d.cluster && n.type !== 'center')
+        );
+      } else {
+        members = [layoutNode];
+      }
+
+      const xs = members.map(n => n.x).filter(v => v != null && !isNaN(v));
+      const ys = members.map(n => n.y).filter(v => v != null && !isNaN(v));
+      if (!xs.length) { xs.push(layoutNode.x); ys.push(layoutNode.y); }
+
+      const cx = (d3.min(xs) + d3.max(xs)) / 2;
+      const cy = (d3.min(ys) + d3.max(ys)) / 2;
+      const spread = Math.max(d3.max(xs) - d3.min(xs), d3.max(ys) - d3.min(ys), 60);
+
+      const viewMin = Math.min(W, H);
+      let scale;
+      if (d.type === 'signal') {
+        scale = Math.min(2.8, Math.max(1.6, (viewMin * 0.55) / spread));
+      } else if (d.type === 'sub') {
+        scale = Math.min(2.4, Math.max(1.45, (viewMin * 0.62) / spread));
+      } else if (d.type === 'hub') {
+        scale = Math.min(2.0, Math.max(1.25, (viewMin * 0.72) / spread));
+      } else {
+        scale = Math.min(2.2, Math.max(1.3, (viewMin * 0.65) / spread));
+      }
+
+      const tx = W / 2 - cx * scale;
+      const ty = H / 2 - cy * scale;
+      getZoomSelection()
+        .transition().duration(520).ease(d3.easeCubicInOut)
+        .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+    }
+
+    const STATE_LABELS = {
+      locked: '待观测', collecting: '收集中', visible: '已显现', strong: '积极信号'
+    };
+    const STATE_ORDER = { strong: 0, visible: 1, collecting: 2, locked: 3 };
+
+    function renderLightRules() {
+      const days = graphMeta.observeDays || 0;
+      const cap = graphMeta.weeklyInstantCap || 2;
+      const intro = document.getElementById('lightIntro');
+      if (intro) {
+        intro.textContent = days
+          ? `心绪不会「一键判定」，而是随与小智互动自动累积观察证据（已观测 ${days} 天，每周最多 ${cap} 条即时通知）：`
+          : `心绪不会「一键判定」，而是随与小智互动自动累积观察证据（每周最多 ${cap} 条即时通知）：`;
+      }
+    }
+
+    function countByState(nodes) {
+      return {
+        strong: nodes.filter(n => n.state === 'strong').length,
+        visible: nodes.filter(n => n.state === 'visible').length,
+        collecting: nodes.filter(n => n.state === 'collecting').length,
+        locked: nodes.filter(n => n.state === 'locked').length
+      };
+    }
+
+    function hubChildSummary(hub) {
+      const subs = graphData.nodes.filter(n => n.parentHub === hub.id && n.type === 'sub');
+      const st = countByState(subs);
+      const parts = [];
+      if (st.strong) parts.push(`${st.strong} 个积极信号`);
+      if (st.visible) parts.push(`${st.visible} 个已显现`);
+      if (st.collecting) parts.push(`${st.collecting} 个收集中`);
+      if (!parts.length) return subs.length ? `${subs.length} 个子维度待观测` : '暂无子维度数据';
+      return parts.join(' · ');
+    }
+
+    function buildSummaryLead(stats, hubs) {
+      const strongHubs = hubs.filter(h => h.state === 'strong').map(h => h.label);
+      const visibleHubs = hubs.filter(h => h.state === 'visible').map(h => h.label);
+      const names = [...strongHubs, ...visibleHubs].slice(0, 3);
+      if (stats.strong > 0 && names.length) {
+        return `孩子在「${names.join('」「')}」等维度表现突出，继续日常互动即可积累更多证据。`;
+      }
+      if (stats.visible > 0) {
+        return `已有 ${stats.visible} 处心绪倾向显现，心谱正在慢慢清晰。`;
+      }
+      if (stats.collecting > 0) {
+        return `已有 ${stats.collecting} 处正在观察中，和小智多聊相关话题会加快显现。`;
+      }
+      return '心谱刚刚开始记录，继续和小智聊天、做任务，证据会自动累积。';
+    }
+
+    function summaryBadge(state) {
+      return `<span class="sum-badge sum-badge-${state}">${STATE_LABELS[state] || state}</span>`;
+    }
+
+    function summaryMiniBar(node) {
+      const pct = evidenceProgressPct(node);
+      return `<div class="mini-bar"><span style="width:${pct}%"></span></div>`;
+    }
+
+    function summaryCardAction(nodeId) {
+      return `<button type="button" class="summary-card-action" data-node-id="${nodeId}">在心谱中查看 ›</button>`;
+    }
+
+    function renderSummaryPanel() {
+      const panel = document.getElementById('summaryPanel');
+      if (!panel) return;
+      const nodes = (graphData.nodes || []).filter(n => n.type !== 'center');
+      const hubs = nodes.filter(n => n.type === 'hub')
+        .sort((a, b) => (STATE_ORDER[a.state] ?? 9) - (STATE_ORDER[b.state] ?? 9)
+          || (b.evidenceCount || 0) - (a.evidenceCount || 0));
+      const stats = countByState(nodes);
+      const days = graphMeta.observeDays || 0;
+      const bandLabel = AGE_BAND_LABELS[currentAgeBand] || currentAgeBand;
+
+      const strongNodes = nodes.filter(n => n.state === 'strong' && n.type !== 'hub')
+        .sort((a, b) => (b.evidenceCount || 0) - (a.evidenceCount || 0));
+      const watchNodes = nodes.filter(n => n.state === 'collecting' && n.type !== 'hub' && (n.evidenceCount || 0) >= 2)
+        .sort((a, b) => {
+          const ra = (a.evidenceCount || 0) / Math.max(1, a.requiredCount || 3);
+          const rb = (b.evidenceCount || 0) / Math.max(1, b.requiredCount || 3);
+          return rb - ra;
+        })
+        .slice(0, 5);
+
+      const hubCards = hubs.length ? hubs.map(hub => {
+        const remain = Math.max(0, (hub.requiredCount || 6) - (hub.evidenceCount || 0));
+        const prog = hub.state === 'collecting' && remain > 0
+          ? ` · 还差 ${remain} 条证据可显现`
+          : (hub.state === 'visible' ? ' · 维度已显现' : '');
+        return `
+          <div class="summary-card">
+            <div class="summary-card-head">
+              <strong>${hub.label}</strong>
+              ${summaryBadge(hub.state)}
+            </div>
+            <div class="summary-card-meta">${hubChildSummary(hub)}${prog}</div>
+            ${summaryMiniBar(hub)}
+            ${summaryCardAction(hub.id)}
+          </div>`;
+      }).join('') : '<div class="summary-empty">暂无维度数据</div>';
+
+      const strongCards = strongNodes.length ? strongNodes.slice(0, 6).map(n => {
+        const typeName = TYPE_META[n.type]?.badge || n.type;
+        const dim = n.cluster ? ` · ${clusterLabel(n.cluster)}` : '';
+        return `
+          <div class="summary-card">
+            <div class="summary-card-head">
+              <strong>${n.label}</strong>
+              ${summaryBadge('strong')}
+            </div>
+            <div class="summary-card-meta">${typeName}${dim} · ${n.suggest || '表现突出'}</div>
+            ${summaryCardAction(n.id)}
+          </div>`;
+      }).join('') : '<div class="summary-empty">还没有积极信号，继续日常互动即可</div>';
+
+      const watchCards = watchNodes.length ? watchNodes.map(n => {
+        const remain = Math.max(1, (n.requiredCount || 3) - (n.evidenceCount || 0));
+        return `
+          <div class="summary-card">
+            <div class="summary-card-head">
+              <strong>${n.label}</strong>
+              ${summaryBadge('collecting')}
+            </div>
+            <div class="summary-card-meta">${TYPE_META[n.type]?.badge || ''} · 再积累 ${remain} 条证据可显现</div>
+            ${summaryMiniBar(n)}
+            ${summaryCardAction(n.id)}
+          </div>`;
+      }).join('') : '<div class="summary-empty">暂无接近显现的观察点</div>';
+
+      panel.innerHTML = `
+        <div class="summary-hero">
+          <div class="eyebrow">${childName} · ${bandLabel}${days ? ` · 已观测 ${days} 天` : ''}</div>
+          <h3>心绪概览</h3>
+          <p class="lead">${buildSummaryLead(stats, hubs)}</p>
+          <div class="hero-row">
+            <span class="hero-num">${stats.strong}</span>
+            <span class="hero-num-label">个积极信号</span>
+          </div>
+        </div>
+        <div class="summary-stats">
+          <div class="summary-stat strong"><b>${stats.strong}</b><span>积极信号</span></div>
+          <div class="summary-stat visible"><b>${stats.visible}</b><span>已显现</span></div>
+          <div class="summary-stat"><b>${stats.collecting}</b><span>收集中</span></div>
+          <div class="summary-stat"><b>${stats.locked}</b><span>待观测</span></div>
+        </div>
+        <div class="summary-section">
+          <div class="summary-section-title">各维度进展</div>
+          ${hubCards}
+        </div>
+        <div class="summary-section">
+          <div class="summary-section-title">近期积极信号</div>
+          ${strongCards}
+        </div>
+        <div class="summary-section">
+          <div class="summary-section-title">值得继续观察</div>
+          ${watchCards}
+        </div>
+        <div class="summary-foot">💡 无需刻意「刷记录」，日常和小智聊天、做任务即可。需要看详情时点「在星图中查看」。</div>`;
+
+      panel.querySelectorAll('.summary-card-action[data-node-id]').forEach(btn => {
+        bindTap(btn, (ev) => {
+          ev.stopPropagation();
+          jumpToNodeFromSummary(btn.dataset.nodeId);
+        });
+      });
+    }
+
+    function jumpToNodeFromSummary(nodeId) {
+      switchViewMode('graph');
+      const node = graphData.nodes.find(n => String(n.id) === String(nodeId));
+      if (node) selectNode(node, true, { forceFocus: true });
+    }
+
+    function switchViewMode(mode) {
+      const isGraph = mode === 'graph';
+      const isSummary = mode === 'summary';
+      const isLight = mode === 'light';
+      document.querySelectorAll('.mode-tabs button').forEach(b => {
+        b.classList.toggle('on', b.dataset.mode === mode);
+      });
+      document.getElementById('graphPanel').style.display = isGraph ? 'flex' : 'none';
+      document.getElementById('summaryPanel').classList.toggle('active', isSummary);
+      document.getElementById('lightPanel').classList.toggle('active', isLight);
+      document.getElementById('detailSheet').style.display = isGraph ? 'block' : 'none';
+      document.getElementById('helpPanel').classList.remove('open');
+      if (isSummary) renderSummaryPanel();
+      if (isGraph && layoutNodes.length) {
+        requestAnimationFrame(() => initGraph(true));
+      }
+    }
+
+    function updateMeta() {
+      const bandLabel = AGE_BAND_LABELS[currentAgeBand] || currentAgeBand;
+      const days = graphMeta.observeDays || '—';
+      const total = graphData.nodes ? graphData.nodes.length : 0;
+      document.getElementById('profileMeta').textContent = `${childName} · ${bandLabel} · 观测 ${days} 天 · ${total} 节点`;
+      document.getElementById('observePill').textContent = `积极 ${graphMeta.strongCount || 0}`;
+    }
+
+    function evidenceProgressLabel(node) {
+      const count = Number(node.evidenceCount) || 0;
+      const target = Math.max(1, Number(node.requiredCount) || 3);
+      if (count >= target) {
+        return count > target
+          ? `证据 ${count} 条 · 已达标（目标 ${target}）`
+          : `证据 ${count}/${target} 条 · 已达标`;
+      }
+      return `证据 ${count}/${target} 条`;
+    }
+
+    function evidenceProgressPct(node) {
+      const count = Number(node.evidenceCount) || 0;
+      const target = Math.max(1, Number(node.requiredCount) || 3);
+      return Math.min(100, Math.round((Math.min(count, target) / target) * 100));
+    }
+
+    function showDetail(node) {
+      const sheet = document.getElementById('detailSheet');
+      if (!node || node.type === 'center') {
+        sheet.innerHTML = '<p style="color:#6b7a99;font-size:0.74rem;">点击任意节点 · <strong style="color:#d3adf7">大紫圆=心绪维度</strong> · 金闪=积极信号</p>';
+        return;
+      }
+      const meta = TYPE_META[node.type];
+      const pct = evidenceProgressPct(node);
+      const dimHint = node.cluster && node.type !== 'center'
+        ? `<p style="margin:4px 0 0;font-size:0.68rem;color:#8b9cc8">所属维度 · ${clusterLabel(node.cluster)}</p>`
+        : '';
+      const statesHtml = LIGHT_STATES.map(s =>
+        `<span class="state-chip ${s.id === node.state ? 'on' : ''}">${s.label}</span>`
+      ).join('');
+      sheet.innerHTML = `
+        <span class="type-badge" style="background:${meta.color}22;color:${meta.color};border-color:${meta.color}55">${meta.badge}</span>
+        <h3>${node.label}</h3>
+        <p>${meta.desc}</p>
+        ${dimHint}
+        <div class="light-track">
+          <div class="label">点亮进度 · ${evidenceProgressLabel(node)}</div>
+          <div class="progress-bar"><span style="width:${pct}%"></span></div>
+          <div class="states">${statesHtml}</div>
+        </div>
+        <p style="margin-top:6px">${node.evidence || ''}</p>
+        <div class="tip">${node.suggest || ''}</div>`;
+    }
+
+    function nodeStrength(d) {
+      return Number(d && d.strength) || 0;
+    }
+
+    function nodeRadius(d) {
+      const s = nodeStrength(d);
+      if (d.type === 'center') return 32;
+      if (d.type === 'hub') return Math.max(14, 13 + s / 12);
+      if (d.type === 'sub') return Math.max(6, 5 + s / 16);
+      return Math.max(4.5, 4 + s / 18);
+    }
+
+    function appendNodeLabels(el, d, r) {
+      if (d.type === 'center') return;
+      const main = d.shortLabel || d.label;
+      if (!main) return;
+      const st = d.state || 'locked';
+      const desc = d.shortDesc || (st === 'locked' ? '待观测' : (st === 'visible' ? '已显现' : (st === 'strong' ? '积极信号' : '')));
+      const isStrongLook = st === 'strong';
+      const isVisibleLook = st === 'visible';
+      const isPending = st === 'locked' || st === 'collecting';
+      const labelClass = 'node-label'
+        + (d.type === 'hub' ? ' hub' : '')
+        + (isStrongLook ? ' strong-label' : '')
+        + (isPending ? ' pending' : '');
+      const text = d.type === 'signal' && main.length > 6 ? main.slice(0, 6) : main;
+      el.append('text').attr('class', labelClass).attr('dy', r + 11).text(text);
+      if (desc) {
+        el.append('text').attr('class', 'node-desc' + (isPending ? ' pending' : '') + (isVisibleLook ? ' visible-desc' : ''))
+          .attr('dy', r + 19)
+          .attr('fill', isStrongLook ? '#ffe7ba' : (isVisibleLook ? 'rgba(255,255,255,0.62)' : null))
+          .text(desc.length > 10 ? desc.slice(0, 10) + '…' : desc);
+      }
+    }
+
+    function drawPendingNode(el, d, r, c) {
+      el.append('circle').attr('r', r + (d.type === 'hub' ? 5 : 2.5)).attr('fill', 'none')
+        .attr('stroke', c).attr('stroke-opacity', d.type === 'hub' ? 0.38 : 0.32)
+        .attr('stroke-width', d.type === 'hub' ? 2 : 1)
+        .attr('stroke-dasharray', d.type === 'hub' ? null : '3 4');
+      el.append('circle').attr('class', 'node-core').attr('r', r)
+        .attr('fill', c).attr('fill-opacity', d.type === 'hub' ? 0.48 : 0.34)
+        .attr('stroke', d.type === 'hub' ? '#efdbff' : c)
+        .attr('stroke-opacity', d.type === 'hub' ? 0.75 : 0.55)
+        .attr('stroke-width', d.type === 'hub' ? 2.2 : 1);
+      if (d.type === 'hub') {
+        el.append('text').attr('class', 'node-type-tag').attr('dy', -r - 6).text('维度');
+      }
+      appendNodeLabels(el, d, r);
+    }
+
+    function addNodeGlow(el, r, c, d) {
+      const st = d.state || 'locked';
+      const { tier, intensity } = displayVisualForNode(d);
+      if (tier === 'none' || st === 'locked') return;
+
+      if (st === 'strong' || tier === 'high') {
+        el.append('circle').attr('r', r + (d.type === 'hub' ? 10 : 7)).attr('fill', c)
+          .attr('opacity', 0.22 + intensity * 0.18).attr('class', 'halo-strong');
+        el.append('circle').attr('r', r + (d.type === 'hub' ? 14 : 10)).attr('fill', st === 'strong' ? '#ffe7ba' : c)
+          .attr('opacity', d.type === 'hub' ? 0.12 : 0.08).attr('class', 'halo-strong-2');
+        return;
+      }
+      if (st === 'visible' || tier === 'mid') {
+        el.append('circle').attr('r', r + (d.type === 'hub' ? 8 : 5)).attr('fill', c)
+          .attr('opacity', 0.16 + intensity * 0.2).attr('class', 'halo-mid');
+        el.append('circle').attr('r', r + (d.type === 'hub' ? 11 : 7)).attr('fill', c)
+          .attr('opacity', 0.08).attr('class', 'halo-visible');
+        return;
+      }
+      el.append('circle').attr('r', r + 3).attr('fill', c).attr('opacity', 0.1 + intensity * 0.15);
+    }
+
+    function nodeBloomFilter(d) {
+      const st = d.state || 'locked';
+      if (st === 'strong') return d.type === 'hub' ? 'url(#bloomStrong)' : 'url(#bloomStrong)';
+      if (st === 'visible') return 'url(#bloom)';
+      const { tier } = displayVisualForNode(d);
+      if (tier === 'high' && d.type === 'hub') return 'url(#bloomStrong)';
+      if (tier === 'high' || tier === 'mid') return 'url(#bloom)';
+      return null;
+    }
+
+    function drawCenterAvatar(el, d) {
+      const R = 32;
+      const theme = AVATAR_THEME[currentAgeBand] || AVATAR_THEME.upper;
+      el.append('circle').attr('r', R + 18).attr('fill', theme.accent).attr('opacity', 0.12).attr('class', 'center-glow');
+      el.append('circle').attr('r', R + 10).attr('fill', 'none').attr('stroke', theme.accent)
+        .attr('stroke-width', 2).attr('stroke-opacity', 0.55).attr('class', 'center-glow');
+      el.append('circle').attr('r', R + 3).attr('fill', '#0f1628').attr('stroke', '#c7d2fe').attr('stroke-width', 2.5);
+
+      if (d.avatarUrl) {
+        const clipId = 'avatarClip_' + d.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const rootSvg = el.node().ownerSVGElement;
+        let defs = d3.select(rootSvg).select('defs');
+        if (defs.empty()) defs = d3.select(rootSvg).append('defs');
+        defs.selectAll('#' + clipId).remove();
+        defs.append('clipPath').attr('id', clipId)
+          .append('circle').attr('r', R - 5);
+        el.append('image')
+          .attr('href', d.avatarUrl)
+          .attr('x', -(R - 5))
+          .attr('y', -(R - 5))
+          .attr('width', (R - 5) * 2)
+          .attr('height', (R - 5) * 2)
+          .attr('clip-path', 'url(#' + clipId + ')')
+          .attr('preserveAspectRatio', 'xMidYMid slice');
+      } else {
+        const av = el.append('g').attr('class', 'avatar-face');
+        av.append('circle').attr('cy', 3).attr('r', R - 5).attr('fill', theme.skin);
+        av.append('path').attr('d', `M ${-R+6},${-2} Q ${-R+2},${-R+2} 0,${-R+4} Q ${R-2},${-R+2} ${R-6},${-2} Z`)
+          .attr('fill', theme.hair);
+        av.append('path').attr('d', `M ${-R+8},${-4} Q ${-10},${-8} ${-4},${-6} Q ${-14},${2} ${-R+10},${8} Z`)
+          .attr('fill', theme.hair).attr('opacity', 0.95);
+        av.append('path').attr('d', `M ${R-8},${-4} Q ${10},${-8} ${4},${-6} Q ${14},${2} ${R-10},${8} Z`)
+          .attr('fill', theme.hair).attr('opacity', 0.95);
+        av.append('ellipse').attr('cx', -9).attr('cy', 4).attr('rx', 3.5).attr('ry', 4.5).attr('fill', '#2d3748');
+        av.append('ellipse').attr('cx', 9).attr('cy', 4).attr('rx', 3.5).attr('ry', 4.5).attr('fill', '#2d3748');
+        av.append('circle').attr('cx', -8).attr('cy', 2).attr('r', 1.2).attr('fill', '#fff');
+        av.append('circle').attr('cx', 10).attr('cy', 2).attr('r', 1.2).attr('fill', '#fff');
+        av.append('ellipse').attr('cx', -12).attr('cy', 10).attr('rx', 4).attr('ry', 2.2).attr('fill', '#ffb4a2').attr('opacity', 0.55);
+        av.append('ellipse').attr('cx', 12).attr('cy', 10).attr('rx', 4).attr('ry', 2.2).attr('fill', '#ffb4a2').attr('opacity', 0.55);
+        av.append('path').attr('d', 'M -7,14 Q 0,20 7,14').attr('fill', 'none').attr('stroke', '#c05621')
+          .attr('stroke-width', 1.6).attr('stroke-linecap', 'round');
+      }
+
+      el.append('circle').attr('class', 'node-core').attr('r', R + 8)
+        .attr('fill', 'rgba(0,0,0,0.001)').attr('stroke', 'none');
+      el.append('text').attr('class', 'node-label hub').attr('dy', R + 16).text(d.label);
+      el.append('text').attr('class', 'node-type-tag').attr('dy', R + 24).text(d.shortDesc || '观察中心');
+    }
+
+    function drawNode(el, d) {
+      const body = el.append('g').attr('class', 'node-body');
+      const r = nodeRadius(d);
+      const c = nodeColor(d);
+      const st = d.state || 'locked';
+
+      addNodeGlow(body, r, c, d);
+
+      if (d.type === 'center') {
+        drawCenterAvatar(body, d);
+        return;
+      }
+
+      if (d.type === 'hub') {
+        if (st === 'locked' || st === 'collecting') {
+          drawPendingNode(body, d, r, c);
+        } else {
+          body.append('circle').attr('r', r + 6).attr('fill', 'none')
+            .attr('stroke', st === 'strong' ? '#ffe7ba' : c)
+            .attr('stroke-opacity', st === 'strong' ? 0.72 : 0.52)
+            .attr('stroke-width', st === 'strong' ? 2.5 : 2)
+            .attr('class', st === 'strong' ? 'halo-mid' : 'halo-visible');
+          body.append('circle').attr('class', 'node-core' + (st === 'strong' ? ' lit-strong' : ' lit-visible'))
+            .attr('r', r).attr('fill', c)
+            .attr('fill-opacity', st === 'strong' ? 1 : 0.88)
+            .attr('stroke', st === 'strong' ? '#ffe7ba' : '#efdbff')
+            .attr('stroke-width', st === 'strong' ? 3 : 2.5)
+            .attr('filter', nodeBloomFilter(d));
+          body.append('text').attr('class', 'node-type-tag').attr('dy', -r - 6)
+            .attr('fill', st === 'strong' ? '#ffe7ba' : 'rgba(255,255,255,0.55)')
+            .text(st === 'strong' ? '积极' : '维度');
+          appendNodeLabels(body, d, r);
+        }
+        appendHitArea(body, d, r);
+        return;
+      }
+
+      if (st === 'locked') {
+        drawPendingNode(body, d, r, c);
+        appendHitArea(body, d, r);
+        return;
+      }
+
+      if (st === 'collecting') {
+        body.append('circle').attr('r', r + 3).attr('fill', 'none')
+          .attr('stroke', '#597ef7').attr('stroke-opacity', 0.35).attr('stroke-width', 1)
+          .attr('stroke-dasharray', `${Math.PI * r * 0.6} ${Math.PI * r * 1.4}`);
+      }
+      if (st === 'visible' || st === 'strong') {
+        body.append('circle').attr('r', r + (st === 'strong' ? 4.5 : 3)).attr('fill', 'none')
+          .attr('stroke', st === 'strong' ? '#ffe7ba' : c)
+          .attr('stroke-opacity', st === 'strong' ? 0.85 : 0.58)
+          .attr('stroke-width', st === 'strong' ? 1.8 : 1.2)
+          .attr('class', st === 'strong' ? 'halo-mid' : null);
+      }
+      const fill = st === 'collecting' ? d3.color(c).darker(0.6) : c;
+      const coreClass = 'node-core'
+        + (st === 'strong' ? ' lit-strong' : (st === 'visible' ? ' lit-visible' : ''));
+      body.append('circle').attr('class', coreClass).attr('r', r).attr('fill', fill)
+        .attr('fill-opacity', st === 'collecting' ? 0.85 : 1)
+        .attr('stroke', st === 'strong' ? '#ffe7ba' : (st === 'visible' ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.25)'))
+        .attr('stroke-width', selectedId === d.id ? 2.5 : (st === 'strong' ? 1.6 : (st === 'visible' ? 1.1 : 0.8)))
+        .attr('filter', nodeBloomFilter(d));
+      appendNodeLabels(body, d, r);
+      appendHitArea(body, d, r);
+    }
+
+    function appendHitArea(el, d, r) {
+      el.append('circle')
+        .attr('class', 'hit-area')
+        .attr('r', Math.max(r + 14, d.type === 'hub' ? 28 : 18))
+        .attr('fill', 'rgba(0,0,0,0.001)');
+    }
+
+    function selectNode(d, pulse, opts) {
+      opts = opts || {};
+      if (pulse === undefined) pulse = true;
+      if (!d || d.type === 'center') {
+        selectedId = null;
+        showDetail(null);
+        updateDimming();
+        return;
+      }
+      const node = graphData.nodes.find(n => String(n.id) === String(d.id)) || d;
+      const nodeId = String(node.id);
+      const isNewSelection = selectedId !== nodeId;
+      if (opts.forceFocus) userAdjustedZoom = false;
+      else if (isNewSelection) userAdjustedZoom = false;
+      selectedId = nodeId;
+      showDetail(node);
+      updateDimming();
+      const shouldFocus = (opts.forceFocus || isNewSelection) && opts.focus !== false;
+      if (pulse && (isNewSelection || opts.forceFocus)) {
+        pulseSelectedNode(selectedId);
+      }
+      if (shouldFocus) {
+        focusOnNode(node, !!opts.forceFocus);
+      }
+    }
+
+    function updateNodeSelection() {
+      if (!nodeSelection) return;
+      nodeSelection.classed('selected', d => selectedId && String(d.id) === String(selectedId));
+    }
+
+    function nudgeNodePhysics(d) {
+      if (!simulation || !d || d.type === 'center') return;
+      const push = d.type === 'hub' ? 5 : (d.type === 'sub' ? 10 : 14);
+      const angle = Math.random() * Math.PI * 2;
+      d.vx = (d.vx || 0) + Math.cos(angle) * push;
+      d.vy = (d.vy || 0) + Math.sin(angle) * push;
+      simulation.alpha(Math.max(simulation.alpha(), 0.28)).restart();
+    }
+
+    function pulseSelectedNode(id) {
+      if (!g) return;
+      const d = layoutNodes.find(n => String(n.id) === String(id));
+      if (!d) return;
+      const nodeEl = g.selectAll('.node').filter(n => String(n.id) === String(id));
+      const body = nodeEl.select('.node-body');
+      const c = nodeColor(d);
+      const r0 = nodeRadius(d);
+
+      if (!body.empty()) {
+        body.interrupt()
+          .attr('transform', 'scale(1)')
+          .transition().duration(120).attr('transform', 'scale(1.32)')
+          .transition().duration(520).ease(d3.easeElasticOut.amplitude(1.3).period(0.36))
+          .attr('transform', 'scale(1)');
+      }
+
+      const core = nodeEl.select('.node-core');
+      if (!core.empty()) {
+        core.interrupt()
+          .transition().duration(120).attr('r', r0 * 1.2)
+          .transition().duration(520).ease(d3.easeElasticOut.amplitude(1.25).period(0.38))
+          .attr('r', r0);
+      }
+
+      [0, 100].forEach(delay => {
+        body.append('circle')
+          .attr('class', 'click-ripple')
+          .attr('r', r0 * 0.6)
+          .attr('fill', 'none')
+          .attr('stroke', d.type === 'signal' ? '#ffd591' : c)
+          .attr('stroke-width', d.type === 'hub' ? 2.5 : 1.6)
+          .attr('opacity', 0.85)
+          .transition().delay(delay).duration(580).ease(d3.easeCubicOut)
+          .attr('r', r0 * (d.type === 'hub' ? 3.5 : 2.8))
+          .attr('opacity', 0)
+          .remove();
+      });
+
+      nudgeNodePhysics(d);
+    }
+
+    function seedNodePositions(nodes, W, H) {
+      const cx = W / 2, cy = H / 2;
+      nodes.forEach(n => {
+        if (n.type === 'center') {
+          n.x = cx; n.y = cy;
+          return;
+        }
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 30 + Math.random() * Math.min(W, H) * 0.42;
+        n.x = cx + Math.cos(angle) * dist;
+        n.y = cy + Math.sin(angle) * dist;
+      });
+    }
+
+    function bindGraphTouchPan(shell) {
+      if (!shell || shell._touchPanBound) return;
+      shell._touchPanBound = true;
+      let start = null;
+
+      const onTouchStart = (ev) => {
+        if (ev.touches.length >= 2) {
+          graphMultiTouch = true;
+          graphTouchMoved = true;
+          markUserZoom();
+          start = null;
+          return;
+        }
+        graphMultiTouch = false;
+        graphTouchMoved = false;
+        const onNode = ev.target.closest && ev.target.closest('.node');
+        start = {
+          x: ev.touches[0].clientX,
+          y: ev.touches[0].clientY,
+          tx: currentZoomTransform.x,
+          ty: currentZoomTransform.y,
+          moved: false,
+          onNode: !!onNode
+        };
+      };
+
+      const onTouchMove = (ev) => {
+        if (ev.touches.length >= 2) {
+          graphMultiTouch = true;
+          graphTouchMoved = true;
+          markUserZoom();
+          start = null;
+          return;
+        }
+        if (!start || ev.touches.length !== 1) return;
+        const dx = ev.touches[0].clientX - start.x;
+        const dy = ev.touches[0].clientY - start.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 8) graphTouchMoved = true;
+        if (!start.moved) {
+          if (start.onNode && dist < 14) return;
+          if (dist < 6) return;
+          start.moved = true;
+        }
+        markUserZoom();
+        ev.preventDefault();
+        const t = d3.zoomIdentity
+          .translate(start.tx + dx, start.ty + dy)
+          .scale(currentZoomTransform.k);
+        currentZoomTransform = t;
+        if (g) g.attr('transform', t);
+        getZoomSelection().property('__zoom', t);
+        const label = document.getElementById('zoomLabel');
+        if (label) label.textContent = Math.round(t.k * 100) + '%';
+      };
+
+      const onTouchEnd = (ev) => {
+        if (graphMultiTouch && ev.touches.length === 0) {
+          suppressNodeSelectUntil = Date.now() + 480;
+          graphMultiTouch = false;
+        }
+        if (ev.touches.length === 0) {
+          setTimeout(() => { graphTouchMoved = false; }, 0);
+        }
+        start = null;
+      };
+
+      shell.addEventListener('touchstart', onTouchStart, { passive: true, capture: true });
+      shell.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+      shell.addEventListener('touchend', onTouchEnd, { passive: true, capture: true });
+      shell.addEventListener('touchcancel', onTouchEnd, { passive: true, capture: true });
+    }
+
+    function initGraph(restart) {
+      const shell = document.querySelector('.graph-shell');
+      const W = shell.clientWidth, H = shell.clientHeight;
+      if (!W || !H) {
+        setTimeout(() => initGraph(restart), 80);
+        return;
+      }
+      graphLayoutW = W;
+      graphLayoutH = H;
+      layoutSettling = true;
+      const savedTransform = restart && currentZoomTransform ? currentZoomTransform : d3.zoomIdentity;
+      if (simulation) simulation.stop();
+      d3.select('#graphSvg').selectAll('*').remove();
+
+      graphShell = shell;
+      svg = d3.select('#graphSvg').attr('viewBox', [0, 0, W, H]);
+      const defs = svg.append('defs');
+      defs.append('filter').attr('id', 'bloom').html(`
+        <feGaussianBlur stdDeviation="3.2" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>`);
+      defs.append('filter').attr('id', 'bloomStrong').html(`
+        <feGaussianBlur stdDeviation="4.5" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>`);
+      const cg = defs.append('radialGradient').attr('id', 'centerGrad');
+      cg.append('stop').attr('offset', '0%').attr('stop-color', '#818cf8');
+      cg.append('stop').attr('offset', '100%').attr('stop-color', '#4f46e5');
+      const bg = defs.append('radialGradient').attr('id', 'bgGrad');
+      bg.append('stop').attr('offset', '0%').attr('stop-color', '#0f1628');
+      bg.append('stop').attr('offset', '100%').attr('stop-color', '#060912');
+      svg.append('rect').attr('width', W).attr('height', H).attr('fill', 'url(#bgGrad)');
+
+      for (let i = 0; i < 120; i++) {
+        svg.append('circle').attr('cx', Math.random() * W).attr('cy', Math.random() * H)
+          .attr('r', Math.random() * 1.1 + 0.2)
+          .attr('fill', '#fff').attr('opacity', Math.random() * 0.4 + 0.03);
+      }
+
+      g = svg.append('g');
+      zoomBehavior = d3.zoom()
+        .scaleExtent([0.3, 3.5])
+        .on('zoom', ev => {
+          currentZoomTransform = ev.transform;
+          g.attr('transform', ev.transform);
+          const label = document.getElementById('zoomLabel');
+          if (label) label.textContent = Math.round(ev.transform.k * 100) + '%';
+          if (ev.sourceEvent) markUserZoom();
+        });
+
+      d3.select(shell).call(zoomBehavior);
+      if (restart && savedTransform && (savedTransform.k !== 1 || savedTransform.x || savedTransform.y)) {
+        d3.select(shell).call(zoomBehavior.transform, savedTransform);
+        currentZoomTransform = savedTransform;
+      } else if (!restart) {
+        currentZoomTransform = d3.zoomIdentity;
+      }
+      shell._touchPanBound = false;
+      bindGraphTouchPan(shell);
+
+      const nodes = graphData.nodes.map(n => ({ ...n }));
+      layoutNodes = nodes;
+      const links = graphData.links.map(l => ({ ...l }));
+      seedNodePositions(nodes, W, H);
+
+      simulation = d3.forceSimulation(nodes)
+        .velocityDecay(0.28)
+        .alpha(1)
+        .alphaDecay(0.018)
+        .force('link', d3.forceLink(links).id(d => d.id)
+          .distance(l => {
+            const t = typeof l.target === 'object' ? l.target : nodes.find(n => n.id === l.target);
+            if (!t) return 30;
+            if (t.level === 1) return 82;
+            if (t.level === 2) return 44;
+            return 26;
+          }).strength(l => 0.16 + (l.strength || 20) / 320))
+        .force('charge', d3.forceManyBody().strength(d => {
+          if (d.type === 'center') return -220;
+          if (d.type === 'hub') return -100;
+          if (d.type === 'sub') return -32;
+          return -10;
+        }))
+        .force('center', d3.forceCenter(W / 2, H / 2))
+        .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + (d.type === 'signal' ? 2 : 8)));
+
+      const cNode = nodes.find(n => n.type === 'center');
+      if (cNode) { cNode.fx = W / 2; cNode.fy = H / 2; }
+
+      const clusterLayer = g.append('g');
+      const linkG = g.append('g');
+      const link = linkG.selectAll('line').data(links).join('line')
+        .attr('class', 'link-node')
+        .attr('stroke', d => {
+          const tgt = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          return nodeColor(tgt);
+        })
+        .attr('stroke-width', d => {
+          const tgt = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          if (tgt?.state === 'strong') return 1.1 + (d.strength || 15) / 70;
+          if (tgt?.state === 'visible') return 0.85 + (d.strength || 15) / 80;
+          const vi = tgt?.visualIntensity || 0;
+          return vi >= 0.62 ? 0.9 + (d.strength || 15) / 80 : 0.35 + (d.strength || 15) / 90;
+        })
+        .attr('stroke-opacity', d => {
+          const tgt = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          if (tgt?.state === 'strong') return 0.52;
+          if (tgt?.state === 'visible') return 0.32;
+          const vi = tgt?.visualIntensity || 0;
+          if (vi >= 0.62) return 0.38;
+          if (vi >= 0.32) return 0.22;
+          return 0.1;
+        });
+
+      nodeSelection = g.append('g').selectAll('g').data(nodes).join('g')
+        .attr('class', 'node')
+        .call(d3.drag()
+          .filter(ev => ev.type === 'mousedown' && ev.button === 0)
+          .on('start', (ev, d) => { if (!ev.active) simulation.alphaTarget(0.25).restart(); d.fx = d.x; d.fy = d.y; })
+          .on('drag', (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+          .on('end', (ev, d) => { if (!ev.active) simulation.alphaTarget(0); if (d.type !== 'center') { d.fx = null; d.fy = null; } })
+        )
+        .on('click', (ev, d) => {
+          if (shouldIgnoreNodeTap()) return;
+          ev.stopPropagation();
+          selectNode(d);
+        })
+        .on('touchend', (ev, d) => {
+          if (shouldIgnoreNodeTap()) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          selectNode(d);
+        });
+
+      nodeSelection.each(function(d) { drawNode(d3.select(this), d); });
+
+      simulation.on('tick', () => {
+        link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        nodeSelection.attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
+      });
+
+      simulation.on('end', () => {
+        layoutSettling = false;
+        updateDimming();
+        getHubClusters().forEach(dim => {
+          const members = nodes.filter(n => n.cluster === dim);
+          if (members.length < 2) return;
+          const cx = d3.mean(members, d => d.x), cy = d3.mean(members, d => d.y);
+          const r = d3.max(members, d => Math.hypot(d.x - cx, d.y - cy)) + 40;
+          clusterLayer.append('circle').attr('cx', cx).attr('cy', cy).attr('r', r)
+            .attr('fill', TYPE_COLORS.hub).attr('fill-opacity', 0.025)
+            .attr('stroke', TYPE_COLORS.hub).attr('stroke-opacity', 0.1)
+            .attr('stroke-width', 1).attr('stroke-dasharray', '8 6');
+        });
+      });
+
+      svg.on('click', () => {
+        selectedId = null;
+        showDetail(null);
+        updateDimming();
+      });
+      document.getElementById('zoomIn').onclick = () => getZoomSelection().transition().duration(250).ease(d3.easeCubicOut).call(zoomBehavior.scaleBy, 1.25);
+      document.getElementById('zoomOut').onclick = () => getZoomSelection().transition().duration(250).ease(d3.easeCubicOut).call(zoomBehavior.scaleBy, 0.8);
+      document.getElementById('zoomReset').onclick = () => getZoomSelection().transition().duration(350).ease(d3.easeCubicInOut).call(zoomBehavior.transform, d3.zoomIdentity);
+      updateMeta();
+    }
+
+    function getConnectedIds(id) {
+      const sid = String(id);
+      const set = new Set([sid]);
+      graphData.links.forEach(l => {
+        const s = String(l.source?.id ?? l.source);
+        const t = String(l.target?.id ?? l.target);
+        if (s === sid) set.add(t);
+        if (t === sid) set.add(s);
+      });
+      const n = graphData.nodes.find(x => String(x.id) === sid);
+      if (n?.parentHub) set.add(String(n.parentHub));
+      if (n?.parentSub) set.add(String(n.parentSub));
+      return set;
+    }
+
+    function updateDimming() {
+      if (!g) return;
+      const conn = selectedId ? getConnectedIds(selectedId) : null;
+      g.selectAll('.node').classed('dimmed', d => {
+        if (selectedId && conn && !conn.has(String(d.id)) && d.type !== 'center') return true;
+        return false;
+      });
+      g.selectAll('.link-node').classed('highlight', d => {
+        if (!selectedId) {
+          const tgt = typeof d.target === 'object' ? d.target : null;
+          return !!(tgt && (tgt.state === 'strong' || tgt.state === 'visible'));
+        }
+        const s = String(d.source.id || d.source);
+        const t = String(d.target.id || d.target);
+        return conn.has(s) && conn.has(t);
+      });
+      updateNodeSelection();
+    }
+
+    function showNotifyToast(title, body, node) {
+      pendingToastNode = node || null;
+      document.getElementById('toastTitle').textContent = title;
+      document.getElementById('toastBody').textContent = body;
+      const toast = document.getElementById('notifyToast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 4500);
+    }
+
+    async function fetchUnreadNotification() {
+      try {
+        const resp = await fetch(`${apiBase}/parent-api/growth-portrait/notifications?childId=${encodeURIComponent(childId)}&page=1&pageSize=5`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const json = await resp.json();
+        if (json.code !== 0 || !json.data) return;
+        const item = (json.data.items || []).find(i => i.isRead === 0 && i.notifyType === 'instant');
+        if (item) {
+          const node = graphData.nodes.find(n => n.id === item.nodeCode);
+          showNotifyToast(item.title, item.summary, node);
+        }
+      } catch (_) { /* optional */ }
+    }
+
+
+    function waitForGraphShell(cb, attempt) {
+      attempt = attempt || 0;
+      const shell = document.querySelector('.graph-shell');
+      const W = shell ? shell.clientWidth : 0;
+      const H = shell ? shell.clientHeight : 0;
+      if (W > 80 && H > 160) return cb();
+      if (attempt > 50) return cb();
+      setTimeout(() => waitForGraphShell(cb, attempt + 1), 40);
+    }
+
+    function resetGraphInteractionState() {
+      userAdjustedZoom = false;
+      graphMultiTouch = false;
+      graphTouchMoved = false;
+      suppressNodeSelectUntil = 0;
+      cancelPendingFocus();
+    }
+
+
+    function mockLightState(strength, evidenceCount, required) {
+      const target = Math.max(1, required || 3);
+      if (evidenceCount < 2) return 'locked';
+      if (evidenceCount >= target && (evidenceCount >= Math.ceil(target * 1.2) || strength >= 72)) return 'strong';
+      if (evidenceCount >= target) return 'visible';
+      return 'collecting';
+    }
+
+    function buildMockMindApiData(ageBand) {
+      const rand = (() => { let s = ageBand.length * 997 + 42; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; })();
+      const nodes = [];
+      const links = [];
+      let strongCount = 0;
+      MIND_DIMS.forEach((dim, di) => {
+        const hubId = 'hub-' + dim;
+        const hubSt = 42 + Math.floor(rand() * 48);
+        const hubEv = 4 + Math.floor(rand() * 6);
+        const hubState = mockLightState(hubSt, hubEv, 6);
+        if (hubState === 'strong') strongCount++;
+        nodes.push({
+          id: hubId, type: 'hub', label: DIM_LABELS[dim], shortLabel: DIM_LABELS[dim], shortDesc: '心绪维度',
+          cluster: dim, level: 1, strength: hubSt, evidenceCount: hubEv, requiredCount: 6, state: hubState,
+          parentHub: null, parentSub: null,
+          evidence: '已收集 ' + hubEv + ' 条观测证据',
+          suggest: hubState === 'strong' ? '积极信号 · 可查看详情并安排亲子陪伴' : '继续日常互动观察'
+        });
+        links.push({ source: 'center', target: hubId, strength: hubSt * 0.55 });
+        const subs = SUB_TEMPLATES[dim];
+        const subCount = 4;
+        for (let si = 0; si < subCount; si++) {
+          const subId = 'sub-' + dim + '-' + si;
+          const st = 28 + Math.floor(rand() * 62);
+          const ev = 1 + Math.floor(rand() * 6);
+          const label = subs[si % subs.length];
+          const subState = mockLightState(st, ev, 5);
+          if (subState === 'strong') strongCount++;
+          nodes.push({
+            id: subId, type: 'sub', label, shortLabel: label,
+            shortDesc: subState === 'strong' ? '积极信号' : (subState === 'visible' ? '倾向显现' : '观察中'),
+            cluster: dim, level: 2, strength: st, evidenceCount: ev, requiredCount: 5, state: subState,
+            parentHub: hubId, parentSub: null,
+            evidence: '已收集 ' + ev + ' 条观测证据',
+            suggest: ev >= 5 ? '倾向显现 · 继续观察同场景表现' : '观察中 · 再积累 ' + Math.max(1, 5 - ev) + ' 条证据可「显现」'
+          });
+          links.push({ source: hubId, target: subId, strength: st * 0.65 });
+          const sigN = subState === 'strong' ? 2 : 1;
+          for (let gi = 0; gi < sigN; gi++) {
+            const sigId = 'sig-' + dim + '-' + si + '-' + gi;
+            const gst = Math.min(96, st + Math.floor(rand() * 18) - 4);
+            const gev = 1 + Math.floor(rand() * 3);
+            const sigState = mockLightState(gst, gev, 3);
+            if (sigState === 'strong') strongCount++;
+            const sigDesc = SIGNAL_VERBS[(si + gi) % SIGNAL_VERBS.length] + ' · ' + SIGNAL_DESC[gi % SIGNAL_DESC.length];
+            nodes.push({
+              id: sigId, type: 'signal', label, shortLabel: label.length > 5 ? label.slice(0, 5) : label,
+              shortDesc: sigDesc, cluster: dim, level: 3, strength: gst, evidenceCount: gev, requiredCount: 3,
+              state: sigState, parentHub: hubId, parentSub: subId,
+              evidence: '已收集 ' + gev + ' 条观测证据',
+              suggest: sigState === 'strong' ? '积极信号 · 可查看详情并安排亲子陪伴' : '观察中 · 再积累 ' + Math.max(1, 3 - gev) + ' 条证据可「显现」'
+            });
+            links.push({ source: subId, target: sigId, strength: gst * 0.8 });
+          }
+        }
+      });
+      return {
+        releaseId: 1,
+        ageBand: ageBand,
+        strongCount,
+        center: { label: childName || '小亮', shortDesc: '观察枢纽', avatarUrl: '' },
+        rules: { observeDays: ageBand === 'preschool' ? 21 : (ageBand === 'lower' ? 14 : 10), weeklyInstantCap: 2 },
+        nodes,
+        links
+      };
+    }
+
+    function bootGraphAfterLoad() {
+      resetGraphInteractionState();
+      waitForGraphShell(() => {
+        initGraph(false);
+        showDetail(null);
+        updateDimming();
+      });
+    }
+
+    async function loadPrototypeGraph() {
+      showLoading();
+      resetGraphInteractionState();
+      const loadStarted = Date.now();
+      currentAgeBand = 'lower';
+      childName = childName || '小亮';
+      const data = buildMockMindApiData(currentAgeBand);
+      graphMeta = {
+        strongCount: data.strongCount || 0,
+        observeDays: data.rules?.observeDays || 14,
+        weeklyInstantCap: data.rules?.weeklyInstantCap || 2
+      };
+      graphData = mapApiToGraph(data);
+      selectedId = null;
+      renderLightRules();
+      renderSummaryPanel();
+      const remain = Math.max(0, 650 - (Date.now() - loadStarted));
+      if (remain) await new Promise(r => setTimeout(r, remain));
+      showApp();
+      requestAnimationFrame(() => requestAnimationFrame(bootGraphAfterLoad));
+    }
+
+    async function loadGraph() {
+      if (!childId) {
+        showError('缺少孩子信息');
+        return;
+      }
+      if (!token) {
+        showError('缺少登录凭证，请返回重新进入');
+        return;
+      }
+      showLoading();
+      try {
+        const resp = await fetch(`${apiBase}/parent-api/growth-portrait/graph?childId=${encodeURIComponent(childId)}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const json = await resp.json();
+        if (json.code !== 0) throw new Error(json.msg || '加载失败');
+        const data = json.data || {};
+        currentAgeBand = data.ageBand || 'upper';
+        graphMeta = {
+          strongCount: data.strongCount || 0,
+          observeDays: data.rules?.observeDays || 0,
+          weeklyInstantCap: data.rules?.weeklyInstantCap || 2
+        };
+        graphData = mapApiToGraph(data);
+        selectedId = null;
+        renderLightRules();
+        renderSummaryPanel();
+        showApp();
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            initGraph(false);
+            showDetail(null);
+            updateDimming();
+            fetchUnreadNotification();
+          });
+        });
+      } catch (e) {
+        showError(e.message || '网络错误，请稍后重试');
+      }
+    }
+
+    function bindTap(el, handler) {
+      if (!el) return;
+      let lastTouch = 0;
+      el.addEventListener('touchend', (ev) => {
+        lastTouch = Date.now();
+        handler(ev);
+      }, { passive: true });
+      el.addEventListener('click', (ev) => {
+        if (Date.now() - lastTouch < 400) return;
+        handler(ev);
+      });
+    }
+
+    function bindUi() {
+      bindTap(document.getElementById('helpBtn'), () => {
+        document.getElementById('helpPanel').classList.toggle('open');
+      });
+      document.querySelectorAll('.mode-tabs button').forEach(btn => {
+        bindTap(btn, () => switchViewMode(btn.dataset.mode));
+      });
+      bindTap(document.getElementById('toastView'), () => {
+        const n = pendingToastNode || graphData.nodes.find(x => x.state === 'strong' && x.type !== 'center');
+        if (n) selectNode(n);
+        document.getElementById('notifyToast').classList.remove('show');
+      });
+      bindTap(document.getElementById('retryBtn'), () => { if (!childId && !token) loadPrototypeGraph(); else loadGraph(); });
+      window.addEventListener('resize', () => {
+        if (document.getElementById('app').classList.contains('ready')) initGraph(true);
+      });
+    }
+
+    function boot() {
+      const q = parseQuery();
+      childId = q.childId || '';
+      childName = q.childName || '小亮';
+      grade = q.grade || '1';
+      token = q.token || '';
+      apiBase = q.apiBase || deriveApiBase();
+      bindUi();
+      if (q.prototype === '1' || q.demo === '1' || (!childId && !token)) loadPrototypeGraph();
+      else loadGraph();
+    }
+
+    boot();
+  </script>
+</body>
+</html>

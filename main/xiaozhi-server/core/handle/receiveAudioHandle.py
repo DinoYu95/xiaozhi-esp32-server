@@ -245,11 +245,13 @@ async def startToChat(conn, text):
             except Exception:
                 pass
 
-    # 成长星图：主孩子发言仅缓存 transcript，会话结束再 batch 分析
+    # 成长星图 / 心绪图谱：主孩子发言仅缓存 transcript，会话结束再 batch 分析
     try:
         from core.growth_portrait.growth_portrait_api_client import append_user_turn
+        from core.mind_portrait.mind_portrait_api_client import append_user_turn as append_mind_user_turn
 
         append_user_turn(conn, actual_text)
+        append_mind_user_turn(conn, actual_text)
     except Exception:
         pass
 

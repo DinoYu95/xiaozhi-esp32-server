@@ -495,6 +495,7 @@
     let graphMultiTouch = false;
     let suppressNodeSelectUntil = 0;
     let userAdjustedZoom = false;
+    let suppressMarkUserZoom = false;
     let pendingToastNode = null;
 
     function parseQuery() {
@@ -604,6 +605,23 @@
       return links;
     }
 
+
+    function enrichNodeClusters(nodes) {
+      const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+      nodes.forEach(n => {
+        n.cluster = String(n.cluster || n.clusterCode || '').trim();
+        if (n.cluster) return;
+        if (n.type === 'hub') {
+          const m = n.id.match(/\.HUB\.([^.]+)$/i) || n.id.match(/hub[-_](\w+)/i);
+          if (m) n.cluster = m[1].toLowerCase();
+        } else if (n.parentHub && byId[n.parentHub]?.cluster) {
+          n.cluster = byId[n.parentHub].cluster;
+        } else if (n.parentSub && byId[n.parentSub]?.cluster) {
+          n.cluster = byId[n.parentSub].cluster;
+        }
+      });
+    }
+
     function mapApiToGraph(data) {
       const centerNode = {
         id: 'center',
@@ -642,6 +660,7 @@
           links.push({ source: 'center', target: hub.id, strength: (hub.strength || 50) * 0.55 });
         }
       });
+      enrichNodeClusters(nodes);
       applyVisualHierarchy(nodes);
       return { nodes, links };
     }
@@ -719,10 +738,11 @@
 
     function cancelPendingFocus() {
       if (simulation) simulation.on('end.focusNode', null);
-      getZoomSelection().interrupt();
+      if (!suppressMarkUserZoom) getZoomSelection().interrupt();
     }
 
     function markUserZoom() {
+      if (suppressMarkUserZoom) return;
       userAdjustedZoom = true;
       cancelPendingFocus();
     }
@@ -754,11 +774,16 @@
 
       let members;
       if (d.type === 'hub') {
-        members = layoutNodes.filter(n => n.cluster === d.cluster);
+        if (d.cluster) {
+          members = layoutNodes.filter(n => n.cluster === d.cluster);
+        } else {
+          const hubConn = getConnectedIds(String(d.id));
+          members = layoutNodes.filter(n => hubConn.has(String(n.id)));
+        }
       } else if (d.type === 'sub' || d.type === 'signal') {
         const conn = getConnectedIds(String(d.id));
         members = layoutNodes.filter(n =>
-          conn.has(String(n.id)) || (n.cluster === d.cluster && n.type !== 'center')
+          conn.has(String(n.id)) || (d.cluster && n.cluster === d.cluster && n.type !== 'center')
         );
       } else {
         members = [layoutNode];
@@ -786,9 +811,11 @@
 
       const tx = W / 2 - cx * scale;
       const ty = H / 2 - cy * scale;
+      suppressMarkUserZoom = true;
       getZoomSelection()
         .transition().duration(520).ease(d3.easeCubicInOut)
-        .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+        .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
+        .on('end interrupt', () => { suppressMarkUserZoom = false; });
     }
 
     const STATE_LABELS = {
@@ -1265,7 +1292,7 @@
         pulseSelectedNode(selectedId);
       }
       if (shouldFocus) {
-        focusOnNode(node, !!opts.forceFocus);
+        focusOnNode(node, true);
       }
     }
 
@@ -1457,7 +1484,7 @@
           g.attr('transform', ev.transform);
           const label = document.getElementById('zoomLabel');
           if (label) label.textContent = Math.round(ev.transform.k * 100) + '%';
-          if (ev.sourceEvent) markUserZoom();
+          if (ev.sourceEvent && !suppressMarkUserZoom) markUserZoom();
         });
 
       d3.select(shell).call(zoomBehavior);
@@ -1635,6 +1662,36 @@
       } catch (_) { /* optional */ }
     }
 
+
+    function waitForGraphShell(cb, attempt) {
+      attempt = attempt || 0;
+      const shell = document.querySelector('.graph-shell');
+      const W = shell ? shell.clientWidth : 0;
+      const H = shell ? shell.clientHeight : 0;
+      if (W > 80 && H > 160) return cb();
+      if (attempt > 50) return cb();
+      setTimeout(() => waitForGraphShell(cb, attempt + 1), 40);
+    }
+
+    function resetGraphInteractionState() {
+      userAdjustedZoom = false;
+      suppressMarkUserZoom = false;
+      graphMultiTouch = false;
+      graphTouchMoved = false;
+      suppressNodeSelectUntil = 0;
+      cancelPendingFocus();
+    }
+
+    function bootGraphAfterLoad() {
+      resetGraphInteractionState();
+      waitForGraphShell(() => {
+        initGraph(false);
+        showDetail(null);
+        updateDimming();
+        fetchUnreadNotification();
+      });
+    }
+
     async function loadGraph() {
       if (!childId) {
         showError('缺少孩子信息');
@@ -1663,14 +1720,7 @@
         renderLightRules();
         renderSummaryPanel();
         showApp();
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            initGraph(false);
-            showDetail(null);
-            updateDimming();
-            fetchUnreadNotification();
-          });
-        });
+        requestAnimationFrame(() => requestAnimationFrame(bootGraphAfterLoad));
       } catch (e) {
         showError(e.message || '网络错误，请稍后重试');
       }

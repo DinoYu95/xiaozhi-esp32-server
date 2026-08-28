@@ -497,6 +497,7 @@
     let graphMultiTouch = false;
     let suppressNodeSelectUntil = 0;
     let userAdjustedZoom = false;
+    let suppressMarkUserZoom = false;
     let pendingToastNode = null;
 
     function parseQuery() {
@@ -743,10 +744,11 @@
 
     function cancelPendingFocus() {
       if (simulation) simulation.on('end.focusNode', null);
-      getZoomSelection().interrupt();
+      if (!suppressMarkUserZoom) getZoomSelection().interrupt();
     }
 
     function markUserZoom() {
+      if (suppressMarkUserZoom) return;
       userAdjustedZoom = true;
       cancelPendingFocus();
     }
@@ -778,11 +780,16 @@
 
       let members;
       if (d.type === 'hub') {
-        members = layoutNodes.filter(n => n.cluster === d.cluster);
+        if (d.cluster) {
+          members = layoutNodes.filter(n => n.cluster === d.cluster);
+        } else {
+          const hubConn = getConnectedIds(String(d.id));
+          members = layoutNodes.filter(n => hubConn.has(String(n.id)));
+        }
       } else if (d.type === 'sub' || d.type === 'signal') {
         const conn = getConnectedIds(String(d.id));
         members = layoutNodes.filter(n =>
-          conn.has(String(n.id)) || (n.cluster === d.cluster && n.type !== 'center')
+          conn.has(String(n.id)) || (d.cluster && n.cluster === d.cluster && n.type !== 'center')
         );
       } else {
         members = [layoutNode];
@@ -810,9 +817,11 @@
 
       const tx = W / 2 - cx * scale;
       const ty = H / 2 - cy * scale;
+      suppressMarkUserZoom = true;
       getZoomSelection()
         .transition().duration(520).ease(d3.easeCubicInOut)
-        .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+        .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
+        .on('end interrupt', () => { suppressMarkUserZoom = false; });
     }
 
     const STATE_LABELS = {
@@ -1289,7 +1298,7 @@
         pulseSelectedNode(selectedId);
       }
       if (shouldFocus) {
-        focusOnNode(node, !!opts.forceFocus);
+        focusOnNode(node, true);
       }
     }
 
@@ -1481,7 +1490,7 @@
           g.attr('transform', ev.transform);
           const label = document.getElementById('zoomLabel');
           if (label) label.textContent = Math.round(ev.transform.k * 100) + '%';
-          if (ev.sourceEvent) markUserZoom();
+          if (ev.sourceEvent && !suppressMarkUserZoom) markUserZoom();
         });
 
       d3.select(shell).call(zoomBehavior);
@@ -1672,6 +1681,7 @@
 
     function resetGraphInteractionState() {
       userAdjustedZoom = false;
+      suppressMarkUserZoom = false;
       graphMultiTouch = false;
       graphTouchMoved = false;
       suppressNodeSelectUntil = 0;

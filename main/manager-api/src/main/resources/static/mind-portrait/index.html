@@ -6,6 +6,11 @@
   <title>心绪图谱</title>
   <script src="https://res.wx.qq.com/open/libs/jweixin-1.6.0.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script>
+    if (typeof d3 === 'undefined') {
+      document.write('<script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js"><\\/script>');
+    }
+  </script>
   <style>
     :root {
       --surface: #fff;
@@ -229,6 +234,15 @@
     }
     .state-overlay.hidden { display: none; }
     .state-overlay h2 { font-size: 1rem; color: #37474f; margin-bottom: 8px; }
+    .state-overlay #errorMsg {
+      font-size: 0.92rem; color: #455a64; margin-bottom: 10px; line-height: 1.65;
+      max-width: 92vw; word-break: break-word; font-weight: 500;
+    }
+    .state-overlay #errorDetail {
+      font-size: 0.72rem; color: #90a4ae; margin-bottom: 16px; line-height: 1.5;
+      max-width: 92vw; word-break: break-all; text-align: left;
+      background: rgba(0,0,0,0.04); padding: 8px 10px; border-radius: 8px;
+    }
     .state-overlay p { font-size: 0.86rem; color: #78909c; margin-bottom: 16px; line-height: 1.6; }
     .state-spinner {
       width: 32px; height: 32px; border: 3px solid rgba(99,102,241,0.2);
@@ -341,6 +355,7 @@
   <div id="errorState" class="state-overlay hidden">
     <h2>无法打开心绪图谱</h2>
     <p id="errorMsg">加载失败</p>
+    <pre id="errorDetail"></pre>
     <button type="button" class="retry-btn" id="retryBtn">重试</button>
   </div>
 
@@ -536,10 +551,12 @@
       document.getElementById('app').classList.remove('ready');
     }
 
-    function showError(msg) {
+    function showError(msg, detail) {
       document.getElementById('loadingState').classList.add('hidden');
       document.getElementById('errorState').classList.remove('hidden');
       document.getElementById('errorMsg').textContent = msg || '加载失败';
+      const detailEl = document.getElementById('errorDetail');
+      if (detailEl) detailEl.textContent = detail || '';
       document.getElementById('app').classList.remove('ready');
     }
 
@@ -1748,9 +1765,17 @@
     function bootGraphAfterLoad() {
       resetGraphInteractionState();
       waitForGraphShell(() => {
-        initGraph(false);
-        showDetail(null);
-        updateDimming();
+        try {
+          if (typeof d3 === 'undefined') {
+            showError('图表库加载失败', 'D3 未加载');
+            return;
+          }
+          initGraph(false);
+          showDetail(null);
+          updateDimming();
+        } catch (e) {
+          showError('图谱渲染失败', (e && e.message) || String(e));
+        }
       });
     }
 
@@ -1776,13 +1801,29 @@
       requestAnimationFrame(() => requestAnimationFrame(bootGraphAfterLoad));
     }
 
+    function bootGraphSafe() {
+      try {
+        if (typeof d3 === 'undefined') {
+          showError('图表库加载失败', 'D3 未加载，请检查网络或刷新；开发环境可加 ?demo=1 预览 mock 数据');
+          return;
+        }
+        initGraph(false);
+        showDetail(null);
+        updateDimming();
+        fetchUnreadNotification();
+      } catch (e) {
+        console.error('[mind-portrait] initGraph failed', e);
+        showError('图谱渲染失败', (e && e.message) || String(e));
+      }
+    }
+
     async function loadGraph() {
       if (!childId) {
-        showError('缺少孩子信息');
+        showError('缺少孩子信息', 'web-view URL 需带 childId=设备档案 id');
         return;
       }
       if (!token) {
-        showError('缺少登录凭证，请返回重新进入');
+        showError('缺少登录凭证', 'web-view URL 需带 token=家长 Bearer（与成长星图相同）');
         return;
       }
       showLoading();
@@ -1792,8 +1833,9 @@
           headers: { Authorization: `Bearer ${token}` }
         });
         let json;
+        const raw = await resp.text();
         try {
-          json = await resp.json();
+          json = raw ? JSON.parse(raw) : {};
         } catch (_) {
           throw new Error(resp.ok ? '响应格式错误' : `请求失败 (${resp.status})，请确认 apiBase 与后端已部署`);
         }
@@ -1813,25 +1855,22 @@
         renderLightRules();
         renderSummaryPanel();
         showApp();
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            initGraph(false);
-            showDetail(null);
-            updateDimming();
-            fetchUnreadNotification();
-          });
-        });
+        requestAnimationFrame(() => requestAnimationFrame(bootGraphSafe));
       } catch (e) {
         let msg = e.message || '网络错误，请稍后重试';
-        if (/暂无已发布的心绪图谱模板/.test(msg)) {
-          msg += '。请在教研 mind-admin 发版与孩子档案匹配的 age_band（preschool/lower/upper/middle），四个年龄段需分别审核通过。';
-        } else if (/401|403|token|凭证|登录/.test(msg)) {
-          msg += '。请从小程序重新进入，确保 web-view URL 携带 token 参数。';
+        let detail = `apiBase=${apiBase || '(空)'} · childId=${childId || '(空)'} · 接口=${apiBase}/parent-api/mind-portrait/graph`;
+        if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) {
+          msg = '网络请求失败（无法连接后端）';
+          detail += '。请确认 request 合法域名与 apiBase 一致，且含 /xiaozhi 前缀。';
+        } else if (/暂无已发布的心绪图谱模板/.test(msg)) {
+          detail += '。教研「通过」≠ 所有孩子可用，需发版与孩子 age_band 一致的模板。';
+        } else if (/401|403|Unauthorized|token|凭证|登录/i.test(msg)) {
+          detail += '。请从小程序重新进入，确保 token 未过期。';
         } else if (/404|请求失败/.test(msg)) {
-          msg += `。当前 apiBase=${apiBase || '(空)'}，请确认 manager-api 已部署且 nginx 已配置 /static/mind-portrait/。`;
+          detail += '。请确认 manager-api 已部署 mindportrait 模块且 nginx 已配置 mind-portrait 静态目录。';
         }
         console.error('[mind-portrait] loadGraph failed', { apiBase, childId, msg: e.message, err: e });
-        showError(msg);
+        showError(msg, detail);
       }
     }
 
@@ -1868,12 +1907,16 @@
 
     function boot() {
       const q = parseQuery();
-      childId = q.childId || '';
-      childName = q.childName || '孩子';
+      childId = q.childId || q.child_id || '';
+      childName = q.childName || q.child_name || '孩子';
       grade = q.grade || '1';
-      token = q.token || '';
-      apiBase = q.apiBase || deriveApiBase();
+      token = q.token || q.accessToken || q.access_token || q.parentToken || '';
+      apiBase = (q.apiBase || q.api_base || deriveApiBase()).replace(/\/$/, '');
       bindUi();
+      if (typeof d3 === 'undefined' && !(q.prototype === '1' || q.demo === '1' || (!childId && !token))) {
+        showError('图表库加载失败', 'D3 CDN 不可用，请刷新或加 ?demo=1 使用离线 mock');
+        return;
+      }
       if (q.prototype === '1' || q.demo === '1' || (!childId && !token)) loadPrototypeGraph();
       else loadGraph();
     }

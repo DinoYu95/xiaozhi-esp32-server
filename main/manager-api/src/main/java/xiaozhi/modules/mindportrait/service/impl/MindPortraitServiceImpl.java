@@ -163,8 +163,21 @@ public class MindPortraitServiceImpl implements MindPortraitService {
         String ageBand = GrowthAgeBandUtil.resolveAgeBand(child);
         MpTemplateReleaseEntity release = findPublishedRelease(ageBand);
         if (release == null) {
+            List<String> publishedBands = releaseDao.selectList(
+                    new LambdaQueryWrapper<MpTemplateReleaseEntity>()
+                            .eq(MpTemplateReleaseEntity::getStatus, MpTemplateReleaseEntity.STATUS_PUBLISHED)
+                            .orderByAsc(MpTemplateReleaseEntity::getAgeBand))
+                    .stream()
+                    .map(MpTemplateReleaseEntity::getAgeBand)
+                    .distinct()
+                    .collect(Collectors.toList());
+            String publishedHint = publishedBands.isEmpty()
+                    ? "manager-api 中 mp_template_release 尚无 published 记录（教研「通过」可能未同步到本环境）"
+                    : "manager-api 已发布年龄段：" + String.join(", ", publishedBands);
             throw new RenException("暂无已发布的心绪图谱模板：" + ageBand
-                    + "（孩子档案解析结果；已发布 preschool 不等于所有孩子都能用，请发版对应年龄段或核对生日/年级/年龄段）");
+                    + "（孩子档案解析结果）。"
+                    + publishedHint
+                    + "。请发版对应年龄段或核对孩子生日/年级/年龄段。");
         }
         List<MpTemplateNodeEntity> templateNodes = nodeDao.selectList(
                 new LambdaQueryWrapper<MpTemplateNodeEntity>()

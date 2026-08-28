@@ -1638,7 +1638,7 @@
 
     async function fetchUnreadNotification() {
       try {
-        const resp = await fetch(`${apiBase}/parent-api/growth-portrait/notifications?childId=${encodeURIComponent(childId)}&page=1&pageSize=5`, {
+        const resp = await fetch(`${apiBase}/parent-api/mind-portrait/notifications?childId=${encodeURIComponent(childId)}&page=1&pageSize=5`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const json = await resp.json();
@@ -1788,7 +1788,7 @@
       }
       showLoading();
       try {
-        const resp = await fetch(`${apiBase}/parent-api/growth-portrait/graph?childId=${encodeURIComponent(childId)}`, {
+        const resp = await fetch(`${apiBase}/parent-api/mind-portrait/graph?childId=${encodeURIComponent(childId)}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const json = await resp.json();

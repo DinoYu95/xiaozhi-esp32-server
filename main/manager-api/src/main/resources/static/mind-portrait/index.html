@@ -515,9 +515,12 @@
 
     function deriveApiBase() {
       const path = window.location.pathname || '';
-      const marker = '/static/mind-portrait/';
-      const idx = path.indexOf(marker);
-      if (idx >= 0) return window.location.origin + path.slice(0, idx);
+      for (const marker of ['/static/mind-portrait/', '/static/growth-portrait/']) {
+        const idx = path.indexOf(marker);
+        if (idx >= 0) return window.location.origin + path.slice(0, idx);
+      }
+      const m = path.match(/^(.*\/xiaozhi)/);
+      if (m) return window.location.origin + m[1];
       return window.location.origin;
     }
 
@@ -1636,6 +1639,143 @@
       } catch (_) { /* optional */ }
     }
 
+    const MIND_DIMS = ['express','recover','self','peer','parent','stable'];
+    const SUB_TEMPLATES = {
+      express:['命名感受','主动倾诉','非暴力表达','情绪识别'],
+      recover:['挫折恢复','再尝试','求助时机','失败后平复'],
+      self:['自我肯定','接纳失败','合理期待','看到自己的好'],
+      peer:['发起互动','冲突修复','被排斥应对','合作分工'],
+      parent:['分享日常','表达需求','边界沟通','寻求安慰'],
+      stable:['睡眠提及','情绪波动','整体活力','节奏稳定']
+    };
+    const SIGNAL_VERBS = ['对话中','聊天时','游戏时','复盘时'];
+    const SIGNAL_DESC = ['主动表现','反复出现','跨场景','稳定趋势'];
+
+    function waitForGraphShell(cb, attempt) {
+      attempt = attempt || 0;
+      const shell = document.querySelector('.graph-shell');
+      const W = shell ? shell.clientWidth : 0;
+      const H = shell ? shell.clientHeight : 0;
+      if (W > 80 && H > 160) return cb();
+      if (attempt > 50) return cb();
+      setTimeout(() => waitForGraphShell(cb, attempt + 1), 40);
+    }
+
+    function resetGraphInteractionState() {
+      userAdjustedZoom = false;
+      graphMultiTouch = false;
+      graphTouchMoved = false;
+      suppressNodeSelectUntil = 0;
+      cancelPendingFocus();
+    }
+
+
+    function mockLightState(strength, evidenceCount, required) {
+      const target = Math.max(1, required || 3);
+      if (evidenceCount < 2) return 'locked';
+      if (evidenceCount >= target && (evidenceCount >= Math.ceil(target * 1.2) || strength >= 72)) return 'strong';
+      if (evidenceCount >= target) return 'visible';
+      return 'collecting';
+    }
+
+    function buildMockMindApiData(ageBand) {
+      const rand = (() => { let s = ageBand.length * 997 + 42; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; })();
+      const nodes = [];
+      const links = [];
+      let strongCount = 0;
+      MIND_DIMS.forEach((dim, di) => {
+        const hubId = 'hub-' + dim;
+        const hubSt = 42 + Math.floor(rand() * 48);
+        const hubEv = 4 + Math.floor(rand() * 6);
+        const hubState = mockLightState(hubSt, hubEv, 6);
+        if (hubState === 'strong') strongCount++;
+        nodes.push({
+          id: hubId, type: 'hub', label: DIM_LABELS[dim], shortLabel: DIM_LABELS[dim], shortDesc: '心绪维度',
+          cluster: dim, level: 1, strength: hubSt, evidenceCount: hubEv, requiredCount: 6, state: hubState,
+          parentHub: null, parentSub: null,
+          evidence: '已收集 ' + hubEv + ' 条观测证据',
+          suggest: hubState === 'strong' ? '积极信号 · 可查看详情并安排亲子陪伴' : '继续日常互动观察'
+        });
+        links.push({ source: 'center', target: hubId, strength: hubSt * 0.55 });
+        const subs = SUB_TEMPLATES[dim];
+        const subCount = 4;
+        for (let si = 0; si < subCount; si++) {
+          const subId = 'sub-' + dim + '-' + si;
+          const st = 28 + Math.floor(rand() * 62);
+          const ev = 1 + Math.floor(rand() * 6);
+          const label = subs[si % subs.length];
+          const subState = mockLightState(st, ev, 5);
+          if (subState === 'strong') strongCount++;
+          nodes.push({
+            id: subId, type: 'sub', label, shortLabel: label,
+            shortDesc: subState === 'strong' ? '积极信号' : (subState === 'visible' ? '倾向显现' : '观察中'),
+            cluster: dim, level: 2, strength: st, evidenceCount: ev, requiredCount: 5, state: subState,
+            parentHub: hubId, parentSub: null,
+            evidence: '已收集 ' + ev + ' 条观测证据',
+            suggest: ev >= 5 ? '倾向显现 · 继续观察同场景表现' : '观察中 · 再积累 ' + Math.max(1, 5 - ev) + ' 条证据可「显现」'
+          });
+          links.push({ source: hubId, target: subId, strength: st * 0.65 });
+          const sigN = subState === 'strong' ? 2 : 1;
+          for (let gi = 0; gi < sigN; gi++) {
+            const sigId = 'sig-' + dim + '-' + si + '-' + gi;
+            const gst = Math.min(96, st + Math.floor(rand() * 18) - 4);
+            const gev = 1 + Math.floor(rand() * 3);
+            const sigState = mockLightState(gst, gev, 3);
+            if (sigState === 'strong') strongCount++;
+            const sigDesc = SIGNAL_VERBS[(si + gi) % SIGNAL_VERBS.length] + ' · ' + SIGNAL_DESC[gi % SIGNAL_DESC.length];
+            nodes.push({
+              id: sigId, type: 'signal', label, shortLabel: label.length > 5 ? label.slice(0, 5) : label,
+              shortDesc: sigDesc, cluster: dim, level: 3, strength: gst, evidenceCount: gev, requiredCount: 3,
+              state: sigState, parentHub: hubId, parentSub: subId,
+              evidence: '已收集 ' + gev + ' 条观测证据',
+              suggest: sigState === 'strong' ? '积极信号 · 可查看详情并安排亲子陪伴' : '观察中 · 再积累 ' + Math.max(1, 3 - gev) + ' 条证据可「显现」'
+            });
+            links.push({ source: subId, target: sigId, strength: gst * 0.8 });
+          }
+        }
+      });
+      return {
+        releaseId: 1,
+        ageBand: ageBand,
+        strongCount,
+        center: { label: childName || '小亮', shortDesc: '观察枢纽', avatarUrl: '' },
+        rules: { observeDays: ageBand === 'preschool' ? 21 : (ageBand === 'lower' ? 14 : 10), weeklyInstantCap: 2 },
+        nodes,
+        links
+      };
+    }
+
+    function bootGraphAfterLoad() {
+      resetGraphInteractionState();
+      waitForGraphShell(() => {
+        initGraph(false);
+        showDetail(null);
+        updateDimming();
+      });
+    }
+
+    async function loadPrototypeGraph() {
+      showLoading();
+      resetGraphInteractionState();
+      const loadStarted = Date.now();
+      currentAgeBand = 'lower';
+      childName = childName || '小亮';
+      const data = buildMockMindApiData(currentAgeBand);
+      graphMeta = {
+        strongCount: data.strongCount || 0,
+        observeDays: data.rules?.observeDays || 14,
+        weeklyInstantCap: data.rules?.weeklyInstantCap || 2
+      };
+      graphData = mapApiToGraph(data);
+      selectedId = null;
+      renderLightRules();
+      renderSummaryPanel();
+      const remain = Math.max(0, 650 - (Date.now() - loadStarted));
+      if (remain) await new Promise(r => setTimeout(r, remain));
+      showApp();
+      requestAnimationFrame(() => requestAnimationFrame(bootGraphAfterLoad));
+    }
+
     async function loadGraph() {
       if (!childId) {
         showError('缺少孩子信息');
@@ -1647,10 +1787,19 @@
       }
       showLoading();
       try {
-        const resp = await fetch(`${apiBase}/parent-api/mind-portrait/graph?childId=${encodeURIComponent(childId)}`, {
+        const url = `${apiBase}/parent-api/mind-portrait/graph?childId=${encodeURIComponent(childId)}`;
+        const resp = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        const json = await resp.json();
+        let json;
+        try {
+          json = await resp.json();
+        } catch (_) {
+          throw new Error(resp.ok ? '响应格式错误' : `请求失败 (${resp.status})，请确认 apiBase 与后端已部署`);
+        }
+        if (!resp.ok && json.code === undefined) {
+          throw new Error(`请求失败 (${resp.status})`);
+        }
         if (json.code !== 0) throw new Error(json.msg || '加载失败');
         const data = json.data || {};
         currentAgeBand = data.ageBand || 'upper';
@@ -1673,7 +1822,16 @@
           });
         });
       } catch (e) {
-        showError(e.message || '网络错误，请稍后重试');
+        let msg = e.message || '网络错误，请稍后重试';
+        if (/暂无已发布的心绪图谱模板/.test(msg)) {
+          msg += '。请在教研 mind-admin 发版与孩子档案匹配的 age_band（preschool/lower/upper/middle），四个年龄段需分别审核通过。';
+        } else if (/401|403|token|凭证|登录/.test(msg)) {
+          msg += '。请从小程序重新进入，确保 web-view URL 携带 token 参数。';
+        } else if (/404|请求失败/.test(msg)) {
+          msg += `。当前 apiBase=${apiBase || '(空)'}，请确认 manager-api 已部署且 nginx 已配置 /static/mind-portrait/。`;
+        }
+        console.error('[mind-portrait] loadGraph failed', { apiBase, childId, msg: e.message, err: e });
+        showError(msg);
       }
     }
 
@@ -1702,7 +1860,7 @@
         if (n) selectNode(n);
         document.getElementById('notifyToast').classList.remove('show');
       });
-      bindTap(document.getElementById('retryBtn'), () => loadGraph());
+      bindTap(document.getElementById('retryBtn'), () => { if (!childId && !token) loadPrototypeGraph(); else loadGraph(); });
       window.addEventListener('resize', () => {
         if (document.getElementById('app').classList.contains('ready')) initGraph(true);
       });
@@ -1716,7 +1874,8 @@
       token = q.token || '';
       apiBase = q.apiBase || deriveApiBase();
       bindUi();
-      loadGraph();
+      if (q.prototype === '1' || q.demo === '1' || (!childId && !token)) loadPrototypeGraph();
+      else loadGraph();
     }
 
     boot();

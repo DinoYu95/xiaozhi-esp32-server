@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
   <script>
     if (typeof d3 === 'undefined') {
-      document.write('<script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js"><\\/script>');
+      document.write('<script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js"><\/script>');
     }
   </script>
   <style>
@@ -234,15 +234,6 @@
     }
     .state-overlay.hidden { display: none; }
     .state-overlay h2 { font-size: 1rem; color: #37474f; margin-bottom: 8px; }
-    .state-overlay #errorMsg {
-      font-size: 0.92rem; color: #455a64; margin-bottom: 10px; line-height: 1.65;
-      max-width: 92vw; word-break: break-word; font-weight: 500;
-    }
-    .state-overlay #errorDetail {
-      font-size: 0.72rem; color: #90a4ae; margin-bottom: 16px; line-height: 1.5;
-      max-width: 92vw; word-break: break-all; text-align: left;
-      background: rgba(0,0,0,0.04); padding: 8px 10px; border-radius: 8px;
-    }
     .state-overlay p { font-size: 0.86rem; color: #78909c; margin-bottom: 16px; line-height: 1.6; }
     .state-spinner {
       width: 32px; height: 32px; border: 3px solid rgba(99,102,241,0.2);
@@ -355,7 +346,6 @@
   <div id="errorState" class="state-overlay hidden">
     <h2>无法打开心绪图谱</h2>
     <p id="errorMsg">加载失败</p>
-    <pre id="errorDetail"></pre>
     <button type="button" class="retry-btn" id="retryBtn">重试</button>
   </div>
 
@@ -370,7 +360,7 @@
           </div>
           <div class="top-actions">
             <button type="button" class="icon-btn" id="helpBtn" title="读图说明">?</button>
-            <span class="stat-pill" id="observePill">强烈 0</span>
+            <span class="stat-pill" id="observePill">积极 0</span>
           </div>
         </div>
       </div>
@@ -394,9 +384,9 @@
               <b>节点含义</b>
               <div style="font-size:0.55rem;color:#6b7a99;margin-bottom:3px">颜色表示层级</div>
               <div><i style="background:#6366f1;border:2px solid #c7d2fe"></i> 孩子中心</div>
-              <div><i style="background:#9254de;border:2px solid #efdbff"></i> 心绪维度</div>
-              <div><i style="background:#597ef7"></i> 子维度</div>
-              <div><i style="background:#ffb020;box-shadow:0 0 6px #ffb020"></i> 对话信号</div>
+              <div><i style="background:#9254de;border:2px solid #efdbff"></i> 维度 Hub</div>
+              <div><i style="background:#597ef7"></i> 子能力</div>
+              <div><i style="background:#ffb020;box-shadow:0 0 6px #ffb020"></i> 观测信号</div>
             </div>
             <div class="corner tr" id="zoomLabel">100%</div>
             <div class="zoom-btns">
@@ -411,22 +401,22 @@
       <div class="help-panel" id="helpPanel">
         <div class="row">
           <div class="dot-sample" style="background:#9254de;border:3px solid #efdbff"></div>
-          <div><strong>心绪维度（你圈的大紫圆）</strong><br>6 个心绪维度。证据达标后会<strong style="color:#d3adf7">整圆变亮</strong>，积极信号时金色脉冲。</div>
+          <div><strong>维度 Hub（你圈的大紫圆）</strong><br>6 个心绪维度。证据达标后会<strong style="color:#d3adf7">整圆变亮</strong>，积极信号时金色脉冲。</div>
         </div>
         <div class="row">
           <div class="dot-sample" style="background:#597ef7;width:14px;height:14px;margin:4px"></div>
-          <div><strong>子维度</strong> · 如「拆解问题」。收集够证据后从灰变亮。</div>
+          <div><strong>子维度</strong> · 如「挫折恢复」。收集够证据后从灰变亮。</div>
         </div>
         <div class="row">
           <div class="dot-sample" style="background:#ffb020;box-shadow:0 0 8px #ffb020"></div>
-          <div><strong>对话信号</strong> · 最小证据点。强烈时会闪，并可能触发家长通知。</div>
+          <div><strong>观测信号</strong> · 最小证据点。强烈时会闪，并可能触发家长通知。</div>
         </div>
       </div>
 
       <div id="summaryPanel"></div>
 
       <div id="lightPanel">
-        <p id="lightIntro" style="margin-bottom:10px;color:#c5d0e8;">心绪不会「一键判定」，而是随与小智互动自动累积观察证据：</p>
+        <p id="lightIntro" style="margin-bottom:10px;color:#c5d0e8;">心绪不会「一键判定」，而是随与小智互动自动累积证据：</p>
         <div style="display:flex;flex-direction:column;gap:8px;">
           <div style="padding:8px 10px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06)">
             <span style="color:#6b7a99">① 未解锁</span> · 证据 &lt; 2 条 → 灰点
@@ -463,16 +453,14 @@
     };
     /** 模块 cluster 仅用于布局分组，不参与节点配色 */
     const CLUSTER_COLORS = {
-      logic:'#ffb020', create:'#ff7a45', study:'#597ef7', lang:'#9254de',
-      social:'#36cfc9', curious:'#ffc53d', interest:'#ff85c0', meta:'#95de64',
-      motor:'#69c0ff', fine:'#b37feb', math:'#ffd666', focus:'#5cdbd3',
-      read:'#9e86ff', emotion:'#ff9c6e'
+      express:'#ff9c6e', recover:'#36cfc9', self:'#a78bfa', peer:'#597ef7',
+      parent:'#ffc53d', stable:'#95de64', center:'#6366f1'
     };
     const TYPE_META = {
-      center: { badge: '观察中心', desc: '代表孩子本人，所有心绪维度连在这里', color: TYPE_COLORS.center },
-      hub:    { badge: '心绪心绪维度', desc: '大方向能力区，如「语言表达」「探究好奇」', color: TYPE_COLORS.hub },
+      center: { badge: '观察中心', desc: '代表孩子本人，所有成长维度连在这里', color: TYPE_COLORS.center },
+      hub:    { badge: '成长维度 Hub', desc: '心绪大方向，如「情绪表达」「压力恢复」', color: TYPE_COLORS.hub },
       sub:    { badge: '子维度', desc: '维度下的具体表现，如「拆解问题」「书面表达」', color: TYPE_COLORS.sub },
-      signal: { badge: '对话信号', desc: '来自对话/任务的单条证据，是最小的「点亮」单位', color: TYPE_COLORS.signal }
+      signal: { badge: '对话信号', desc: '来自对话的单条证据，是最小的「观察」单位', color: TYPE_COLORS.signal }
     };
     const LIGHT_STATES = [
       { id: 'locked', label: '未解锁' },
@@ -481,10 +469,8 @@
       { id: 'strong', label: '积极信号' }
     ];
     const DIM_LABELS = {
-      logic:'逻辑推理', create:'创造表达', study:'学习策略', lang:'语言表达',
-      social:'合作沟通', curious:'探究好奇', interest:'兴趣倾向', meta:'自我觉察',
-      motor:'大运动', fine:'精细动作', math:'数理思维', focus:'专注稳定',
-      read:'阅读表达', emotion:'情绪调节'
+      express:'情绪表达', recover:'压力恢复', self:'自我感受', peer:'同伴互动',
+      parent:'亲子沟通', stable:'状态稳定'
     };
     const AVATAR_THEME = {
       preschool: { hair: '#5c4033', skin: '#ffe0c2', accent: '#ffb020' },
@@ -551,12 +537,10 @@
       document.getElementById('app').classList.remove('ready');
     }
 
-    function showError(msg, detail) {
+    function showError(msg) {
       document.getElementById('loadingState').classList.add('hidden');
       document.getElementById('errorState').classList.remove('hidden');
       document.getElementById('errorMsg').textContent = msg || '加载失败';
-      const detailEl = document.getElementById('errorDetail');
-      if (detailEl) detailEl.textContent = detail || '';
       document.getElementById('app').classList.remove('ready');
     }
 
@@ -607,6 +591,7 @@
       n.parentSub = String(n.parentSub || n.parentSubCode || '').trim();
       if (n.parentHub === 'undefined') n.parentHub = '';
       if (n.parentSub === 'undefined') n.parentSub = '';
+      n.cluster = String(n.cluster || n.clusterCode || '').trim();
       return n;
     }
 
@@ -623,6 +608,23 @@
       nodes.filter(n => n.type === 'signal' && n.parentSub).forEach(n => add(n.parentSub, n.id, 28));
       nodes.filter(n => n.type === 'signal' && !n.parentSub && n.parentHub).forEach(n => add(n.parentHub, n.id, 22));
       return links;
+    }
+
+
+    function enrichNodeClusters(nodes) {
+      const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+      nodes.forEach(n => {
+        n.cluster = String(n.cluster || n.clusterCode || '').trim();
+        if (n.cluster) return;
+        if (n.type === 'hub') {
+          const m = n.id.match(/\.HUB\.([^.]+)$/i) || n.id.match(/hub[-_](\w+)/i);
+          if (m) n.cluster = m[1].toLowerCase();
+        } else if (n.parentHub && byId[n.parentHub]?.cluster) {
+          n.cluster = byId[n.parentHub].cluster;
+        } else if (n.parentSub && byId[n.parentSub]?.cluster) {
+          n.cluster = byId[n.parentSub].cluster;
+        }
+      });
     }
 
     function mapApiToGraph(data) {
@@ -663,6 +665,7 @@
           links.push({ source: 'center', target: hub.id, strength: (hub.strength || 50) * 0.55 });
         }
       });
+      enrichNodeClusters(nodes);
       applyVisualHierarchy(nodes);
       return { nodes, links };
     }
@@ -844,7 +847,7 @@
       if (st.strong) parts.push(`${st.strong} 个积极信号`);
       if (st.visible) parts.push(`${st.visible} 个已显现`);
       if (st.collecting) parts.push(`${st.collecting} 个收集中`);
-      if (!parts.length) return subs.length ? `${subs.length} 个子维度待观测` : '暂无子维度数据';
+      if (!parts.length) return subs.length ? `${subs.length} 个子能力待观测` : '暂无子能力数据';
       return parts.join(' · ');
     }
 
@@ -856,12 +859,12 @@
         return `孩子在「${names.join('」「')}」等方向表现突出，继续日常互动即可积累更多证据。`;
       }
       if (stats.visible > 0) {
-        return `已有 ${stats.visible} 处能力倾向显现，心谱正在慢慢点亮。`;
+        return `已有 ${stats.visible} 处能力倾向显现，星图正在慢慢点亮。`;
       }
       if (stats.collecting > 0) {
         return `已有 ${stats.collecting} 处正在收集中，和小智多聊相关话题会加快显现。`;
       }
-      return '心谱刚刚开始记录，继续和小智聊天、做任务，证据会自动累积。';
+      return '星图刚刚开始记录，继续和小智聊天、做任务，证据会自动累积。';
     }
 
     function summaryBadge(state) {
@@ -874,7 +877,7 @@
     }
 
     function summaryCardAction(nodeId) {
-      return `<button type="button" class="summary-card-action" data-node-id="${nodeId}">在心谱中查看 ›</button>`;
+      return `<button type="button" class="summary-card-action" data-node-id="${nodeId}">在星图中查看 ›</button>`;
     }
 
     function renderSummaryPanel() {
@@ -946,7 +949,7 @@
       panel.innerHTML = `
         <div class="summary-hero">
           <div class="eyebrow">${childName} · ${bandLabel}${days ? ` · 已观测 ${days} 天` : ''}</div>
-          <h3>心绪概览</h3>
+          <h3>成长概览</h3>
           <p class="lead">${buildSummaryLead(stats, hubs)}</p>
           <div class="hero-row">
             <span class="hero-num">${stats.strong}</span>
@@ -971,7 +974,7 @@
           <div class="summary-section-title">值得继续观察</div>
           ${watchCards}
         </div>
-        <div class="summary-foot">💡 无需刻意「刷记录」，日常和小智聊天、做任务即可。需要看详情时点「在心谱中查看」。</div>`;
+        <div class="summary-foot">💡 无需刻意「刷点亮」，日常和小智聊天、做任务即可。需要看详情时点「在星图中查看」。</div>`;
 
       panel.querySelectorAll('.summary-card-action[data-node-id]').forEach(btn => {
         bindTap(btn, (ev) => {
@@ -1010,7 +1013,7 @@
       const days = graphMeta.observeDays || '—';
       const total = graphData.nodes ? graphData.nodes.length : 0;
       document.getElementById('profileMeta').textContent = `${childName} · ${bandLabel} · 观测 ${days} 天 · ${total} 节点`;
-      document.getElementById('observePill').textContent = `强烈 ${graphMeta.strongCount || 0}`;
+      document.getElementById('observePill').textContent = `积极 ${graphMeta.strongCount || 0}`;
     }
 
     function evidenceProgressLabel(node) {
@@ -1033,7 +1036,7 @@
     function showDetail(node) {
       const sheet = document.getElementById('detailSheet');
       if (!node || node.type === 'center') {
-        sheet.innerHTML = '<p style="color:#6b7a99;font-size:0.74rem;">点击任意节点 · <strong style="color:#d3adf7">大紫圆=心绪维度</strong> · 金闪=积极信号</p>';
+        sheet.innerHTML = '<p style="color:#6b7a99;font-size:0.74rem;">点击任意节点 · <strong style="color:#d3adf7">大紫圆=维度 Hub</strong> · 金闪=积极信号</p>';
         return;
       }
       const meta = TYPE_META[node.type];
@@ -1656,17 +1659,6 @@
       } catch (_) { /* optional */ }
     }
 
-    const MIND_DIMS = ['express','recover','self','peer','parent','stable'];
-    const SUB_TEMPLATES = {
-      express:['命名感受','主动倾诉','非暴力表达','情绪识别'],
-      recover:['挫折恢复','再尝试','求助时机','失败后平复'],
-      self:['自我肯定','接纳失败','合理期待','看到自己的好'],
-      peer:['发起互动','冲突修复','被排斥应对','合作分工'],
-      parent:['分享日常','表达需求','边界沟通','寻求安慰'],
-      stable:['睡眠提及','情绪波动','整体活力','节奏稳定']
-    };
-    const SIGNAL_VERBS = ['对话中','聊天时','游戏时','复盘时'];
-    const SIGNAL_DESC = ['主动表现','反复出现','跨场景','稳定趋势'];
 
     function waitForGraphShell(cb, attempt) {
       attempt = attempt || 0;
@@ -1686,162 +1678,31 @@
       cancelPendingFocus();
     }
 
-
-    function mockLightState(strength, evidenceCount, required) {
-      const target = Math.max(1, required || 3);
-      if (evidenceCount < 2) return 'locked';
-      if (evidenceCount >= target && (evidenceCount >= Math.ceil(target * 1.2) || strength >= 72)) return 'strong';
-      if (evidenceCount >= target) return 'visible';
-      return 'collecting';
-    }
-
-    function buildMockMindApiData(ageBand) {
-      const rand = (() => { let s = ageBand.length * 997 + 42; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; })();
-      const nodes = [];
-      const links = [];
-      let strongCount = 0;
-      MIND_DIMS.forEach((dim, di) => {
-        const hubId = 'hub-' + dim;
-        const hubSt = 42 + Math.floor(rand() * 48);
-        const hubEv = 4 + Math.floor(rand() * 6);
-        const hubState = mockLightState(hubSt, hubEv, 6);
-        if (hubState === 'strong') strongCount++;
-        nodes.push({
-          id: hubId, type: 'hub', label: DIM_LABELS[dim], shortLabel: DIM_LABELS[dim], shortDesc: '心绪维度',
-          cluster: dim, level: 1, strength: hubSt, evidenceCount: hubEv, requiredCount: 6, state: hubState,
-          parentHub: null, parentSub: null,
-          evidence: '已收集 ' + hubEv + ' 条观测证据',
-          suggest: hubState === 'strong' ? '积极信号 · 可查看详情并安排亲子陪伴' : '继续日常互动观察'
-        });
-        links.push({ source: 'center', target: hubId, strength: hubSt * 0.55 });
-        const subs = SUB_TEMPLATES[dim];
-        const subCount = 4;
-        for (let si = 0; si < subCount; si++) {
-          const subId = 'sub-' + dim + '-' + si;
-          const st = 28 + Math.floor(rand() * 62);
-          const ev = 1 + Math.floor(rand() * 6);
-          const label = subs[si % subs.length];
-          const subState = mockLightState(st, ev, 5);
-          if (subState === 'strong') strongCount++;
-          nodes.push({
-            id: subId, type: 'sub', label, shortLabel: label,
-            shortDesc: subState === 'strong' ? '积极信号' : (subState === 'visible' ? '倾向显现' : '观察中'),
-            cluster: dim, level: 2, strength: st, evidenceCount: ev, requiredCount: 5, state: subState,
-            parentHub: hubId, parentSub: null,
-            evidence: '已收集 ' + ev + ' 条观测证据',
-            suggest: ev >= 5 ? '倾向显现 · 继续观察同场景表现' : '观察中 · 再积累 ' + Math.max(1, 5 - ev) + ' 条证据可「显现」'
-          });
-          links.push({ source: hubId, target: subId, strength: st * 0.65 });
-          const sigN = subState === 'strong' ? 2 : 1;
-          for (let gi = 0; gi < sigN; gi++) {
-            const sigId = 'sig-' + dim + '-' + si + '-' + gi;
-            const gst = Math.min(96, st + Math.floor(rand() * 18) - 4);
-            const gev = 1 + Math.floor(rand() * 3);
-            const sigState = mockLightState(gst, gev, 3);
-            if (sigState === 'strong') strongCount++;
-            const sigDesc = SIGNAL_VERBS[(si + gi) % SIGNAL_VERBS.length] + ' · ' + SIGNAL_DESC[gi % SIGNAL_DESC.length];
-            nodes.push({
-              id: sigId, type: 'signal', label, shortLabel: label.length > 5 ? label.slice(0, 5) : label,
-              shortDesc: sigDesc, cluster: dim, level: 3, strength: gst, evidenceCount: gev, requiredCount: 3,
-              state: sigState, parentHub: hubId, parentSub: subId,
-              evidence: '已收集 ' + gev + ' 条观测证据',
-              suggest: sigState === 'strong' ? '积极信号 · 可查看详情并安排亲子陪伴' : '观察中 · 再积累 ' + Math.max(1, 3 - gev) + ' 条证据可「显现」'
-            });
-            links.push({ source: subId, target: sigId, strength: gst * 0.8 });
-          }
-        }
-      });
-      return {
-        releaseId: 1,
-        ageBand: ageBand,
-        strongCount,
-        center: { label: childName || '小亮', shortDesc: '观察枢纽', avatarUrl: '' },
-        rules: { observeDays: ageBand === 'preschool' ? 21 : (ageBand === 'lower' ? 14 : 10), weeklyInstantCap: 2 },
-        nodes,
-        links
-      };
-    }
-
     function bootGraphAfterLoad() {
       resetGraphInteractionState();
       waitForGraphShell(() => {
-        try {
-          if (typeof d3 === 'undefined') {
-            showError('图表库加载失败', 'D3 未加载');
-            return;
-          }
-          initGraph(false);
-          showDetail(null);
-          updateDimming();
-        } catch (e) {
-          showError('图谱渲染失败', (e && e.message) || String(e));
-        }
-      });
-    }
-
-    async function loadPrototypeGraph() {
-      showLoading();
-      resetGraphInteractionState();
-      const loadStarted = Date.now();
-      currentAgeBand = 'lower';
-      childName = childName || '小亮';
-      const data = buildMockMindApiData(currentAgeBand);
-      graphMeta = {
-        strongCount: data.strongCount || 0,
-        observeDays: data.rules?.observeDays || 14,
-        weeklyInstantCap: data.rules?.weeklyInstantCap || 2
-      };
-      graphData = mapApiToGraph(data);
-      selectedId = null;
-      renderLightRules();
-      renderSummaryPanel();
-      const remain = Math.max(0, 650 - (Date.now() - loadStarted));
-      if (remain) await new Promise(r => setTimeout(r, remain));
-      showApp();
-      requestAnimationFrame(() => requestAnimationFrame(bootGraphAfterLoad));
-    }
-
-    function bootGraphSafe() {
-      try {
-        if (typeof d3 === 'undefined') {
-          showError('图表库加载失败', 'D3 未加载，请检查网络或刷新；开发环境可加 ?demo=1 预览 mock 数据');
-          return;
-        }
         initGraph(false);
         showDetail(null);
         updateDimming();
         fetchUnreadNotification();
-      } catch (e) {
-        console.error('[mind-portrait] initGraph failed', e);
-        showError('图谱渲染失败', (e && e.message) || String(e));
-      }
+      });
     }
 
     async function loadGraph() {
       if (!childId) {
-        showError('缺少孩子信息', 'web-view URL 需带 childId=设备档案 id');
+        showError('缺少孩子信息');
         return;
       }
       if (!token) {
-        showError('缺少登录凭证', 'web-view URL 需带 token=家长 Bearer（与成长星图相同）');
+        showError('缺少登录凭证，请返回重新进入');
         return;
       }
       showLoading();
       try {
-        const url = `${apiBase}/parent-api/mind-portrait/graph?childId=${encodeURIComponent(childId)}`;
-        const resp = await fetch(url, {
+        const resp = await fetch(`${apiBase}/parent-api/mind-portrait/graph?childId=${encodeURIComponent(childId)}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        let json;
-        const raw = await resp.text();
-        try {
-          json = raw ? JSON.parse(raw) : {};
-        } catch (_) {
-          throw new Error(resp.ok ? '响应格式错误' : `请求失败 (${resp.status})，请确认 apiBase 与后端已部署`);
-        }
-        if (!resp.ok && json.code === undefined) {
-          throw new Error(`请求失败 (${resp.status})`);
-        }
+        const json = await resp.json();
         if (json.code !== 0) throw new Error(json.msg || '加载失败');
         const data = json.data || {};
         currentAgeBand = data.ageBand || 'upper';
@@ -1855,22 +1716,9 @@
         renderLightRules();
         renderSummaryPanel();
         showApp();
-        requestAnimationFrame(() => requestAnimationFrame(bootGraphSafe));
+        requestAnimationFrame(() => requestAnimationFrame(bootGraphAfterLoad));
       } catch (e) {
-        let msg = e.message || '网络错误，请稍后重试';
-        let detail = `apiBase=${apiBase || '(空)'} · childId=${childId || '(空)'} · 接口=${apiBase}/parent-api/mind-portrait/graph`;
-        if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) {
-          msg = '网络请求失败（无法连接后端）';
-          detail += '。请确认 request 合法域名与 apiBase 一致，且含 /xiaozhi 前缀。';
-        } else if (/暂无已发布的心绪图谱模板/.test(msg)) {
-          detail += '。教研「通过」≠ 所有孩子可用，需发版与孩子 age_band 一致的模板。';
-        } else if (/401|403|Unauthorized|token|凭证|登录/i.test(msg)) {
-          detail += '。请从小程序重新进入，确保 token 未过期。';
-        } else if (/404|请求失败/.test(msg)) {
-          detail += '。请确认 manager-api 已部署 mindportrait 模块且 nginx 已配置 mind-portrait 静态目录。';
-        }
-        console.error('[mind-portrait] loadGraph failed', { apiBase, childId, msg: e.message, err: e });
-        showError(msg, detail);
+        showError(e.message || '网络错误，请稍后重试');
       }
     }
 
@@ -1899,7 +1747,7 @@
         if (n) selectNode(n);
         document.getElementById('notifyToast').classList.remove('show');
       });
-      bindTap(document.getElementById('retryBtn'), () => { if (!childId && !token) loadPrototypeGraph(); else loadGraph(); });
+      bindTap(document.getElementById('retryBtn'), () => loadGraph());
       window.addEventListener('resize', () => {
         if (document.getElementById('app').classList.contains('ready')) initGraph(true);
       });
@@ -1913,12 +1761,7 @@
       token = q.token || q.accessToken || q.access_token || q.parentToken || '';
       apiBase = (q.apiBase || q.api_base || deriveApiBase()).replace(/\/$/, '');
       bindUi();
-      if (typeof d3 === 'undefined' && !(q.prototype === '1' || q.demo === '1' || (!childId && !token))) {
-        showError('图表库加载失败', 'D3 CDN 不可用，请刷新或加 ?demo=1 使用离线 mock');
-        return;
-      }
-      if (q.prototype === '1' || q.demo === '1' || (!childId && !token)) loadPrototypeGraph();
-      else loadGraph();
+      loadGraph();
     }
 
     boot();

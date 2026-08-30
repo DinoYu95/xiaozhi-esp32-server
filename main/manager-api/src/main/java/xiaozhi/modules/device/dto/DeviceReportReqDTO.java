@@ -53,6 +53,22 @@ public class DeviceReportReqDTO implements Serializable {
     @Schema(description = "板子配置信息")
     private BoardInfo board;
 
+    @Schema(description = "业务设备类型")
+    @JsonProperty("device_type")
+    private String deviceType;
+
+    @Schema(description = "系统 SWU 版本")
+    @JsonProperty("system_version")
+    private String systemVersion;
+
+    @Schema(description = "应用 SWU 版本（与 application.version 二选一）")
+    @JsonProperty("app_version")
+    private String appVersion;
+
+    @Schema(description = "OTA 订阅通道")
+    @JsonProperty("ota_channel")
+    private String otaChannel;
+
     // endregion
 
     @Getter

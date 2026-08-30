@@ -12,6 +12,7 @@ import org.apache.shiro.spring.web.ShiroFilterFactoryBean;
 import org.apache.shiro.web.config.ShiroFilterConfiguration;
 import org.apache.shiro.web.mgt.DefaultWebSecurityManager;
 import org.apache.shiro.web.session.mgt.DefaultWebSessionManager;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -20,6 +21,7 @@ import xiaozhi.modules.parent.consent.filter.ParentConsentFilter;
 import xiaozhi.modules.parent.filter.ParentTokenFilter;
 import xiaozhi.modules.security.oauth2.Oauth2Filter;
 import xiaozhi.modules.security.oauth2.Oauth2Realm;
+import xiaozhi.modules.security.secret.DevopsOtaTokenFilter;
 import xiaozhi.modules.security.secret.ServerSecretFilter;
 import xiaozhi.modules.sys.service.SysParamsService;
 
@@ -30,6 +32,9 @@ import xiaozhi.modules.sys.service.SysParamsService;
  */
 @Configuration
 public class ShiroConfig {
+
+    @Value("${devops.ota.service-token:}")
+    private String devopsOtaServiceToken;
 
     @Bean
     public DefaultWebSessionManager sessionManager() {
@@ -67,6 +72,7 @@ public class ShiroConfig {
         filters.put("parentConsent", parentConsentFilter);
         // 服务密钥过滤
         filters.put("server", new ServerSecretFilter(sysParamsService));
+        filters.put("devopsOta", new DevopsOtaTokenFilter(sysParamsService, devopsOtaServiceToken));
         shiroFilter.setFilters(filters);
 
         // 添加Shiro的内置过滤器
@@ -79,6 +85,7 @@ public class ShiroConfig {
          */
         Map<String, String> filterMap = new LinkedHashMap<>();
         filterMap.put("/ota/**", "anon");
+        filterMap.put("/devops/ota/**", "devopsOta");
         filterMap.put("/otaMag/download/**", "anon");
         filterMap.put("/webjars/**", "anon");
         filterMap.put("/druid/**", "anon");

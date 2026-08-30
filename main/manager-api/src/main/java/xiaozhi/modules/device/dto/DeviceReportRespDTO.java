@@ -22,6 +22,9 @@ public class DeviceReportRespDTO {
     @Schema(description = "固件版本信息")
     private Firmware firmware;
 
+    @Schema(description = "k230 SWU 双包更新（system/app）")
+    private java.util.Map<String, Firmware> updates;
+
     @Schema(description = "WebSocket配置")
     private Websocket websocket;
 

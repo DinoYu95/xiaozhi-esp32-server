@@ -7,14 +7,20 @@ import lombok.Data;
 @Schema(description = "用户显示设备列表VO")
 public class UserShowDeviceListVO {
 
-    @Schema(description = "app版本")
+    @Schema(description = "应用 SWU 版本")
     private String appVersion;
+
+    @Schema(description = "系统 SWU 版本")
+    private String systemVersion;
 
     @Schema(description = "绑定用户名称")
     private String bindUserName;
 
-    @Schema(description = "设备型号")
+    @Schema(description = "业务设备类型")
     private String deviceType;
+
+    @Schema(description = "硬件板型 board")
+    private String board;
 
     @Schema(description = "设备唯一标识符")
     private String id;

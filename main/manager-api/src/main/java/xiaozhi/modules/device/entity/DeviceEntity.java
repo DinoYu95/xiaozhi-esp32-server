@@ -43,8 +43,14 @@ public class DeviceEntity {
     @Schema(description = "自动更新开关(0关闭/1开启)")
     private Integer autoUpdate;
 
-    @Schema(description = "设备硬件型号")
+    @Schema(description = "设备硬件型号（board / Device Model）")
     private String board;
+
+    @Schema(description = "业务设备类型（与用户场景相关，非 board）")
+    private String deviceType;
+
+    @Schema(description = "系统 SWU 版本")
+    private String systemVersion;
 
     @Schema(description = "设备别名")
     private String alias;
@@ -56,8 +62,11 @@ public class DeviceEntity {
     @Schema(description = "智能体ID")
     private String agentId;
 
-    @Schema(description = "固件版本号")
+    @Schema(description = "应用 SWU 版本")
     private String appVersion;
+
+    @Schema(description = "OTA 订阅通道 stable/beta")
+    private String otaChannel;
 
     @Schema(description = "排序")
     private Integer sort;

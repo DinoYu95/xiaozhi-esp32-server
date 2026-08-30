@@ -821,3 +821,53 @@ databaseChangeLog:
         - sqlFile:
             encoding: utf8
             path: classpath:db/changelog/202608281600.sql
+  - changeSet:
+      id: 202608301638
+      author: xiaozhi
+      changes:
+        - sqlFile:
+            encoding: utf8
+            path: classpath:db/changelog/202608301638.sql
+  - changeSet:
+      id: 202608301639
+      author: xiaozhi
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            columnExists:
+              tableName: ai_device
+              columnName: device_type
+      changes:
+        - sql:
+            sql: ALTER TABLE `ai_device` ADD COLUMN `device_type` VARCHAR(32) NULL DEFAULT NULL COMMENT '业务设备类型（与用户场景相关，非 board）' AFTER `board`
+  - changeSet:
+      id: 202608301640
+      author: xiaozhi
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            columnExists:
+              tableName: ai_device
+              columnName: system_version
+      changes:
+        - sql:
+            sql: ALTER TABLE `ai_device` ADD COLUMN `system_version` VARCHAR(32) NULL DEFAULT NULL COMMENT '系统 SWU 版本' AFTER `device_type`
+  - changeSet:
+      id: 202608301641
+      author: xiaozhi
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            columnExists:
+              tableName: ai_device
+              columnName: ota_channel
+      changes:
+        - sql:
+            sql: ALTER TABLE `ai_device` ADD COLUMN `ota_channel` VARCHAR(16) NOT NULL DEFAULT 'stable' COMMENT 'OTA 订阅通道 stable/beta' AFTER `app_version`
+  - changeSet:
+      id: 202608301700
+      author: xiaozhi
+      changes:
+        - sqlFile:
+            encoding: utf8
+            path: classpath:db/changelog/202608301700.sql

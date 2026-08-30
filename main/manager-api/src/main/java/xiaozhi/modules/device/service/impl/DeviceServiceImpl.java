@@ -62,6 +62,8 @@ import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.device.entity.OtaEntity;
 import xiaozhi.modules.device.service.DeviceService;
 import xiaozhi.modules.device.service.OtaService;
+import xiaozhi.modules.ota.service.DevopsOtaService;
+import xiaozhi.modules.ota.vo.DeviceOtaCheckRespVO;
 import xiaozhi.modules.device.vo.UserShowDeviceListVO;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
@@ -81,6 +83,7 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
     private final SysParamsService sysParamsService;
     private final RedisUtils redisUtils;
     private final OtaService otaService;
+    private final DevopsOtaService devopsOtaService;
     private final SysUserScopeService sysUserScopeService;
     private final DeviceChildDao deviceChildDao;
     private final ParentDeviceBindingDao parentDeviceBindingDao;
@@ -207,16 +210,23 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
         response.setServer_time(buildServerTime());
 
         DeviceEntity deviceById = getDeviceByMacAddress(macAddress);
+        persistOtaReportFields(deviceById, deviceReport);
 
         // 设备未绑定，则返回当前上传的固件信息（不更新）以此兼容旧固件版本
         if (deviceById == null) {
             DeviceReportRespDTO.Firmware firmware = new DeviceReportRespDTO.Firmware();
-            firmware.setVersion(deviceReport.getApplication().getVersion());
+            firmware.setVersion(deviceReport.getApplication() == null ? null
+                    : deviceReport.getApplication().getVersion());
             firmware.setUrl(Constant.INVALID_FIRMWARE_URL);
             response.setFirmware(firmware);
-        } else {
-            // 只有在设备已绑定且autoUpdate不为0的情况下才返回固件升级信息
-            if (deviceById.getAutoUpdate() != 0) {
+        } else if (deviceById.getAutoUpdate() != null && deviceById.getAutoUpdate() != 0) {
+            String boardType = deviceById.getBoard();
+            if (StringUtils.isBlank(boardType) && deviceReport.getBoard() != null) {
+                boardType = deviceReport.getBoard().getType();
+            }
+            if (devopsOtaService.isKnownHardware(boardType)) {
+                applySwuFirmware(response, deviceById);
+            } else {
                 String type = deviceReport.getBoard() == null ? null : deviceReport.getBoard().getType();
                 DeviceReportRespDTO.Firmware firmware = buildFirmwareInfo(type,
                         deviceReport.getApplication() == null ? null : deviceReport.getApplication().getVersion());
@@ -280,8 +290,8 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
 
         if (deviceById != null) {
             // 如果设备存在，则异步更新上次连接时间和版本信息
-            String appVersion = deviceReport.getApplication() != null ? deviceReport.getApplication().getVersion()
-                    : null;
+            String appVersion = StringUtils.firstNonBlank(deviceReport.getAppVersion(),
+                    deviceReport.getApplication() != null ? deviceReport.getApplication().getVersion() : null);
             // 通过Spring代理调用异步方法
             ((DeviceServiceImpl) AopContext.currentProxy()).updateDeviceConnectionInfo(deviceById.getAgentId(),
                     deviceById.getId(), appVersion);
@@ -364,7 +374,9 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
             vo.setRecentChatTime(DateUtils.getShortTime(device.getUpdateDate()));
             sysUserUtilService.assignUsername(device.getUserId(),
                     vo::setBindUserName);
-            vo.setDeviceType(device.getBoard());
+            vo.setBoard(device.getBoard());
+            vo.setSystemVersion(device.getSystemVersion());
+            vo.setDeviceType(StringUtils.defaultIfBlank(device.getDeviceType(), device.getBoard()));
             return vo;
         }).toList();
         // 计算页数
@@ -469,6 +481,52 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
         return JSONUtil.toJsonStr(Map.of(
                 "t", "device_bind",
                 "code", activationCode));
+    }
+
+    private void persistOtaReportFields(DeviceEntity device, DeviceReportReqDTO report) {
+        if (device == null || report == null) {
+            return;
+        }
+        boolean dirty = false;
+        if (StringUtils.isNotBlank(report.getDeviceType())) {
+            device.setDeviceType(report.getDeviceType());
+            dirty = true;
+        }
+        if (StringUtils.isNotBlank(report.getSystemVersion())) {
+            device.setSystemVersion(report.getSystemVersion());
+            dirty = true;
+        }
+        if (StringUtils.isNotBlank(report.getOtaChannel())) {
+            device.setOtaChannel(report.getOtaChannel());
+            dirty = true;
+        }
+        if (dirty) {
+            deviceDao.updateById(device);
+        }
+    }
+
+    private void applySwuFirmware(DeviceReportRespDTO response, DeviceEntity device) {
+        DeviceOtaCheckRespVO manifest = devopsOtaService.checkManifestForDevice(device);
+        if (manifest == null || manifest.getUpdates() == null || manifest.getUpdates().isEmpty()) {
+            DeviceReportRespDTO.Firmware firmware = new DeviceReportRespDTO.Firmware();
+            firmware.setVersion(StringUtils.defaultIfBlank(device.getAppVersion(), device.getSystemVersion()));
+            firmware.setUrl(Constant.INVALID_FIRMWARE_URL);
+            response.setFirmware(firmware);
+            return;
+        }
+        java.util.Map<String, DeviceReportRespDTO.Firmware> updates = new java.util.LinkedHashMap<>();
+        DeviceReportRespDTO.Firmware first = null;
+        for (var entry : manifest.getUpdates().entrySet()) {
+            DeviceReportRespDTO.Firmware fw = new DeviceReportRespDTO.Firmware();
+            fw.setVersion(entry.getValue().getVersion());
+            fw.setUrl(entry.getValue().getUrl());
+            updates.put(entry.getKey(), fw);
+            if (first == null || "system".equals(entry.getKey())) {
+                first = fw;
+            }
+        }
+        response.setUpdates(updates);
+        response.setFirmware(first);
     }
 
     private DeviceReportRespDTO.Firmware buildFirmwareInfo(String type, String currentVersion) {

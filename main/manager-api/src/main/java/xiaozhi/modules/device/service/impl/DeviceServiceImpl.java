@@ -63,6 +63,7 @@ import xiaozhi.modules.device.entity.OtaEntity;
 import xiaozhi.modules.device.service.DeviceService;
 import xiaozhi.modules.device.service.OtaService;
 import xiaozhi.modules.ota.service.DevopsOtaService;
+import xiaozhi.modules.ota.util.OtaDeviceFieldBinder;
 import xiaozhi.modules.ota.vo.DeviceOtaCheckRespVO;
 import xiaozhi.modules.device.vo.UserShowDeviceListVO;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
@@ -95,7 +96,8 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
             device.setId(deviceId);
             device.setLastConnectedAt(new Date());
             if (StringUtils.isNotBlank(appVersion)) {
-                device.setAppVersion(appVersion);
+                // 旧 OTA 上报的 application.version 是固件版本，写入 system_version
+                device.setSystemVersion(appVersion);
             }
             deviceDao.updateById(device);
             if (StringUtils.isNotBlank(agentId)) {
@@ -134,7 +136,6 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
 
         String macAddress = (String) cacheMap.get("mac_address");
         String board = (String) cacheMap.get("board");
-        String appVersion = (String) cacheMap.get("app_version");
         UserDetail user = SecurityUser.getUser();
         if (user.getId() == null) {
             throw new RenException(ErrorCode.USER_NOT_LOGIN);
@@ -146,8 +147,8 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
         deviceEntity.setId(deviceId);
         deviceEntity.setBoard(board);
         deviceEntity.setAgentId(agentId);
-        deviceEntity.setAppVersion(appVersion);
         deviceEntity.setMacAddress(macAddress);
+        OtaDeviceFieldBinder.applyCacheToDevice(deviceEntity, cacheMap);
         deviceEntity.setUserId(ownerUserId);
         deviceEntity.setCreator(user.getId());
         deviceEntity.setAutoUpdate(1);
@@ -290,11 +291,11 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
 
         if (deviceById != null) {
             // 如果设备存在，则异步更新上次连接时间和版本信息
-            String appVersion = StringUtils.firstNonBlank(deviceReport.getAppVersion(),
+            String firmwareVersion = StringUtils.firstNonBlank(deviceReport.getSystemVersion(),
                     deviceReport.getApplication() != null ? deviceReport.getApplication().getVersion() : null);
-            // 通过Spring代理调用异步方法
+            // 通过Spring代理调用异步方法（firmware → system_version）
             ((DeviceServiceImpl) AopContext.currentProxy()).updateDeviceConnectionInfo(deviceById.getAgentId(),
-                    deviceById.getId(), appVersion);
+                    deviceById.getId(), firmwareVersion);
         } else {
             // 如果设备不存在，则生成激活码
             DeviceReportRespDTO.Activation code = buildActivation(macAddress, deviceReport);
@@ -375,8 +376,12 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
             sysUserUtilService.assignUsername(device.getUserId(),
                     vo::setBindUserName);
             vo.setBoard(device.getBoard());
-            vo.setSystemVersion(device.getSystemVersion());
-            vo.setDeviceType(StringUtils.defaultIfBlank(device.getDeviceType(), device.getBoard()));
+            vo.setSystemVersion(StringUtils.firstNonBlank(device.getSystemVersion(), device.getAppVersion()));
+            if (StringUtils.isBlank(device.getSystemVersion())) {
+                vo.setAppVersion(null);
+            }
+            vo.setDeviceType(device.getDeviceType());
+            vo.setOtaChannel(StringUtils.defaultIfBlank(device.getOtaChannel(), "stable"));
             return vo;
         }).toList();
         // 计算页数
@@ -459,9 +464,7 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
             dataMap.put("board", (deviceReport.getBoard() != null && deviceReport.getBoard().getType() != null)
                     ? deviceReport.getBoard().getType()
                     : (deviceReport.getChipModelName() != null ? deviceReport.getChipModelName() : "unknown"));
-            dataMap.put("app_version", (deviceReport.getApplication() != null)
-                    ? deviceReport.getApplication().getVersion()
-                    : null);
+            OtaDeviceFieldBinder.putReportIntoCache(dataMap, deviceReport);
 
             dataMap.put("deviceId", deviceId);
             dataMap.put("activation_code", newCode);
@@ -492,12 +495,18 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
             device.setDeviceType(report.getDeviceType());
             dirty = true;
         }
-        if (StringUtils.isNotBlank(report.getSystemVersion())) {
-            device.setSystemVersion(report.getSystemVersion());
+        String firmware = StringUtils.firstNonBlank(report.getSystemVersion(),
+                report.getApplication() != null ? report.getApplication().getVersion() : null);
+        if (StringUtils.isNotBlank(firmware)) {
+            device.setSystemVersion(firmware);
             dirty = true;
         }
         if (StringUtils.isNotBlank(report.getOtaChannel())) {
             device.setOtaChannel(report.getOtaChannel());
+            dirty = true;
+        }
+        if (StringUtils.isNotBlank(report.getAppVersion())) {
+            device.setAppVersion(report.getAppVersion());
             dirty = true;
         }
         if (dirty) {
@@ -509,7 +518,7 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
         DeviceOtaCheckRespVO manifest = devopsOtaService.checkManifestForDevice(device);
         if (manifest == null || manifest.getUpdates() == null || manifest.getUpdates().isEmpty()) {
             DeviceReportRespDTO.Firmware firmware = new DeviceReportRespDTO.Firmware();
-            firmware.setVersion(StringUtils.defaultIfBlank(device.getAppVersion(), device.getSystemVersion()));
+            firmware.setVersion(StringUtils.defaultIfBlank(device.getSystemVersion(), device.getAppVersion()));
             firmware.setUrl(Constant.INVALID_FIRMWARE_URL);
             response.setFirmware(firmware);
             return;
@@ -609,7 +618,9 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
         entity.setUserId(userId);
         entity.setAgentId(dto.getAgentId());
         entity.setBoard(dto.getBoard());
-        entity.setAppVersion(dto.getAppVersion());
+        entity.setSystemVersion(dto.getAppVersion());
+        entity.setDeviceType(dto.getDeviceType());
+        entity.setOtaChannel(StringUtils.defaultIfBlank(dto.getOtaChannel(), "stable"));
         entity.setMacAddress(dto.getMacAddress());
         entity.setCreateDate(now);
         entity.setUpdateDate(now);

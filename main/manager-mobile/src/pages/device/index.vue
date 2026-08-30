@@ -244,7 +244,16 @@ defineExpose({
                     {{ t('device.macAddress') }}：{{ device.macAddress }}
                   </text>
                   <text class="mb-[12rpx] block text-[28rpx] text-[#65686f] leading-[1.4]">
-                    {{ t('device.firmwareVersion') }}：{{ device.appVersion }}
+                    {{ t('device.deviceType') }}：{{ device.deviceType || '--' }}
+                  </text>
+                  <text class="mb-[12rpx] block text-[28rpx] text-[#65686f] leading-[1.4]">
+                    {{ t('device.systemVersion') }}：{{ device.systemVersion || device.appVersion || '--' }}
+                  </text>
+                  <text class="mb-[12rpx] block text-[28rpx] text-[#65686f] leading-[1.4]">
+                    {{ t('device.appVersion') }}：{{ device.systemVersion ? (device.appVersion || '--') : '--' }}
+                  </text>
+                  <text class="mb-[12rpx] block text-[28rpx] text-[#65686f] leading-[1.4]">
+                    {{ t('device.otaChannel') }}：{{ device.otaChannel || 'stable' }}
                   </text>
                   <text class="block text-[28rpx] text-[#65686f] leading-[1.4]">
                     {{ t('device.lastConnection') }}：{{ formatTime(device.lastConnectedAt) }}

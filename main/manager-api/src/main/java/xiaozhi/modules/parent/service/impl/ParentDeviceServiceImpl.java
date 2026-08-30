@@ -26,6 +26,7 @@ import xiaozhi.modules.agent.vo.AgentSkillVO;
 import xiaozhi.modules.agent.vo.AgentSkillMappingVO;
 import xiaozhi.modules.device.dao.DeviceDao;
 import xiaozhi.modules.device.entity.DeviceEntity;
+import xiaozhi.modules.ota.util.OtaDeviceFieldBinder;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dao.ParentUserDao;
@@ -114,14 +115,13 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
 
             String macAddress = (String) cacheMap.get("mac_address");
             String board = (String) cacheMap.get("board");
-            String appVersion = (String) cacheMap.get("app_version");
             Date now = new Date();
             DeviceEntity deviceEntity = new DeviceEntity();
             deviceEntity.setId(deviceId);
             deviceEntity.setBoard(board != null ? board : "unknown");
             deviceEntity.setAgentId(agentId);
-            deviceEntity.setAppVersion(appVersion);
             deviceEntity.setMacAddress(macAddress != null ? macAddress : deviceId);
+            OtaDeviceFieldBinder.applyCacheToDevice(deviceEntity, cacheMap);
             deviceEntity.setAutoUpdate(1);
             deviceEntity.setUserId(platformOwnerUserId);
             deviceEntity.setCreator(platformOwnerUserId);

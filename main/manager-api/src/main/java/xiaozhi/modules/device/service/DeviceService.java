@@ -100,7 +100,7 @@ public interface DeviceService extends BaseService<DeviceEntity> {
     void manualAddDevice(Long userId, DeviceManualAddDTO dto);
 
     /**
-     * 更新设备连接信息
+     * 更新设备连接信息（version 为固件/系统版本，写入 system_version）
      */
     void updateDeviceConnectionInfo(String agentId, String deviceId, String appVersion);
 

@@ -10,6 +10,9 @@ export interface Device {
   lastConnectedAt: string
   autoUpdate: number
   board: string
+  deviceType?: string
+  systemVersion?: string
+  otaChannel?: string
   alias?: string
   agentId: string
   appVersion: string

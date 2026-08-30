@@ -15,6 +15,15 @@
         <el-form-item :label="$t('manualAddDeviceDialog.firmwareVersion')" prop="appVersion">
           <el-input v-model="deviceForm.appVersion" :placeholder="$t('manualAddDeviceDialog.firmwareVersionPlaceholder')"></el-input>
         </el-form-item>
+        <el-form-item :label="$t('manualAddDeviceDialog.bizDeviceType')" prop="deviceType">
+          <el-input v-model="deviceForm.deviceType" :placeholder="$t('manualAddDeviceDialog.bizDeviceTypePlaceholder')"></el-input>
+        </el-form-item>
+        <el-form-item :label="$t('manualAddDeviceDialog.otaChannel')" prop="otaChannel">
+          <el-select v-model="deviceForm.otaChannel" :placeholder="$t('manualAddDeviceDialog.otaChannelPlaceholder')" style="width: 100%">
+            <el-option label="stable" value="stable"></el-option>
+            <el-option label="beta" value="beta"></el-option>
+          </el-select>
+        </el-form-item>
         <el-form-item :label="$t('manualAddDeviceDialog.macAddress')" prop="macAddress">
           <el-input v-model="deviceForm.macAddress" :placeholder="$t('manualAddDeviceDialog.macAddressPlaceholder')"></el-input>
         </el-form-item>
@@ -53,6 +62,8 @@ export default {
       deviceForm: {
         board: '',
         appVersion: '',
+        deviceType: '',
+        otaChannel: 'stable',
         macAddress: ''
       },
       firmwareTypes: [],

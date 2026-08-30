@@ -61,7 +61,7 @@ public class DeviceReportReqDTO implements Serializable {
     @JsonProperty("system_version")
     private String systemVersion;
 
-    @Schema(description = "应用 SWU 版本（与 application.version 二选一）")
+    @Schema(description = "应用 SWU 版本（仅应用包，不要填固件版本）")
     @JsonProperty("app_version")
     private String appVersion;
 

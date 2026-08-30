@@ -24,14 +24,32 @@
                   <el-checkbox v-model="scope.row.selected"></el-checkbox>
                 </template>
               </el-table-column>
-              <el-table-column :label="$t('device.model')" prop="model" align="center">
+              <el-table-column :label="$t('device.model')" prop="model" align="center" min-width="140">
                 <template slot-scope="scope">
-                  {{ getFirmwareTypeName(scope.row.model) }}
+                  {{ getFirmwareTypeName(scope.row.model) || displayValue(scope.row.model) }}
                 </template>
               </el-table-column>
-              <el-table-column :label="$t('device.firmwareVersion')" prop="firmwareVersion"
-                align="center"></el-table-column>
-              <el-table-column :label="$t('device.macAddress')" prop="macAddress" align="center"></el-table-column>
+              <el-table-column :label="$t('device.deviceType')" prop="deviceType" align="center" min-width="100">
+                <template slot-scope="scope">
+                  {{ displayValue(scope.row.deviceType) }}
+                </template>
+              </el-table-column>
+              <el-table-column :label="$t('device.systemVersion')" prop="systemVersion" align="center" min-width="110">
+                <template slot-scope="scope">
+                  {{ displayValue(scope.row.systemVersion) }}
+                </template>
+              </el-table-column>
+              <el-table-column :label="$t('device.appVersion')" prop="appVersion" align="center" min-width="110">
+                <template slot-scope="scope">
+                  {{ displayValue(scope.row.appVersion) }}
+                </template>
+              </el-table-column>
+              <el-table-column :label="$t('device.otaChannel')" prop="otaChannel" align="center" width="100">
+                <template slot-scope="scope">
+                  {{ displayValue(scope.row.otaChannel) }}
+                </template>
+              </el-table-column>
+              <el-table-column :label="$t('device.macAddress')" prop="macAddress" align="center" min-width="140"></el-table-column>
               <el-table-column :label="$t('device.parentDisplayName')" prop="parentDisplayName" align="center" min-width="130">
                 <template slot-scope="scope">
                   <span class="parent-display-name">{{ scope.row.parentDisplayName || '--' }}</span>
@@ -164,6 +182,10 @@ export default {
       if (!keyword) return this.deviceList;
       return this.deviceList.filter(device =>
         (device.model && device.model.toLowerCase().includes(keyword)) ||
+        (device.deviceType && device.deviceType.toLowerCase().includes(keyword)) ||
+        (device.systemVersion && device.systemVersion.toLowerCase().includes(keyword)) ||
+        (device.appVersion && device.appVersion.toLowerCase().includes(keyword)) ||
+        (device.otaChannel && device.otaChannel.toLowerCase().includes(keyword)) ||
         (device.macAddress && device.macAddress.toLowerCase().includes(keyword)) ||
         (device.parentDisplayName && device.parentDisplayName.toLowerCase().includes(keyword))
       );
@@ -372,7 +394,11 @@ export default {
             return {
               device_id: device.id,
               model: device.board,
-              firmwareVersion: device.appVersion,
+              deviceType: device.deviceType,
+              systemVersion: device.systemVersion || device.appVersion || '',
+              appVersion: device.systemVersion ? (device.appVersion || '') : '',
+              otaChannel: device.otaChannel || 'stable',
+              firmwareVersion: device.systemVersion || device.appVersion,
               macAddress: device.macAddress,
               parentDisplayName: device.parentDisplayName,
               bindTime: device.createDate,
@@ -468,6 +494,9 @@ export default {
       }
       return "";
     },
+    displayValue(value) {
+      return value === undefined || value === null || String(value).trim() === '' ? '--' : value;
+    },
     getFirmwareTypeName(type) {
       const firmwareType = this.firmwareTypes.find(item => item.key === type)
       return firmwareType ? firmwareType.name : type
@@ -489,8 +518,8 @@ export default {
     },
     // 判断是否可以生成表情、主题、字体bin文件
     isGenerate(row) {
-      const version = row.firmwareVersion.replace(/\./g, '');
-      return Number(version) >= 200;
+      const version = (row.systemVersion || row.firmwareVersion || '').replace(/\./g, '');
+      return version !== '' && Number(version) >= 200;
     },
   }
 };

@@ -424,14 +424,17 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
     @Transactional
     public DeviceOtaCheckRespVO checkManifest(DeviceOtaCheckReqDTO req) {
         DeviceEntity device = findOrTouchDevice(req);
-        return buildManifest(device, false);
+        reconcileAlreadyOnTarget(device);
+        return buildManifest(device, true);
     }
 
     @Override
+    @Transactional
     public DeviceOtaCheckRespVO checkManifestForDevice(DeviceEntity device) {
         if (device == null) {
             return new DeviceOtaCheckRespVO();
         }
+        reconcileAlreadyOnTarget(device);
         return buildManifest(device, true);
     }
 
@@ -493,9 +496,71 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
         return hw != null && hw.getEnabled() != null && hw.getEnabled() == 1;
     }
 
+    /**
+     * 设备已在目标版本但漏报 success 时补记，避免覆盖度偏低。
+     */
+    private void reconcileAlreadyOnTarget(DeviceEntity device) {
+        if (device == null
+                || (StringUtils.isBlank(device.getId()) && StringUtils.isBlank(device.getMacAddress()))) {
+            return;
+        }
+        ManifestIndex index = loadManifestIndex();
+        Date now = new Date();
+        for (String type : List.of("system", "app")) {
+            VisibleRelease visible = findVisibleIncludingCurrent(device, type, index);
+            if (visible == null || visible.pkg == null) {
+                continue;
+            }
+            String current = "system".equals(type) ? device.getSystemVersion() : device.getAppVersion();
+            if (StringUtils.isBlank(current) || OtaVersionUtils.compare(current, visible.pkg.getVersion()) != 0) {
+                continue;
+            }
+            String mac = OtaRolloutMatcher.normalizeMac(device.getMacAddress());
+            OtaDeviceUpgradeLogEntity latest = latestLog(visible.release.getId(), mac);
+            if (latest != null && "success".equals(latest.getStatus())) {
+                continue;
+            }
+            if (latest == null) {
+                OtaDeviceUpgradeLogEntity row = new OtaDeviceUpgradeLogEntity();
+                row.setReleaseId(visible.release.getId());
+                row.setMacAddress(mac);
+                row.setPkgType(type);
+                row.setToVersion(visible.pkg.getVersion());
+                row.setStatus("success");
+                row.setReportedAt(now);
+                upgradeLogDao.insert(row);
+            } else {
+                latest.setStatus("success");
+                latest.setToVersion(visible.pkg.getVersion());
+                latest.setReportedAt(now);
+                upgradeLogDao.updateById(latest);
+            }
+        }
+    }
+
+    private VisibleRelease findVisibleIncludingCurrent(DeviceEntity device, String pkgType, ManifestIndex index) {
+        VisibleRelease best = null;
+        for (String ch : OtaRolloutMatcher.visibleChannels(device.getOtaChannel())) {
+            List<IndexedRelease> candidates = index.actives.getOrDefault(indexKey(device.getBoard(), ch, pkgType),
+                    List.of());
+            for (IndexedRelease ir : candidates) {
+                if (!deviceEligible(device, ir.release, ir.pkg, ir.whitelistMacs)) {
+                    continue;
+                }
+                if (best == null || OtaVersionUtils.compare(ir.pkg.getVersion(), best.pkg.getVersion()) > 0) {
+                    best = new VisibleRelease(ir.release, ir.pkg, false);
+                }
+            }
+        }
+        return best;
+    }
+
     private DeviceOtaCheckRespVO buildManifest(DeviceEntity device, boolean newerOnly) {
         DeviceOtaCheckRespVO resp = new DeviceOtaCheckRespVO();
         if (device == null || StringUtils.isBlank(device.getBoard())) {
+            return resp;
+        }
+        if (device.getAutoUpdate() != null && device.getAutoUpdate() == 0) {
             return resp;
         }
         ManifestIndex index = loadManifestIndex();
@@ -942,8 +1007,15 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
         vo.setMacAddress(device.getMacAddress());
         vo.setBoard(device.getBoard());
         vo.setDeviceType(device.getDeviceType());
-        vo.setSystemVersion(StringUtils.defaultIfBlank(device.getSystemVersion(), "0.0.0"));
-        vo.setAppVersion(StringUtils.defaultIfBlank(device.getAppVersion(), "0.0.0"));
+        String systemVersion = device.getSystemVersion();
+        String appVersion = device.getAppVersion();
+        // 未迁移时 app_version 仍是固件，归到 System；App 仅在已有 system_version 时才展示
+        if (StringUtils.isBlank(systemVersion) && StringUtils.isNotBlank(appVersion)) {
+            systemVersion = appVersion;
+            appVersion = null;
+        }
+        vo.setSystemVersion(systemVersion);
+        vo.setAppVersion(appVersion);
         vo.setOtaChannel(StringUtils.defaultIfBlank(device.getOtaChannel(), "stable"));
         vo.setAutoUpdate(device.getAutoUpdate() == null || device.getAutoUpdate() != 0);
         vo.setLastConnectedAt(device.getLastConnectedAt());

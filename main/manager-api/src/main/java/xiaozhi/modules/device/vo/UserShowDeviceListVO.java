@@ -22,6 +22,9 @@ public class UserShowDeviceListVO {
     @Schema(description = "硬件板型 board")
     private String board;
 
+    @Schema(description = "OTA 订阅通道")
+    private String otaChannel;
+
     @Schema(description = "设备唯一标识符")
     private String id;
 

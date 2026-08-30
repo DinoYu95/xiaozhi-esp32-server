@@ -21,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import xiaozhi.common.utils.Result;
 import xiaozhi.modules.ota.dto.HardwareTypeCreateDTO;
 import xiaozhi.modules.ota.dto.HardwareTypeUpdateDTO;
+import xiaozhi.modules.ota.dto.PackageRegisterDTO;
 import xiaozhi.modules.ota.dto.PoolDevicesAddDTO;
 import xiaozhi.modules.ota.dto.ReleaseCreateDTO;
 import xiaozhi.modules.ota.dto.ReleaseRollbackDTO;
@@ -85,6 +86,13 @@ public class DevopsOtaController {
             @RequestParam(value = "notes", required = false) String notes,
             @RequestHeader(value = "X-DevOps-User", required = false) String user) {
         return ok(devopsOtaService.uploadPackage(file, notes, user));
+    }
+
+    @PostMapping("/packages/register")
+    @Operation(summary = "登记已上传 OSS 的 SWU 包 metadata")
+    public Result<PackageVO> registerPackage(@Valid @RequestBody PackageRegisterDTO dto,
+            @RequestHeader(value = "X-DevOps-User", required = false) String user) {
+        return ok(devopsOtaService.registerPackage(dto, user));
     }
 
     @DeleteMapping("/packages/{id}")

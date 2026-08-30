@@ -9,6 +9,7 @@ import xiaozhi.modules.ota.dto.DeviceOtaCheckReqDTO;
 import xiaozhi.modules.ota.dto.DeviceOtaReportDTO;
 import xiaozhi.modules.ota.dto.HardwareTypeCreateDTO;
 import xiaozhi.modules.ota.dto.HardwareTypeUpdateDTO;
+import xiaozhi.modules.ota.dto.PackageRegisterDTO;
 import xiaozhi.modules.ota.dto.PoolDevicesAddDTO;
 import xiaozhi.modules.ota.dto.ReleaseCreateDTO;
 import xiaozhi.modules.ota.dto.ReleaseRollbackDTO;
@@ -33,6 +34,8 @@ public interface DevopsOtaService {
     void deleteHardwareType(String key);
 
     PackageVO uploadPackage(MultipartFile file, String notes, String createdBy);
+
+    PackageVO registerPackage(PackageRegisterDTO dto, String createdBy);
 
     List<PackageVO> listPackages(String type, String hardware, String channel, String status);
 

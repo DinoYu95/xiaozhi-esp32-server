@@ -45,6 +45,7 @@ import xiaozhi.modules.ota.dto.DeviceOtaCheckReqDTO;
 import xiaozhi.modules.ota.dto.DeviceOtaReportDTO;
 import xiaozhi.modules.ota.dto.HardwareTypeCreateDTO;
 import xiaozhi.modules.ota.dto.HardwareTypeUpdateDTO;
+import xiaozhi.modules.ota.dto.PackageRegisterDTO;
 import xiaozhi.modules.ota.dto.PoolDevicesAddDTO;
 import xiaozhi.modules.ota.dto.ReleaseCreateDTO;
 import xiaozhi.modules.ota.dto.ReleaseRollbackDTO;
@@ -199,6 +200,38 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
                 }
             }
         }
+    }
+
+    @Override
+    @Transactional
+    public PackageVO registerPackage(PackageRegisterDTO dto, String createdBy) {
+        OtaHardwareTypeEntity hw = hardwareTypeDao.selectById(dto.getHardware());
+        if (hw == null || hw.getEnabled() == null || hw.getEnabled() == 0) {
+            throw new RenException("硬件类型 " + dto.getHardware() + " 未配置或已禁用");
+        }
+        if (StringUtils.isNotBlank(dto.getId()) && packageDao.selectById(dto.getId()) != null) {
+            return toPackageVo(packageDao.selectById(dto.getId()));
+        }
+        OtaPackageEntity pkg = new OtaPackageEntity();
+        if (StringUtils.isNotBlank(dto.getId())) {
+            pkg.setId(dto.getId().trim());
+        }
+        pkg.setType(dto.getType().toLowerCase(Locale.ROOT));
+        pkg.setHardware(dto.getHardware());
+        pkg.setVersion(dto.getVersion());
+        pkg.setChannel(dto.getChannel().toLowerCase(Locale.ROOT));
+        pkg.setFilename(dto.getFilename());
+        pkg.setOssKey(dto.getOssKey());
+        pkg.setSizeBytes(dto.getSizeBytes());
+        pkg.setSha256(dto.getSha256());
+        pkg.setStatus("draft");
+        pkg.setNotes(dto.getNotes());
+        pkg.setCreatedBy(StringUtils.defaultIfBlank(createdBy, "devops"));
+        pkg.setCreatedAt(new Date());
+        packageDao.insert(pkg);
+        log.info("OTA package registered id={} hardware={} version={} channel={}",
+                pkg.getId(), pkg.getHardware(), pkg.getVersion(), pkg.getChannel());
+        return toPackageVo(pkg);
     }
 
     @Override

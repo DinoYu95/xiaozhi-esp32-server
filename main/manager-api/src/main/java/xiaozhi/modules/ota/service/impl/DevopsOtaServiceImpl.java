@@ -1,6 +1,9 @@
 package xiaozhi.modules.ota.service.impl;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -159,28 +162,43 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
         if (hw == null || hw.getEnabled() == null || hw.getEnabled() == 0) {
             throw new RenException("硬件类型 " + parsed.hardware() + " 未配置或已禁用");
         }
-        String sha256;
+        Path temp = null;
         try {
-            sha256 = sha256Hex(file.getBytes());
-            storageService.upload(parsed, file.getInputStream(), file.getSize());
+            temp = Files.createTempFile("ota-swu-", ".part");
+            file.transferTo(temp);
+            long size = Files.size(temp);
+            log.info("OTA upload received: {} ({} bytes), spooling done", parsed.filename(), size);
+            String sha256 = sha256HexFile(temp);
+            try (InputStream in = Files.newInputStream(temp)) {
+                storageService.upload(parsed, in, size);
+            }
+            log.info("OTA upload stored: {} sha256={}", parsed.filename(), sha256);
+            OtaPackageEntity pkg = new OtaPackageEntity();
+            pkg.setType(parsed.type());
+            pkg.setHardware(parsed.hardware());
+            pkg.setVersion(parsed.version());
+            pkg.setChannel(parsed.channel());
+            pkg.setFilename(parsed.filename());
+            pkg.setOssKey(SwuFilenameParser.ossKey(parsed));
+            pkg.setSizeBytes(size);
+            pkg.setSha256(sha256);
+            pkg.setStatus("draft");
+            pkg.setNotes(notes);
+            pkg.setCreatedBy(StringUtils.defaultIfBlank(createdBy, "devops"));
+            pkg.setCreatedAt(new Date());
+            packageDao.insert(pkg);
+            return toPackageVo(pkg);
         } catch (IOException e) {
             throw new RenException("读取上传文件失败", e);
+        } finally {
+            if (temp != null) {
+                try {
+                    Files.deleteIfExists(temp);
+                } catch (IOException e) {
+                    log.warn("删除临时 SWU 文件失败: {}", temp, e);
+                }
+            }
         }
-        OtaPackageEntity pkg = new OtaPackageEntity();
-        pkg.setType(parsed.type());
-        pkg.setHardware(parsed.hardware());
-        pkg.setVersion(parsed.version());
-        pkg.setChannel(parsed.channel());
-        pkg.setFilename(parsed.filename());
-        pkg.setOssKey(SwuFilenameParser.ossKey(parsed));
-        pkg.setSizeBytes(file.getSize());
-        pkg.setSha256(sha256);
-        pkg.setStatus("draft");
-        pkg.setNotes(notes);
-        pkg.setCreatedBy(StringUtils.defaultIfBlank(createdBy, "devops"));
-        pkg.setCreatedAt(new Date());
-        packageDao.insert(pkg);
-        return toPackageVo(pkg);
     }
 
     @Override
@@ -1080,6 +1098,27 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
     private static String sha256Hex(byte[] bytes) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RenException("无法计算 sha256", e);
+        }
+    }
+
+    private static String sha256HexFile(Path path) throws IOException {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] buf = new byte[1024 * 1024];
+            try (InputStream in = Files.newInputStream(path)) {
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    md.update(buf, 0, n);
+                }
+            }
+            byte[] digest = md.digest();
             StringBuilder sb = new StringBuilder(digest.length * 2);
             for (byte b : digest) {
                 sb.append(String.format("%02x", b));

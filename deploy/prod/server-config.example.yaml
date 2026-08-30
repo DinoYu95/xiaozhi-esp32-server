@@ -8,7 +8,7 @@ server:
   port: 8000
   http_port: 8003
   # 【必填】设备/公网访问视觉分析时用；填 ECS 公网 IP 或域名
-  vision_explain: http://【必填:公网IP或域名】:8003/mcp/vision/explain
+  vision_explain: https://api.newgravtech.com/mcp/vision/explain
 
 manager-api:
   # 同 compose 网络内固定写法，一般不用改

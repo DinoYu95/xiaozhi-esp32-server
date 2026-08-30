@@ -18,33 +18,34 @@
             <el-table ref="deviceTable" :data="paginatedDeviceList" class="transparent-table"
               :header-cell-class-name="headerCellClassName" v-loading="loading"
               :element-loading-text="$t('deviceManagement.loading')" element-loading-spinner="el-icon-loading"
-              element-loading-background="rgba(255, 255, 255, 0.7)">
+              element-loading-background="rgba(255, 255, 255, 0.7)"
+              style="width: 100%">
               <el-table-column :label="$t('modelConfig.select')" align="center" width="120">
                 <template slot-scope="scope">
                   <el-checkbox v-model="scope.row.selected"></el-checkbox>
                 </template>
               </el-table-column>
-              <el-table-column :label="$t('device.model')" prop="model" align="center" min-width="140">
+              <el-table-column :label="$t('device.model')" prop="model" align="center" min-width="130">
                 <template slot-scope="scope">
                   {{ getFirmwareTypeName(scope.row.model) || displayValue(scope.row.model) }}
                 </template>
               </el-table-column>
-              <el-table-column :label="$t('device.deviceType')" prop="deviceType" align="center" min-width="100">
+              <el-table-column :label="$t('device.deviceType')" prop="deviceType" align="center" width="100">
                 <template slot-scope="scope">
                   {{ displayValue(scope.row.deviceType) }}
                 </template>
               </el-table-column>
-              <el-table-column :label="$t('device.systemVersion')" prop="systemVersion" align="center" min-width="110">
+              <el-table-column :label="$t('device.systemVersion')" prop="systemVersion" align="center" width="100">
                 <template slot-scope="scope">
                   {{ displayValue(scope.row.systemVersion) }}
                 </template>
               </el-table-column>
-              <el-table-column :label="$t('device.appVersion')" prop="appVersion" align="center" min-width="110">
+              <el-table-column :label="$t('device.appVersion')" prop="appVersion" align="center" width="100">
                 <template slot-scope="scope">
                   {{ displayValue(scope.row.appVersion) }}
                 </template>
               </el-table-column>
-              <el-table-column :label="$t('device.otaChannel')" prop="otaChannel" align="center" width="100">
+              <el-table-column :label="$t('device.otaChannel')" prop="otaChannel" align="center" width="90">
                 <template slot-scope="scope">
                   {{ displayValue(scope.row.otaChannel) }}
                 </template>
@@ -233,8 +234,10 @@ export default {
     async getFirmwareTypes() {
       try {
         const res = await Api.dict.getDictDataByType('FIRMWARE_TYPE')
-        this.firmwareTypes = res.data
+        const raw = res && (Array.isArray(res.data) ? res.data : res.data && res.data.data)
+        this.firmwareTypes = Array.isArray(raw) ? raw : []
       } catch (error) {
+        this.firmwareTypes = []
         console.error(this.$t('device.getFirmwareTypeFailed') + ':', error)
         this.$message.error(error.message || this.$t('device.getFirmwareTypeFailed'))
       }
@@ -389,8 +392,9 @@ export default {
       this.loading = true;
       Api.device.getAgentBindDevices(agentId, ({ data }) => {
         this.loading = false;
-        if (data.code === 0) {
-          this.deviceList = data.data.map(device => {
+        if (data && data.code === 0) {
+          const rows = Array.isArray(data.data) ? data.data : [];
+          this.deviceList = rows.map(device => {
             return {
               device_id: device.id,
               model: device.board,
@@ -421,7 +425,7 @@ export default {
           // 获取设备列表后，立即获取设备状态
           this.fetchDeviceStatus(agentId);
         } else {
-          this.$message.error(data.msg || this.$t('device.getListFailed'));
+          this.$message.error((data && data.msg) || this.$t('device.getListFailed'));
         }
       });
     },
@@ -498,6 +502,9 @@ export default {
       return value === undefined || value === null || String(value).trim() === '' ? '--' : value;
     },
     getFirmwareTypeName(type) {
+      if (!Array.isArray(this.firmwareTypes)) {
+        return type
+      }
       const firmwareType = this.firmwareTypes.find(item => item.key === type)
       return firmwareType ? firmwareType.name : type
     },
@@ -854,6 +861,8 @@ export default {
 :deep(.el-table__body-wrapper) {
   flex: 1;
   overflow-y: auto;
+  overflow-x: auto;
+  min-height: 160px;
   max-height: none !important;
 }
 

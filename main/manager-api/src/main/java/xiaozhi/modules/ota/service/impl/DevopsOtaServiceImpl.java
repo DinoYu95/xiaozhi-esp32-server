@@ -1004,18 +1004,18 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
     private DeviceOtaViewVO toDeviceView(DeviceEntity device, ManifestIndex index) {
         DeviceOtaViewVO vo = new DeviceOtaViewVO();
         vo.setDeviceId(StringUtils.defaultIfBlank(device.getId(), device.getMacAddress()));
-        vo.setMacAddress(device.getMacAddress());
-        vo.setBoard(device.getBoard());
-        vo.setDeviceType(device.getDeviceType());
+        vo.setMacAddress(StringUtils.defaultString(device.getMacAddress()));
+        vo.setBoard(StringUtils.defaultString(device.getBoard()));
+        vo.setDeviceType(StringUtils.defaultString(device.getDeviceType()));
         String systemVersion = device.getSystemVersion();
         String appVersion = device.getAppVersion();
         // 未迁移时 app_version 仍是固件，归到 System；App 仅在已有 system_version 时才展示
         if (StringUtils.isBlank(systemVersion) && StringUtils.isNotBlank(appVersion)) {
             systemVersion = appVersion;
-            appVersion = null;
+            appVersion = "";
         }
-        vo.setSystemVersion(systemVersion);
-        vo.setAppVersion(appVersion);
+        vo.setSystemVersion(StringUtils.defaultIfBlank(systemVersion, "0.0.0"));
+        vo.setAppVersion(StringUtils.defaultString(appVersion));
         vo.setOtaChannel(StringUtils.defaultIfBlank(device.getOtaChannel(), "stable"));
         vo.setAutoUpdate(device.getAutoUpdate() == null || device.getAutoUpdate() != 0);
         vo.setLastConnectedAt(device.getLastConnectedAt());

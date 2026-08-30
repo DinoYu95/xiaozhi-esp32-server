@@ -121,8 +121,11 @@ export default {
       this.fetchAgentList();
       this.addDeviceDialogVisible = false;
     },
-    handleDeviceManage() {
-      this.$router.push('/device-management');
+    handleDeviceManage(device) {
+      const agentId = device && (device.agentId || device.id);
+      this.$router.push(agentId
+        ? { path: '/device-management', query: { agentId } }
+        : '/device-management');
     },
     handleSearch(payload) {
       const keyword = typeof payload === 'string' ? payload : payload?.keyword;

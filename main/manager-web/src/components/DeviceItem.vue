@@ -118,7 +118,7 @@ export default {
       this.$router.push({ path: '/voice-print', query: { agentId: this.device.agentId } });
     },
     handleDeviceManage() {
-      this.$router.push({ path: '/device-management', query: { agentId: this.device.agentId } });
+      this.$emit('deviceManage', this.device);
     },
     handleChatHistory() {
       if (!this.device.chatHistoryConf) {

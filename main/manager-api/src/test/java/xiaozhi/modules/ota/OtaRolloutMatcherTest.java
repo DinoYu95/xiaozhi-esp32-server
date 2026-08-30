@@ -48,6 +48,13 @@ class OtaRolloutMatcherTest {
     }
 
     @Test
+    void deviceOtaKeyPrefersDeviceType() {
+        assertEquals("k230", OtaRolloutMatcher.deviceOtaKey("k230", "k230_linux_board"));
+        assertEquals("k230_linux_board", OtaRolloutMatcher.deviceOtaKey("", "k230_linux_board"));
+        assertEquals("k230_linux_board", OtaRolloutMatcher.deviceOtaKey(null, "k230_linux_board"));
+    }
+
+    @Test
     void versionCompare() {
         assertTrue(OtaVersionUtils.isNewer("1.3.1", "1.3.0"));
         assertFalse(OtaVersionUtils.isNewer("1.3.0", "1.3.1"));

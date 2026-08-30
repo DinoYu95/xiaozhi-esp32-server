@@ -73,4 +73,14 @@ public final class OtaRolloutMatcher {
         return macs == null ? Set.of()
                 : macs.stream().map(OtaRolloutMatcher::normalizeMac).filter(s -> !s.isEmpty()).collect(java.util.stream.Collectors.toSet());
     }
+
+    /**
+     * SWU 文件名 hardware 段与设备 {@code device_type} 对齐；未配置 device_type 时回退 {@code board}。
+     */
+    public static String deviceOtaKey(String deviceType, String board) {
+        if (StringUtils.isNotBlank(deviceType)) {
+            return deviceType.trim();
+        }
+        return StringUtils.defaultString(board);
+    }
 }

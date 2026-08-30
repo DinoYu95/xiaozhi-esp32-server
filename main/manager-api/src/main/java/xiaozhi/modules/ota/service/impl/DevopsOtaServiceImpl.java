@@ -381,7 +381,9 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
 
         Set<String> whitelist = collectReleaseWhitelist(release);
         List<DeviceEntity> devices = deviceDao.selectList(new LambdaQueryWrapper<DeviceEntity>()
-                .eq(DeviceEntity::getBoard, pkg.getHardware()));
+                .and(w -> w.eq(DeviceEntity::getDeviceType, pkg.getHardware())
+                        .or()
+                        .eq(DeviceEntity::getBoard, pkg.getHardware())));
         for (DeviceEntity device : devices) {
             if (!deviceEligible(device, release, pkg, whitelist)) {
                 continue;
@@ -559,8 +561,8 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
     private VisibleRelease findVisibleIncludingCurrent(DeviceEntity device, String pkgType, ManifestIndex index) {
         VisibleRelease best = null;
         for (String ch : OtaRolloutMatcher.visibleChannels(device.getOtaChannel())) {
-            List<IndexedRelease> candidates = index.actives.getOrDefault(indexKey(device.getBoard(), ch, pkgType),
-                    List.of());
+            List<IndexedRelease> candidates = index.actives.getOrDefault(
+                    indexKey(deviceOtaKey(device), ch, pkgType), List.of());
             for (IndexedRelease ir : candidates) {
                 if (!deviceEligible(device, ir.release, ir.pkg, ir.whitelistMacs)) {
                     continue;
@@ -575,7 +577,7 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
 
     private DeviceOtaCheckRespVO buildManifest(DeviceEntity device, boolean newerOnly) {
         DeviceOtaCheckRespVO resp = new DeviceOtaCheckRespVO();
-        if (device == null || StringUtils.isBlank(device.getBoard())) {
+        if (device == null || StringUtils.isBlank(deviceOtaKey(device))) {
             return resp;
         }
         if (device.getAutoUpdate() != null && device.getAutoUpdate() == 0) {
@@ -613,8 +615,8 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
     private VisibleRelease findVisible(DeviceEntity device, String pkgType, ManifestIndex index) {
         VisibleRelease best = null;
         for (String ch : OtaRolloutMatcher.visibleChannels(device.getOtaChannel())) {
-            List<IndexedRelease> candidates = index.actives.getOrDefault(indexKey(device.getBoard(), ch, pkgType),
-                    List.of());
+            List<IndexedRelease> candidates = index.actives.getOrDefault(
+                    indexKey(deviceOtaKey(device), ch, pkgType), List.of());
             for (IndexedRelease ir : candidates) {
                 if (!deviceEligible(device, ir.release, ir.pkg, ir.whitelistMacs)) {
                     continue;
@@ -640,7 +642,7 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
         }
         for (OtaReleaseEntity rolled : index.rolledBack) {
             OtaPackageEntity pkg = index.packages.get(rolled.getPackageId());
-            if (pkg == null || !pkgType.equals(pkg.getType()) || !Objects.equals(device.getBoard(), pkg.getHardware())) {
+            if (pkg == null || !pkgType.equals(pkg.getType()) || !packageMatchesDevice(pkg, device)) {
                 continue;
             }
             if (!current.equals(pkg.getVersion()) || rolled.getPreviousReleaseId() == null) {
@@ -667,7 +669,7 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
         if (!OtaReleaseStateMachine.ACTIVE.equals(release.getStatus())) {
             return false;
         }
-        if (!Objects.equals(device.getBoard(), pkg.getHardware())) {
+        if (!packageMatchesDevice(pkg, device)) {
             return false;
         }
         if (!OtaRolloutMatcher.channelCanSeeRelease(device.getOtaChannel(), release.getChannel())) {
@@ -768,7 +770,9 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
         Set<String> whitelist = collectReleaseWhitelist(release);
         List<DeviceEntity> hardwareDevices = pkg == null ? List.of()
                 : deviceDao.selectList(new LambdaQueryWrapper<DeviceEntity>()
-                        .eq(DeviceEntity::getBoard, pkg.getHardware()));
+                        .and(w -> w.eq(DeviceEntity::getDeviceType, pkg.getHardware())
+                                .or()
+                                .eq(DeviceEntity::getBoard, pkg.getHardware())));
         List<DeviceEntity> eligible = new ArrayList<>();
         for (DeviceEntity device : hardwareDevices) {
             if (deviceEligible(device, release, pkg, whitelist)) {
@@ -1073,6 +1077,16 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
 
     private static String indexKey(String hardware, String channel, String type) {
         return hardware + "|" + channel + "|" + type;
+    }
+
+    private static String deviceOtaKey(DeviceEntity device) {
+        return OtaRolloutMatcher.deviceOtaKey(device == null ? null : device.getDeviceType(),
+                device == null ? null : device.getBoard());
+    }
+
+    private static boolean packageMatchesDevice(OtaPackageEntity pkg, DeviceEntity device) {
+        return pkg != null && device != null
+                && Objects.equals(deviceOtaKey(device), pkg.getHardware());
     }
 
     private List<String> parseMacsJson(String json) {

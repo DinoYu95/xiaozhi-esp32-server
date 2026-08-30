@@ -308,12 +308,23 @@ public class DeviceServiceImpl extends BaseServiceImpl<DeviceDao, DeviceEntity> 
     @Override
     public List<DeviceEntity> getUserDevices(Long userId, String agentId) {
         QueryWrapper<DeviceEntity> wrapper = new QueryWrapper<>();
-        wrapper.eq("user_id", userId);
-        wrapper.eq("agent_id", agentId);
+        wrapper.eq(userId != null, "user_id", userId);
+        wrapper.eq(StringUtils.isNotBlank(agentId), "agent_id", agentId);
         List<DeviceEntity> devices = baseDao.selectList(wrapper);
         for (DeviceEntity device : devices) {
-            device.setParentDisplayName(ParentDeviceDisplayResolver.resolveDeviceName(
-                    deviceDao, deviceChildDao, parentDeviceBindingDao, device.getId()));
+            try {
+                device.setParentDisplayName(ParentDeviceDisplayResolver.resolveDeviceName(
+                        deviceDao, deviceChildDao, parentDeviceBindingDao, device.getId()));
+            } catch (Exception e) {
+                log.warn("resolve parent display name failed, deviceId={}", device.getId(), e);
+            }
+            if (StringUtils.isBlank(device.getSystemVersion()) && StringUtils.isNotBlank(device.getAppVersion())) {
+                device.setSystemVersion(device.getAppVersion());
+                device.setAppVersion(null);
+            }
+            if (StringUtils.isBlank(device.getOtaChannel())) {
+                device.setOtaChannel("stable");
+            }
         }
         return devices;
     }

@@ -15,6 +15,9 @@
       <div class="content-panel">
         <div class="content-area">
           <el-card class="device-card" shadow="never">
+            <div v-if="!loading && deviceList.length === 0" class="empty-device-hint">
+              {{ $t('device.emptyListHint') }}
+            </div>
             <el-table ref="deviceTable" :data="paginatedDeviceList" class="transparent-table"
               :header-cell-class-name="headerCellClassName" v-loading="loading"
               :element-loading-text="$t('deviceManagement.loading')" element-loading-spinner="el-icon-loading"
@@ -221,11 +224,14 @@ export default {
       return pages;
     },
   },
-  mounted() {
-    const agentId = this.$route.query.agentId;
-    if (agentId) {
-      this.fetchBindDevices(agentId);
+  watch: {
+    '$route.query.agentId'(val) {
+      this.currentAgentId = val || '';
+      this.loadDevices();
     }
+  },
+  mounted() {
+    this.loadDevices();
   },
   created() {
     this.getFirmwareTypes()
@@ -388,46 +394,99 @@ export default {
       this.currentPage = page;
     },
 
+    resolveAgentId() {
+      const fromQuery = this.$route.query.agentId;
+      if (fromQuery) {
+        try {
+          sessionStorage.setItem('xiaozhi.lastAgentId', fromQuery);
+        } catch (e) { /* ignore */ }
+        return fromQuery;
+      }
+      try {
+        return sessionStorage.getItem('xiaozhi.lastAgentId') || '';
+      } catch (e) {
+        return '';
+      }
+    },
+    loadDevices() {
+      const agentId = this.resolveAgentId();
+      this.currentAgentId = agentId;
+      this.fetchBindDevices(agentId);
+    },
+    pickField(device, camel, snake) {
+      if (device[camel] !== undefined && device[camel] !== null && device[camel] !== '') {
+        return device[camel];
+      }
+      if (device[snake] !== undefined && device[snake] !== null && device[snake] !== '') {
+        return device[snake];
+      }
+      return device[camel] || device[snake] || '';
+    },
+    mapDeviceRow(device) {
+      const systemVersion = this.pickField(device, 'systemVersion', 'system_version')
+        || this.pickField(device, 'appVersion', 'app_version');
+      const rawApp = this.pickField(device, 'appVersion', 'app_version');
+      const hasSystem = !!(device.systemVersion || device.system_version);
+      return {
+        device_id: device.id,
+        model: this.pickField(device, 'board', 'board'),
+        deviceType: this.pickField(device, 'deviceType', 'device_type'),
+        systemVersion,
+        appVersion: hasSystem ? rawApp : '',
+        otaChannel: this.pickField(device, 'otaChannel', 'ota_channel') || 'stable',
+        firmwareVersion: systemVersion,
+        macAddress: this.pickField(device, 'macAddress', 'mac_address'),
+        parentDisplayName: this.pickField(device, 'parentDisplayName', 'parent_display_name'),
+        bindTime: device.createDate || device.create_date,
+        lastConversation: device.lastConnectedAt || device.last_connected_at,
+        remark: device.alias,
+        _originalRemark: device.alias,
+        isEdit: false,
+        _submitting: false,
+        otaSwitch: device.autoUpdate === 1 || device.auto_update === 1,
+        rawBindTime: new Date(device.createDate || device.create_date || 0).getTime(),
+        selected: false,
+        deviceStatus: 'offline'
+      };
+    },
+    applyDeviceRows(rows, agentId) {
+      this.deviceList = rows.map(this.mapDeviceRow)
+        .sort((a, b) => a.rawBindTime - b.rawBindTime);
+      this.activeSearchKeyword = "";
+      this.searchKeyword = "";
+      if (agentId) {
+        this.fetchDeviceStatus(agentId);
+      }
+    },
     fetchBindDevices(agentId) {
       this.loading = true;
-      Api.device.getAgentBindDevices(agentId, ({ data }) => {
+      const onResult = ({ data }) => {
         this.loading = false;
         if (data && data.code === 0) {
           const rows = Array.isArray(data.data) ? data.data : [];
-          this.deviceList = rows.map(device => {
-            return {
-              device_id: device.id,
-              model: device.board,
-              deviceType: device.deviceType,
-              systemVersion: device.systemVersion || device.appVersion || '',
-              appVersion: device.systemVersion ? (device.appVersion || '') : '',
-              otaChannel: device.otaChannel || 'stable',
-              firmwareVersion: device.systemVersion || device.appVersion,
-              macAddress: device.macAddress,
-              parentDisplayName: device.parentDisplayName,
-              bindTime: device.createDate,
-              lastConversation: device.lastConnectedAt,
-              remark: device.alias,
-              _originalRemark: device.alias,
-              isEdit: false,
-              _submitting: false,
-              otaSwitch: device.autoUpdate === 1,
-              rawBindTime: new Date(device.createDate).getTime(),
-              selected: false,
-              // 初始设置为离线状态
-              deviceStatus: 'offline'
-            };
-          })
-            .sort((a, b) => a.rawBindTime - b.rawBindTime);
-          this.activeSearchKeyword = "";
-          this.searchKeyword = "";
-
-          // 获取设备列表后，立即获取设备状态
-          this.fetchDeviceStatus(agentId);
+          if (rows.length === 0 && agentId) {
+            this.loading = true;
+            Api.device.listMyDevices((res) => {
+              this.loading = false;
+              const fallback = res && res.data;
+              if (fallback && fallback.code === 0) {
+                this.applyDeviceRows(Array.isArray(fallback.data) ? fallback.data : [], '');
+              } else {
+                this.applyDeviceRows([], agentId);
+              }
+            });
+            return;
+          }
+          this.applyDeviceRows(rows, agentId);
         } else {
           this.$message.error((data && data.msg) || this.$t('device.getListFailed'));
         }
-      });
+      };
+      if (agentId) {
+        Api.device.getAgentBindDevices(agentId, onResult);
+      } else {
+        Api.device.listMyDevices(onResult);
+      }
     },
 
     // 获取设备状态
@@ -852,18 +911,20 @@ export default {
 }
 
 :deep(.transparent-table) {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  max-height: calc(100vh - 40vh);
+  width: 100%;
+  max-height: none;
 }
 
 :deep(.el-table__body-wrapper) {
-  flex: 1;
-  overflow-y: auto;
   overflow-x: auto;
-  min-height: 160px;
-  max-height: none !important;
+  min-height: 200px;
+}
+
+.empty-device-hint {
+  padding: 24px 16px 8px;
+  color: #909399;
+  font-size: 14px;
+  text-align: center;
 }
 
 :deep(.el-table__header-wrapper) {

@@ -636,6 +636,7 @@ export default {
 
   // Device management page text
   'device.management': 'Device Management',
+  'device.emptyListHint': 'No devices yet. Open this page from an agent card. If you just upgraded, refresh and try again.',
   'device.add': 'Add Device',
   'device.edit': 'Edit Device',
   'device.delete': 'Delete Device',

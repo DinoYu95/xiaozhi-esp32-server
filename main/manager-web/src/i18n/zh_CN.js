@@ -665,6 +665,7 @@ export default {
 
   // 设备管理页面文本
   'device.management': '设备管理',
+  'device.emptyListHint': '暂无设备。请从智能体卡片点「设备管理」进入；若刚升级接口，请刷新页面后重试。',
   'device.add': '添加设备',
   'device.edit': '编辑设备',
   'device.delete': '删除设备',

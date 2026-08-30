@@ -118,6 +118,13 @@ export default {
       this.$router.push({ path: '/voice-print', query: { agentId: this.device.agentId } });
     },
     handleDeviceManage() {
+      const agentId = this.device.agentId || this.device.id;
+      if (agentId) {
+        try {
+          sessionStorage.setItem('xiaozhi.lastAgentId', agentId);
+        } catch (e) { /* ignore */ }
+        this.$router.push({ path: '/device-management', query: { agentId } });
+      }
       this.$emit('deviceManage', this.device);
     },
     handleChatHistory() {

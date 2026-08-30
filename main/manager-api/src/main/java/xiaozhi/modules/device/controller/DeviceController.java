@@ -85,6 +85,14 @@ public class DeviceController {
         return new Result<List<DeviceEntity>>().ok(devices);
     }
 
+    @GetMapping("/list")
+    @Operation(summary = "当前用户全部设备（无 agentId 时智控台兜底）")
+    @RequiresPermissions("sys:role:normal")
+    public Result<List<DeviceEntity>> listMyDevices() {
+        List<DeviceEntity> devices = deviceService.getUserDevices(sysUserScopeService.getDataScopeUserId(), null);
+        return new Result<List<DeviceEntity>>().ok(devices);
+    }
+
     @PostMapping("/bind/{agentId}")
     @Operation(summary = "设备在线接口")
     @RequiresPermissions("sys:role:normal")

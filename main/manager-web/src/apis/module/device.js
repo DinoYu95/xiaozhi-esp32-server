@@ -18,6 +18,21 @@ export default {
                 });
             }).send();
     },
+    listMyDevices(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/device/list`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime();
+                callback(res);
+            })
+            .networkFail((err) => {
+                console.error('获取设备列表失败:', err);
+                RequestService.reAjaxFun(() => {
+                    this.listMyDevices(callback);
+                });
+            }).send();
+    },
     // 解绑设备
     unbindDevice(device_id, callback) {
         RequestService.sendRequest()

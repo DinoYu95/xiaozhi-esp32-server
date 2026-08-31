@@ -155,13 +155,20 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
     @Override
     @Transactional
     public void resetAllOtaData() {
-        upgradeLogDao.delete(new LambdaQueryWrapper<>());
-        releasePoolDao.delete(new LambdaQueryWrapper<>());
-        releaseDao.delete(new LambdaQueryWrapper<>());
-        poolDeviceDao.delete(new LambdaQueryWrapper<>());
-        poolDao.delete(new LambdaQueryWrapper<>());
-        packageDao.delete(new LambdaQueryWrapper<>());
-        hardwareTypeDao.delete(new LambdaQueryWrapper<>());
+        upgradeLogDao.delete(new LambdaQueryWrapper<OtaDeviceUpgradeLogEntity>()
+                .isNotNull(OtaDeviceUpgradeLogEntity::getId));
+        releasePoolDao.delete(new LambdaQueryWrapper<OtaReleasePoolEntity>()
+                .isNotNull(OtaReleasePoolEntity::getId));
+        releaseDao.delete(new LambdaQueryWrapper<OtaReleaseEntity>()
+                .isNotNull(OtaReleaseEntity::getId));
+        poolDeviceDao.delete(new LambdaQueryWrapper<OtaWhitelistPoolDeviceEntity>()
+                .isNotNull(OtaWhitelistPoolDeviceEntity::getId));
+        poolDao.delete(new LambdaQueryWrapper<OtaWhitelistPoolEntity>()
+                .isNotNull(OtaWhitelistPoolEntity::getId));
+        packageDao.delete(new LambdaQueryWrapper<OtaPackageEntity>()
+                .isNotNull(OtaPackageEntity::getId));
+        hardwareTypeDao.delete(new LambdaQueryWrapper<OtaHardwareTypeEntity>()
+                .isNotNull(OtaHardwareTypeEntity::getHwKey));
         Date now = new Date();
         OtaHardwareTypeEntity row = new OtaHardwareTypeEntity();
         row.setHwKey("k230");

@@ -154,6 +154,28 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
 
     @Override
     @Transactional
+    public void resetAllOtaData() {
+        upgradeLogDao.delete(new LambdaQueryWrapper<>());
+        releasePoolDao.delete(new LambdaQueryWrapper<>());
+        releaseDao.delete(new LambdaQueryWrapper<>());
+        poolDeviceDao.delete(new LambdaQueryWrapper<>());
+        poolDao.delete(new LambdaQueryWrapper<>());
+        packageDao.delete(new LambdaQueryWrapper<>());
+        hardwareTypeDao.delete(new LambdaQueryWrapper<>());
+        Date now = new Date();
+        OtaHardwareTypeEntity row = new OtaHardwareTypeEntity();
+        row.setHwKey("k230");
+        row.setName("K230");
+        row.setDescription("与 SWU 文件名 hardware 段、device_type 一致");
+        row.setEnabled(1);
+        row.setCreatedAt(now);
+        row.setUpdatedAt(now);
+        hardwareTypeDao.insert(row);
+        log.warn("DevOps OTA reset: cleared packages/releases/pools; seeded hardware type k230");
+    }
+
+    @Override
+    @Transactional
     public PackageVO uploadPackage(MultipartFile file, String notes, String createdBy) {
         if (file == null || file.isEmpty()) {
             throw new RenException("上传文件不能为空");
@@ -413,10 +435,7 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
         }
 
         Set<String> whitelist = collectReleaseWhitelist(release);
-        List<DeviceEntity> devices = deviceDao.selectList(new LambdaQueryWrapper<DeviceEntity>()
-                .and(w -> w.eq(DeviceEntity::getDeviceType, pkg.getHardware())
-                        .or()
-                        .eq(DeviceEntity::getBoard, pkg.getHardware())));
+        List<DeviceEntity> devices = loadDevicesForRelease(pkg, whitelist);
         for (DeviceEntity device : devices) {
             if (!deviceEligible(device, release, pkg, whitelist)) {
                 continue;
@@ -431,7 +450,29 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
             logRow.setReportedAt(now);
             upgradeLogDao.insert(logRow);
         }
-        return toReleaseVo(release, true);
+        return toReleaseVo(release, false);
+    }
+
+    private List<DeviceEntity> loadDevicesForRelease(OtaPackageEntity pkg, Collection<String> whitelistMacs) {
+        if (pkg == null) {
+            return List.of();
+        }
+        Set<String> normalized = OtaRolloutMatcher.normalizeMacSet(whitelistMacs);
+        if (!normalized.isEmpty()) {
+            List<DeviceEntity> matched = new ArrayList<>();
+            for (String mac : normalized) {
+                DeviceEntity device = deviceDao.selectOne(new LambdaQueryWrapper<DeviceEntity>()
+                        .apply("LOWER(mac_address) = {0}", mac));
+                if (device != null) {
+                    matched.add(device);
+                }
+            }
+            return matched;
+        }
+        return deviceDao.selectList(new LambdaQueryWrapper<DeviceEntity>()
+                .and(w -> w.eq(DeviceEntity::getDeviceType, pkg.getHardware())
+                        .or()
+                        .eq(DeviceEntity::getBoard, pkg.getHardware())));
     }
 
     @Override

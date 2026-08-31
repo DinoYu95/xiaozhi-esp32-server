@@ -71,4 +71,7 @@ public interface DevopsOtaService {
     void reportUpgrade(DeviceOtaReportDTO dto);
 
     boolean isKnownHardware(String hardware);
+
+    /** 清空包/发布/白名单/升级流水/硬件类型，并重新 seed k230（不删 ai_device） */
+    void resetAllOtaData();
 }

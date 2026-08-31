@@ -69,6 +69,13 @@ public class DevopsOtaController {
         return ok(null);
     }
 
+    @PostMapping("/admin/reset")
+    @Operation(summary = "清空全部 OTA 数据（包/发布/白名单/硬件类型），保留 ai_device")
+    public Result<Void> resetAllOtaData() {
+        devopsOtaService.resetAllOtaData();
+        return ok(null);
+    }
+
     @GetMapping("/packages")
     @Operation(summary = "SWU 包列表")
     public Result<List<PackageVO>> listPackages(

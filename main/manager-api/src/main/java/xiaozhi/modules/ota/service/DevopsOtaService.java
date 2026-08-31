@@ -13,6 +13,7 @@ import xiaozhi.modules.ota.dto.PackageRegisterDTO;
 import xiaozhi.modules.ota.dto.PoolDevicesAddDTO;
 import xiaozhi.modules.ota.dto.ReleaseCreateDTO;
 import xiaozhi.modules.ota.dto.ReleaseRollbackDTO;
+import xiaozhi.modules.ota.dto.ReleaseRolloutUpdateDTO;
 import xiaozhi.modules.ota.dto.WhitelistPoolCreateDTO;
 import xiaozhi.modules.ota.dto.WhitelistPoolUpdateDTO;
 import xiaozhi.modules.ota.vo.DeviceOtaCheckRespVO;
@@ -59,6 +60,8 @@ public interface DevopsOtaService {
     List<ReleaseVO> listReleases();
 
     ReleaseVO createRelease(ReleaseCreateDTO dto, String publishedBy);
+
+    ReleaseVO updateReleaseRollout(Long id, ReleaseRolloutUpdateDTO dto);
 
     ReleaseVO rollbackRelease(Long id, ReleaseRollbackDTO dto);
 

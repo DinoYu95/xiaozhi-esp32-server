@@ -49,6 +49,7 @@ import xiaozhi.modules.ota.dto.PackageRegisterDTO;
 import xiaozhi.modules.ota.dto.PoolDevicesAddDTO;
 import xiaozhi.modules.ota.dto.ReleaseCreateDTO;
 import xiaozhi.modules.ota.dto.ReleaseRollbackDTO;
+import xiaozhi.modules.ota.dto.ReleaseRolloutUpdateDTO;
 import xiaozhi.modules.ota.dto.WhitelistPoolCreateDTO;
 import xiaozhi.modules.ota.dto.WhitelistPoolUpdateDTO;
 import xiaozhi.modules.ota.entity.OtaDeviceUpgradeLogEntity;
@@ -458,6 +459,57 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
             upgradeLogDao.insert(logRow);
         }
         return toReleaseVo(release, false);
+    }
+
+    @Override
+    @Transactional
+    public ReleaseVO updateReleaseRollout(Long id, ReleaseRolloutUpdateDTO dto) {
+        OtaReleaseEntity release = releaseDao.selectById(id);
+        if (release == null) {
+            throw new RenException("发布不存在");
+        }
+        if (!OtaReleaseStateMachine.ACTIVE.equals(release.getStatus())) {
+            throw new RenException("仅 active 发布可调整灰度");
+        }
+        int rollout = dto.getRolloutPercent() == null ? 100 : dto.getRolloutPercent();
+        if (rollout < 1 || rollout > 100) {
+            throw new RenException("灰度比例须在 1-100");
+        }
+        int oldRollout = release.getRolloutPercent() == null ? 0 : release.getRolloutPercent();
+        if (rollout == oldRollout) {
+            return toReleaseVo(release, true);
+        }
+        release.setRolloutPercent(rollout);
+        releaseDao.updateById(release);
+
+        if (rollout > oldRollout) {
+            OtaPackageEntity pkg = packageDao.selectById(release.getPackageId());
+            if (pkg != null) {
+                Set<String> whitelist = collectReleaseWhitelist(release);
+                List<DeviceEntity> devices = loadDevicesForRelease(pkg, whitelist);
+                Date now = new Date();
+                for (DeviceEntity device : devices) {
+                    if (!deviceEligible(device, release, pkg, whitelist)) {
+                        continue;
+                    }
+                    String mac = OtaRolloutMatcher.normalizeMac(device.getMacAddress());
+                    if (latestLog(release.getId(), mac) != null) {
+                        continue;
+                    }
+                    OtaDeviceUpgradeLogEntity logRow = new OtaDeviceUpgradeLogEntity();
+                    logRow.setReleaseId(release.getId());
+                    logRow.setMacAddress(mac);
+                    logRow.setPkgType(pkg.getType());
+                    logRow.setFromVersion(
+                            "system".equals(pkg.getType()) ? device.getSystemVersion() : device.getAppVersion());
+                    logRow.setToVersion(pkg.getVersion());
+                    logRow.setStatus("pending");
+                    logRow.setReportedAt(now);
+                    upgradeLogDao.insert(logRow);
+                }
+            }
+        }
+        return toReleaseVo(release, true);
     }
 
     private List<DeviceEntity> loadDevicesForRelease(OtaPackageEntity pkg, Collection<String> whitelistMacs) {

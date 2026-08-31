@@ -25,6 +25,7 @@ import xiaozhi.modules.ota.dto.PackageRegisterDTO;
 import xiaozhi.modules.ota.dto.PoolDevicesAddDTO;
 import xiaozhi.modules.ota.dto.ReleaseCreateDTO;
 import xiaozhi.modules.ota.dto.ReleaseRollbackDTO;
+import xiaozhi.modules.ota.dto.ReleaseRolloutUpdateDTO;
 import xiaozhi.modules.ota.dto.WhitelistPoolCreateDTO;
 import xiaozhi.modules.ota.dto.WhitelistPoolUpdateDTO;
 import xiaozhi.modules.ota.service.DevopsOtaService;
@@ -172,6 +173,13 @@ public class DevopsOtaController {
     public Result<ReleaseVO> createRelease(@Valid @RequestBody ReleaseCreateDTO dto,
             @RequestHeader(value = "X-DevOps-User", required = false) String user) {
         return ok(devopsOtaService.createRelease(dto, user));
+    }
+
+    @PutMapping("/releases/{id}/rollout")
+    @Operation(summary = "调整 active 发布灰度比例（不新建发布）")
+    public Result<ReleaseVO> updateReleaseRollout(@PathVariable("id") Long id,
+            @Valid @RequestBody ReleaseRolloutUpdateDTO dto) {
+        return ok(devopsOtaService.updateReleaseRollout(id, dto));
     }
 
     @PostMapping("/releases/{id}/rollback")

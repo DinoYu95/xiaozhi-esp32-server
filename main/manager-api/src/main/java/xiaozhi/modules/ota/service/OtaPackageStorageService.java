@@ -24,12 +24,17 @@ public interface OtaPackageStorageService {
     record SwuStream(InputStream inputStream, long contentLength, String filename, AutoCloseable cleanup)
             implements AutoCloseable {
         @Override
-        public void close() throws Exception {
+        public void close() {
             try {
                 inputStream.close();
-            } finally {
-                if (cleanup != null) {
+            } catch (Exception ignored) {
+                // best-effort close
+            }
+            if (cleanup != null) {
+                try {
                     cleanup.close();
+                } catch (Exception ignored) {
+                    // best-effort cleanup (e.g. OSS client shutdown)
                 }
             }
         }

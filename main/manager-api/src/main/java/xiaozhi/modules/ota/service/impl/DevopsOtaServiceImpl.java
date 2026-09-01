@@ -736,7 +736,7 @@ public class DevopsOtaServiceImpl implements DevopsOtaService {
             }
             DeviceOtaCheckRespVO.UpdateItem item = new DeviceOtaCheckRespVO.UpdateItem();
             item.setVersion(visible.pkg.getVersion());
-            item.setUrl(storageService.resolveAccessUrl(visible.pkg.getOssKey()));
+            item.setUrl(storageService.resolveDeviceDownloadUrl(visible.pkg.getOssKey()));
             item.setSha256(visible.pkg.getSha256());
             item.setReleaseId(visible.release.getId());
             item.setMandatory(false);

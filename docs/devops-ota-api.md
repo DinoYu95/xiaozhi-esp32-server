@@ -16,6 +16,18 @@
 
 OSS：复用参数字典 `aliyun.oss.*`（endpoint / AK 等与家长端相同）。**Bucket 用独立项 `aliyun.oss.ota.bucket`**，留空才回退 `aliyun.oss.bucket`。不要改 `xiaozhi-parent`。对象键：`ota/{hardware}/{channel}/{type}/{version}/{filename}`。未启用 OSS 时落到 `uploadfile/`，设备通过 `/ota/swu/file/{oss_key}` 下载。
 
+**设备 SWU 下载 URL（`/ota/check` 返回的 `url`）：**
+
+| 参数字典 | 说明 |
+|----------|------|
+| `aliyun.oss.ota.device_download_mode` | `presigned`（默认）：OSS **预签名 URL**，私有桶可用；`proxy`：经 manager-api `GET /ota/swu/file/{oss_key}` 代理（嵌入式缺 CA 证书时用） |
+| `aliyun.oss.signed_url_expire_seconds` | 预签名有效期，默认 86400 秒 |
+| `xiaozhi.parent.public-base-url` | `proxy` 模式必填，如 `http://公网IP:8002/xiaozhi`（manager-api 经 Nginx，**不是** 8003） |
+
+私有桶 **不要** 依赖 `aliyun.oss.public_read=true` 的直链（会 403）。设备端 `/ota/check` 已改为走 `resolveDeviceDownloadUrl`，与家长端 `public_read` 解耦。
+
+**嵌入式 wget CA 报错：** 优先把 `device_download_mode` 改为 `proxy`，设备只访问 HTTP 的 manager-api；或在设备上安装 `ca-certificates` 后继续用 `presigned`。
+
 SWU 文件名：`^(system|app)_([A-Za-z0-9_-]+)_(\d+\.\d+\.\d+(?:[-+][\w.]+)?)_(stable|beta)\.swu$`
 
 覆盖度：`percent = success_count / eligible_count`。eligible = 同 hardware 且命中灰度（`hash(mac)%100 < rollout`）或白名单池 / extra MAC，并满足通道可见性。

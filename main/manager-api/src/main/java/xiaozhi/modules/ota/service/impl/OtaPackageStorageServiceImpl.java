@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
+import com.aliyun.oss.model.OSSObject;
 import com.aliyun.oss.model.ObjectMetadata;
 
 import lombok.RequiredArgsConstructor;
@@ -42,6 +43,7 @@ public class OtaPackageStorageServiceImpl implements OtaPackageStorageService {
     private static final String PARAM_PATH_PREFIX = "aliyun.oss.path_prefix";
     private static final String PARAM_PUBLIC_READ = "aliyun.oss.public_read";
     private static final String PARAM_SIGNED_EXPIRE = "aliyun.oss.signed_url_expire_seconds";
+    private static final String PARAM_OTA_DEVICE_DOWNLOAD = "aliyun.oss.ota.device_download_mode";
 
     private final SysParamsService sysParamsService;
 
@@ -72,9 +74,63 @@ public class OtaPackageStorageServiceImpl implements OtaPackageStorageService {
         if (cfg.enabled) {
             return buildOssAccessUrl(physicalKey(ossKey, cfg), cfg);
         }
-        String base = trimSlash(publicBaseUrl);
-        String path = "/ota/swu/file/" + ossKey;
-        return StringUtils.isNotBlank(base) ? base + path : path;
+        return buildProxyUrl(ossKey);
+    }
+
+    @Override
+    public String resolveDeviceDownloadUrl(String ossKey) {
+        if (StringUtils.isBlank(ossKey)) {
+            return null;
+        }
+        if (ossKey.startsWith("http://") || ossKey.startsWith("https://")) {
+            return ossKey;
+        }
+        OssConfig cfg = loadOssConfig();
+        if (!cfg.enabled || "proxy".equalsIgnoreCase(cfg.otaDeviceDownloadMode)) {
+            return buildProxyUrl(ossKey);
+        }
+        return buildPresignedUrl(physicalKey(ossKey, cfg), cfg);
+    }
+
+    @Override
+    public SwuStream openSwuStream(String ossKey) {
+        if (StringUtils.isBlank(ossKey)) {
+            return null;
+        }
+        OssConfig cfg = loadOssConfig();
+        if (!cfg.enabled) {
+            Path file = localPath(ossKey);
+            if (!Files.isRegularFile(file)) {
+                return null;
+            }
+            try {
+                return new SwuStream(
+                        Files.newInputStream(file),
+                        Files.size(file),
+                        filenameFromKey(ossKey),
+                        () -> {
+                        });
+            } catch (IOException e) {
+                log.warn("读取本地 SWU 失败: {}", ossKey, e);
+                return null;
+            }
+        }
+        if (StringUtils.isAnyBlank(cfg.endpoint, cfg.bucket, cfg.accessKeyId, cfg.accessKeySecret)) {
+            log.warn("OSS 未配置完整，无法代理下载 SWU: {}", ossKey);
+            return null;
+        }
+        OSS client = new OSSClientBuilder().build(cfg.endpoint, cfg.accessKeyId, cfg.accessKeySecret);
+        try {
+            String objectKey = physicalKey(ossKey, cfg);
+            ObjectMetadata meta = client.getObjectMetadata(cfg.bucket, objectKey);
+            OSSObject obj = client.getObject(cfg.bucket, objectKey);
+            long size = meta == null ? -1L : meta.getContentLength();
+            return new SwuStream(obj.getObjectContent(), size, filenameFromKey(ossKey), client::shutdown);
+        } catch (Exception e) {
+            client.shutdown();
+            log.warn("OSS 读取 SWU 失败 key={} bucket={}", ossKey, cfg.bucket, e);
+            return null;
+        }
     }
 
     public byte[] readLocalFile(String ossKey) {
@@ -139,6 +195,10 @@ public class OtaPackageStorageServiceImpl implements OtaPackageStorageService {
         if (cfg.publicRead) {
             return "https://" + cfg.bucket + "." + cfg.endpoint + "/" + objectKey;
         }
+        return buildPresignedUrl(objectKey, cfg);
+    }
+
+    private String buildPresignedUrl(String objectKey, OssConfig cfg) {
         OSS client = null;
         try {
             client = new OSSClientBuilder().build(cfg.endpoint, cfg.accessKeyId, cfg.accessKeySecret);
@@ -150,6 +210,20 @@ public class OtaPackageStorageServiceImpl implements OtaPackageStorageService {
                 client.shutdown();
             }
         }
+    }
+
+    private String buildProxyUrl(String ossKey) {
+        String base = trimSlash(publicBaseUrl);
+        String path = "/ota/swu/file/" + ossKey;
+        if (StringUtils.isBlank(base)) {
+            log.warn("未配置 xiaozhi.parent.public-base-url，设备 SWU 代理 URL 可能不完整: {}", path);
+            return path;
+        }
+        return base + path;
+    }
+
+    private static String filenameFromKey(String ossKey) {
+        return ossKey.contains("/") ? ossKey.substring(ossKey.lastIndexOf('/') + 1) : ossKey;
     }
 
     private static String physicalKey(String logicalKey, OssConfig cfg) {
@@ -175,6 +249,8 @@ public class OtaPackageStorageServiceImpl implements OtaPackageStorageService {
         cfg.pathPrefix = StringUtils.isNotBlank(prefix) ? prefix : "xiaozhi";
         cfg.publicRead = !"false".equalsIgnoreCase(
                 StringUtils.trimToEmpty(sysParamsService.getValue(PARAM_PUBLIC_READ, true)));
+        cfg.otaDeviceDownloadMode = StringUtils.defaultIfBlank(
+                sysParamsService.getValue(PARAM_OTA_DEVICE_DOWNLOAD, true), "presigned");
         try {
             cfg.signedUrlExpireSeconds = Integer.parseInt(
                     StringUtils.defaultIfBlank(sysParamsService.getValue(PARAM_SIGNED_EXPIRE, true), "86400"));
@@ -216,5 +292,6 @@ public class OtaPackageStorageServiceImpl implements OtaPackageStorageService {
         String pathPrefix;
         boolean publicRead = true;
         int signedUrlExpireSeconds = 86400;
+        String otaDeviceDownloadMode = "presigned";
     }
 }

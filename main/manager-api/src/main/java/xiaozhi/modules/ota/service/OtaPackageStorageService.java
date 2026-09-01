@@ -10,8 +10,28 @@ public interface OtaPackageStorageService {
 
     String resolveAccessUrl(String ossKey);
 
+    /** 设备端 SWU 下载 URL（私有桶默认预签名；可配置经 manager-api 代理） */
+    String resolveDeviceDownloadUrl(String ossKey);
+
     byte[] readLocalFile(String ossKey);
 
+    /** @return null 表示对象不存在 */
+    SwuStream openSwuStream(String ossKey);
+
     record StoredObject(String ossKey, boolean oss) {
+    }
+
+    record SwuStream(InputStream inputStream, long contentLength, String filename, AutoCloseable cleanup)
+            implements AutoCloseable {
+        @Override
+        public void close() throws Exception {
+            try {
+                inputStream.close();
+            } finally {
+                if (cleanup != null) {
+                    cleanup.close();
+                }
+            }
+        }
     }
 }

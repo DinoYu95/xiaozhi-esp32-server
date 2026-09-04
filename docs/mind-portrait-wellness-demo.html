@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>心绪陪伴 · 本周详情</title>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --card: #fff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --brand: #0d9488;
+      --brand-soft: #ccfbf1;
+      --warm: #f97316;
+      --warm-soft: #ffedd5;
+      --lavender: #8b5cf6;
+      --lavender-soft: #ede9fe;
+      --ok: #059669;
+      --ok-bg: #ecfdf5;
+      --watch: #d97706;
+      --watch-bg: #fffbeb;
+      --calm: #0284c7;
+      --calm-bg: #eff6ff;
+      --radius: 16px;
+      --shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+      background: linear-gradient(165deg, #e8f4f8 0%, #f4f6fb 40%, #faf5ff 100%);
+      color: var(--text);
+      line-height: 1.55;
+      display: flex;
+      justify-content: center;
+      min-height: 100%;
+    }
+
+    /* 小程序 web-view 视口 */
+    .app {
+      width: 100%;
+      max-width: 430px;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.04);
+    }
+
+    .topbar {
+      padding: 14px 16px 10px;
+      padding-top: max(14px, env(safe-area-inset-top));
+      background: var(--card);
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      flex-shrink: 0;
+    }
+    .topbar h1 { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+    .topbar .sub { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+    .disclaimer {
+      margin-top: 8px;
+      font-size: 0.65rem;
+      color: #94a3b8;
+      padding: 6px 10px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px dashed #e2e8f0;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding: 10px 12px 0;
+      background: var(--card);
+      flex-shrink: 0;
+    }
+    .tabs button {
+      flex: 1;
+      border: none;
+      background: transparent;
+      padding: 10px 4px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      border-radius: 10px 10px 0 0;
+      cursor: pointer;
+      position: relative;
+    }
+    .tabs button.on {
+      color: var(--brand);
+      font-weight: 700;
+      background: var(--bg);
+    }
+    .tabs button.on::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 20%; right: 20%;
+      height: 2px; background: var(--brand); border-radius: 2px;
+    }
+
+    .scroll {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 12px 14px 24px;
+      padding-bottom: max(24px, env(safe-area-inset-bottom));
+    }
+
+    .panel { display: none; }
+    .panel.on { display: block; }
+
+    /* ── 本周心绪 ── */
+    .hero {
+      background: linear-gradient(135deg, #0d9488 0%, #14b8a6 55%, #5eead4 100%);
+      border-radius: var(--radius);
+      padding: 18px 16px;
+      color: #fff;
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+    }
+    .hero-label { font-size: 0.68rem; opacity: 0.9; letter-spacing: 0.04em; }
+    .hero-status {
+      font-size: 1.45rem;
+      font-weight: 800;
+      margin: 6px 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .hero-status .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #fef08a;
+      box-shadow: 0 0 0 4px rgba(255,255,255,0.25);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.75; transform: scale(0.92); }
+    }
+    .hero-summary { font-size: 0.82rem; line-height: 1.65; opacity: 0.95; }
+    .hero-meta {
+      display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;
+    }
+    .hero-meta span {
+      font-size: 0.62rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.18);
+      backdrop-filter: blur(4px);
+    }
+
+    .trend-bar {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+    }
+    .trend-bar h3 { font-size: 0.78rem; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+    .trend-days {
+      display: flex; gap: 6px; align-items: flex-end; height: 48px;
+    }
+    .trend-days .day {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .trend-days .bar {
+      width: 100%; max-width: 28px; border-radius: 6px 6px 2px 2px;
+      background: linear-gradient(180deg, #5eead4, #0d9488);
+      min-height: 8px;
+      transition: height 0.4s ease;
+    }
+    .trend-days .day.watch .bar {
+      background: linear-gradient(180deg, #fcd34d, #d97706);
+    }
+    .trend-days label { font-size: 0.58rem; color: var(--muted); }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--muted);
+      margin: 16px 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .section-title::before {
+      content: '';
+      width: 3px; height: 12px;
+      background: var(--brand);
+      border-radius: 2px;
+    }
+
+    .dim-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .dim-card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      border: 1px solid transparent;
+    }
+    .dim-card:active { transform: scale(0.98); }
+    .dim-card.selected { border-color: var(--brand); box-shadow: 0 0 0 2px rgba(13,148,136,0.15); }
+    .dim-card .icon { font-size: 1.2rem; margin-bottom: 4px; }
+    .dim-card .name { font-size: 0.78rem; font-weight: 700; }
+    .dim-card .tag {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 0.62rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    .tag.ok { background: var(--ok-bg); color: var(--ok); }
+    .tag.watch { background: var(--watch-bg); color: var(--watch); }
+    .tag.calm { background: var(--calm-bg); color: var(--calm); }
+    .dim-card .hint { font-size: 0.65rem; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+
+    .detail-sheet {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+      display: none;
+    }
+    .detail-sheet.show { display: block; animation: slideUp 0.25s ease; }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .detail-sheet h4 { font-size: 0.88rem; margin-bottom: 6px; }
+    .detail-sheet p { font-size: 0.74rem; color: var(--muted); line-height: 1.6; }
+
+    .advice-block {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow);
+    }
+    .advice-block.child { border-left: 4px solid var(--brand); }
+    .advice-block.parent { border-left: 4px solid var(--lavender); background: linear-gradient(135deg, #fff 0%, #faf5ff 100%); }
+    .advice-block h3 {
+      font-size: 0.82rem;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .advice-block ul { list-style: none; }
+    .advice-block li {
+      font-size: 0.76rem;
+      color: var(--text);
+      padding: 8px 0;
+      border-bottom: 1px solid #f1f5f9;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .advice-block li:last-child { border-bottom: none; padding-bottom: 0; }
+    .advice-block li .num {
+      flex-shrink: 0;
+      width: 20px; height: 20px;
+      border-radius: 6px;
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-size: 0.62rem;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .advice-block.parent li .num { background: var(--lavender-soft); color: var(--lavender); }
+
+    .parent-calm {
+      background: linear-gradient(135deg, #ede9fe 0%, #fce7f3 100%);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+    }
+    .parent-calm .quote {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #5b21b6;
+      line-height: 1.65;
+      margin-bottom: 10px;
+    }
+    .parent-calm p { font-size: 0.72rem; color: #6b21a8; opacity: 0.85; }
+    .breath-btn {
+      margin-top: 12px;
+      width: 100%;
+      border: none;
+      padding: 12px;
+      border-radius: 12px;
+      background: #fff;
+      color: var(--lavender);
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(139,92,246,0.15);
+    }
+    .breath-btn:active { transform: scale(0.98); }
+
+    .when-help {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 0.68rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .when-help b { color: var(--text); display: block; margin-bottom: 4px; font-size: 0.72rem; }
+
+    /* ── 心谱 Tab（简版） ── */
+    .mini-graph {
+      background: #081018;
+      border-radius: var(--radius);
+      aspect-ratio: 1;
+      max-height: 340px;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+    }
+    .mini-graph .center-node {
+      position: absolute;
+      left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 0.7rem; font-weight: 700;
+      box-shadow: 0 0 24px rgba(99,102,241,0.5);
+      z-index: 2;
+    }
+    .mini-graph .orbit {
+      position: absolute;
+      left: 50%; top: 50%;
+      width: 72px; height: 72px;
+      margin: -36px 0 0 -36px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.08);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.58rem;
+      color: rgba(255,255,255,0.85);
+      text-align: center;
+      padding: 4px;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .mini-graph .orbit:active { transform: scale(1.08); }
+    .mini-graph .orbit.watch {
+      box-shadow: 0 0 16px rgba(251,191,36,0.35);
+      border-color: rgba(251,191,36,0.4);
+    }
+    .mini-graph .orbit.ok {
+      box-shadow: 0 0 12px rgba(94,234,212,0.25);
+    }
+    .mini-graph .hint-overlay {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 10px 12px;
+      background: linear-gradient(transparent, rgba(0,0,0,0.75));
+      font-size: 0.62rem;
+      color: #94a3b8;
+      text-align: center;
+    }
+    .link-full {
+      display: block;
+      text-align: center;
+      font-size: 0.74rem;
+      color: var(--brand);
+      padding: 12px;
+      background: var(--card);
+      border-radius: 12px;
+      text-decoration: none;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+
+    /* ── 说明 Tab ── */
+    .faq-item {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }
+    .faq-item h4 { font-size: 0.78rem; margin-bottom: 4px; }
+    .faq-item p { font-size: 0.72rem; color: var(--muted); line-height: 1.55; }
+
+    .toast {
+      position: fixed;
+      left: 50%; bottom: 80px;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(30,41,59,0.92);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s, transform 0.3s;
+      z-index: 100;
+      max-width: 85%;
+      text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* 桌面预览：右侧说明 */
+    @media (min-width: 900px) {
+      body { padding: 24px; gap: 24px; align-items: flex-start; }
+      .app { min-height: 812px; border-radius: 24px; overflow: hidden; flex-shrink: 0; }
+      .notes {
+        max-width: 360px;
+        background: #fff;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: var(--shadow);
+        font-size: 0.78rem;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+      .notes h2 { font-size: 0.95rem; color: var(--text); margin-bottom: 12px; }
+      .notes ul { padding-left: 18px; margin: 8px 0; }
+      .notes li { margin: 6px 0; }
+      .notes .tag-demo { display: inline-block; background: var(--brand-soft); color: var(--brand); padding: 2px 8px; border-radius: 6px; font-size: 0.68rem; font-weight: 600; }
+    }
+    @media (max-width: 899px) {
+      .notes { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app" id="app">
+    <header class="topbar">
+      <h1 id="childName">小亮 · 心绪陪伴</h1>
+      <p class="sub" id="weekRange">8月25日 – 8月31日 · 基于日常对话观察</p>
+      <p class="disclaimer">本页为产品 Demo，观察结论不构成医学或心理诊断。如有持续困扰，请咨询专业人士。</p>
+    </header>
+
+    <main class="scroll">
+      <section class="panel on" id="panel-status" role="tabpanel">
+        <div class="hero">
+          <div class="hero-label">整体状态</div>
+          <div class="hero-status">
+            <span class="dot"></span>
+            <span id="overallStatus">整体平稳，略有波动</span>
+          </div>
+          <p class="hero-summary" id="heroSummary">
+            这周和小智聊天里，孩子多数时候情绪表达自然，考试话题出现 3 次，谈及时语气偏紧张，但能在聊天后继续聊其他兴趣，恢复速度比上周略快。
+          </p>
+          <div class="hero-meta">
+            <span>已观察 14 天</span>
+            <span>比上周 ↑ 更稳定</span>
+            <span>无需紧急关注</span>
+          </div>
+        </div>
+
+        <div class="trend-bar">
+          <h3>近 7 天整体感受（示意）</h3>
+          <div class="trend-days" id="trendDays"></div>
+        </div>
+
+        <div class="section-title">四个生活面向</div>
+        <div class="dim-grid" id="dimGrid"></div>
+
+        <div class="detail-sheet" id="dimDetail">
+          <h4 id="dimDetailTitle">—</h4>
+          <p id="dimDetailBody">—</p>
+        </div>
+
+        <div class="when-help">
+          <b>什么时候建议寻求专业帮助？</b>
+          若情绪困扰持续 2 周以上，明显影响睡眠、上学或社交，或孩子表达伤害自己/他人的想法，请尽快联系学校心理老师、儿童心理专科或当地心理援助热线。本产品仅提供日常观察与陪伴参考。
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <aside class="notes">
+    <h2>心绪陪伴 · 本周详情页</h2>
+    <p><span class="tag-demo">二级页</span> 仅孩子状态，不含家长建议</p>
+    <ul>
+      <li>从机器人 Tab「查看详情」进入</li>
+      <li>含：整体状态 · 7 天趋势 · 四面向 · 专业求助说明</li>
+      <li>不含：陪伴建议 / 给家长的你 / 呼吸练习（在<strong>会话</strong>）</li>
+      <li>已移除：心谱概览 Tab、力导向图入口</li>
+    </ul>
+    <p style="margin-top:12px;font-size:0.68rem;">本地打开：<code>docs/mind-portrait-wellness-demo.html</code><br>可加 <code>?childName=小明</code></p>
+  </aside>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const MOCK = {
+      dimensions: [
+        { id: 'emotion', icon: '🌤', name: '情绪与状态', tag: 'ok', tagLabel: '平稳',
+          hint: '能表达开心与不满，整体节奏稳定',
+          detail: '本周聊天中，孩子 5 次主动描述自己的感受（如「今天挺开心」「有点烦」），未出现长时间低落或失控表达。' },
+        { id: 'stress', icon: '🌊', name: '面对压力时', tag: 'watch', tagLabel: '需留意',
+          hint: '考试话题出现增多，恢复尚可',
+          detail: '「考试」「作业」相关表述 3 次，语气偏紧；通常在聊完游戏或朋友后会切换话题，约 10–20 分钟内恢复。' },
+        { id: 'relation', icon: '🤝', name: '与人相处', tag: 'ok', tagLabel: '良好',
+          hint: '同伴与亲子沟通都有积极信号',
+          detail: '主动分享同学互动 2 次，向家长复述学校趣事 4 次，冲突相关表述较少。' },
+        { id: 'self', icon: '🪞', name: '自我感受', tag: 'calm', tagLabel: '观察中',
+          hint: '自我评价中性偏积极',
+          detail: '提到「我已经很努力了」1 次，未出现持续自我否定；证据仍在积累，建议继续日常闲聊观察。' }
+      ],
+      trend: [65, 58, 72, 45, 68, 70, 75]
+    };
+
+    function parseQuery() {
+      const q = {};
+      location.search.slice(1).split('&').forEach(p => {
+        const i = p.indexOf('=');
+        if (i < 0) q[decodeURIComponent(p)] = '';
+        else q[decodeURIComponent(p.slice(0, i))] = decodeURIComponent(p.slice(i + 1));
+      });
+      return q;
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2800);
+    }
+
+    function renderTrend() {
+      const el = document.getElementById('trendDays');
+      const labels = ['一','二','三','四','五','六','日'];
+      el.innerHTML = MOCK.trend.map((h, i) => {
+        const watch = h < 55;
+        return `<div class="day${watch ? ' watch' : ''}">
+          <div class="bar" style="height:${h}%"></div>
+          <label>${labels[i]}</label>
+        </div>`;
+      }).join('');
+    }
+
+    function renderDims() {
+      const grid = document.getElementById('dimGrid');
+      grid.innerHTML = MOCK.dimensions.map((d, i) => `
+        <div class="dim-card" data-idx="${i}">
+          <div class="icon">${d.icon}</div>
+          <div class="name">${d.name}</div>
+          <span class="tag ${d.tag}">${d.tagLabel}</span>
+          <p class="hint">${d.hint}</p>
+        </div>
+      `).join('');
+      grid.querySelectorAll('.dim-card').forEach(card => {
+        card.addEventListener('click', () => {
+          grid.querySelectorAll('.dim-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+          const d = MOCK.dimensions[+card.dataset.idx];
+          document.getElementById('dimDetailTitle').textContent = d.name + ' · ' + d.tagLabel;
+          document.getElementById('dimDetailBody').textContent = d.detail;
+          document.getElementById('dimDetail').classList.add('show');
+        });
+      });
+    }
+
+    (function boot() {
+      const q = parseQuery();
+      if (q.childName) {
+        document.getElementById('childName').textContent = q.childName + ' · 心绪陪伴';
+      }
+      renderTrend();
+      renderDims();
+    })();
+  </script>
+</body>
+</html>

@@ -17,6 +17,8 @@ public class MindNotificationPageVO {
     public static class Item {
         private Long id;
         private String notifyType;
+        /** 会话渲染类型：mind_instant_card | mind_weekly_card */
+        private String cardType;
         private String title;
         private String summary;
         private String nodeCode;

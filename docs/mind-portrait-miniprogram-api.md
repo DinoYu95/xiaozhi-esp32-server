@@ -1,20 +1,26 @@
-# 心绪图谱 · 小程序对接文档
+# 心绪陪伴 · 小程序对接文档
 
-> 与成长星图 **同一套交互与动画**，仅文案/维度不同。H5 参考：`/static/mind-portrait/index.html`  
-> 后端：`mp_*` 表 + `/parent-api/mind-portrait/*`（与 growth-portrait 平行）
+> **产品定位（v1）**：家长看孩子**当前状态是否健康**（机器人 Tab），在**会话**里收陪伴建议与减焦虑支持。  
+> **不是**全屏力导向「心绪星图」——力导向 graph 仅保留后端/教研，**家长端 UI 已下线**。  
+> H5 参考：`docs/mind-portrait-wellness-demo.html`（详情页）、`docs/mind-portrait-split-demo.html`（Tab+会话）  
+> 后端：`mp_*` 表 + `/parent-api/mind-portrait/*`
 
 **免责声明**：页面需展示「基于对话观察，不构成医学或心理诊断」。
 
 ---
 
+## 1. 信息架构
 
+| 位置 | 内容 | 数据来源 |
+|------|------|----------|
+| **机器人 Tab** | 心绪观察卡片（图一）：整体状态 + 4 面向 + 可选按钮 | `GET /wellness-summary` |
+| **详情页**（二级） | 本周心绪：7 天趋势 + 四面向展开 + 专业求助说明 | 同上 `detail` 字段或同接口 |
+| **会话 Tab** | 周报卡片、即时提醒、给家长的话、陪伴建议、呼吸练习 | `notifications` + `weekly-digest` + 小智对话 |
 
-## 1. 你要做什么
+**按钮显示规则（图一底部）**
 
-1. **把 HTML 原型改成小程序页面**（D3 可换 canvas / 小程序 canvas / echarts 力导向，字段对齐即可）
-2. **调 parent-api 拿图谱数据**，不要写死 JS 里的 `AGE_DIMS` / `SUB_TEMPLATES`
-3. **Tab 结构**：与「掌握地图」并列 — `学习` | `心绪图谱`
-4. **通知**：拉取 `/notifications`，未读角标；周报入口调 `/weekly-digest`
+- `showActions === false`（孩子整体正常）：**不展示**「去会话看陪伴建议」「查看详情」
+- `showActions === true`：展示两个按钮；左→切会话 Tab，右→打开详情页
 
 ---
 
@@ -43,7 +49,79 @@ Content-Type: application/json
 
 ## 3. 核心 API
 
-### 3.1 获取心绪图谱（主接口）
+### 3.0 心绪概览（家长端主接口 · 待实现）
+
+机器人 Tab 卡片 + 详情页均用此接口。**不要**对家长端暴露 `/graph`。
+
+```http
+GET /parent-api/mind-portrait/wellness-summary?childId={device_child.id}
+```
+
+**Response `data`**
+
+```typescript
+interface MindWellnessSummaryVO {
+  childId: number;
+  childName: string;
+  observeDays: number;
+  weekStart: string;   // ISO date
+  weekEnd: string;
+
+  /** 整体档位，驱动 UI */
+  overallLevel: 'stable' | 'watch' | 'concern';
+  overallText: string; // 「整体平稳，略有波动」
+  summary: string;
+
+  chips: { text: string; type: 'ok' | 'watch' | 'neutral' }[];
+
+  dimensions: {
+    code: string;       // hub nodeCode，如 stress / emotion
+    name: string;       // 「面对压力时」
+    status: 'ok' | 'watch' | 'observe';
+    statusText: string; // 「平稳」「需留意」「观察中」
+    hint: string;       // 卡片一行说明
+    detail: string;     // 详情页展开段落
+  }[];
+
+  weekTrend: {
+    date: string;       // YYYY-MM-DD
+    dayLabel: string;   // 一…日
+    level: 'ok' | 'watch' | 'neutral';
+  }[];
+
+  /** 图一底部按钮：后端算好，前端只读 */
+  showActions: boolean;
+  actions?: {
+    chat: { label: string };   // 「去会话看陪伴建议」
+    detail: { label: string }; // 「查看详情」
+  };
+}
+```
+
+**`showActions` 计算规则（后端实现）**
+
+```java
+boolean anyWatch = dimensions.stream().anyMatch(d -> "watch".equals(d.getStatus()));
+boolean showActions = !"stable".equals(overallLevel) || anyWatch;
+// stable 且四面向均无 watch → false，图一不展示按钮
+// 任一 watch 或 overallLevel 为 watch/concern → true
+```
+
+**`overallLevel` 聚合规则（后端从 mp_* hub 节点推导）**
+
+| 条件 | overallLevel |
+|------|----------------|
+| 任一 hub `state=strong` 且 cluster 属压力/情绪负向 | `concern` |
+| 任一 hub 对应维度 `status=watch` | `watch` |
+| 其余 | `stable` |
+
+Hub → 四面向映射（按 age_band 模板 `node_type=hub` 的 `sort_order` 前 4 个，或固定 cluster 分组）。
+
+**详情页与图一**：同接口；详情页**不返回** `parentTips` / `childTips`（那些进会话）。
+
+---
+
+### 3.1 心绪图谱 graph（内部/教研 · 家长端 UI 已下线）
 
 ```http
 GET /parent-api/mind-portrait/graph?childId={device_child.id}
@@ -173,7 +251,7 @@ POST /parent-api/mind-portrait/notifications/{id}/read
 
 ---
 
-### 3.3 周报（Phase 3）
+### 3.3 周报（推送到会话 · 卡片消息）
 
 ```http
 GET /parent-api/mind-portrait/weekly-digest?childId={id}&weekStart=2026-08-18
@@ -187,9 +265,18 @@ interface MindWeeklyDigestVO {
   weekEnd: string;
   newStrongCount: number;
   topHighlights: { nodeCode, label, shortDesc, strength }[];
-  parentTip: string;  // 亲子建议一句
+  /** 会话卡片标题区 */
+  title: string;           // 「整体平稳，「面对压力时」值得多陪」
+  summary: string;
+  /** 给家长的行动建议 bullet（会话卡片内，不进详情页） */
+  parentActions: string[];
+  /** 共情短句（会话独立消息或卡片内） */
+  parentSupport: string;   // 「不等于你的教育出了问题…」
+  childTips: string[];       // 陪伴孩子的 3 个小动作
 }
 ```
+
+会话侧渲染为 **weekly_card** 消息类型（见 §6.2）。
 
 ---
 
@@ -243,17 +330,49 @@ Authorization: Bearer <server_secret>
 
 ---
 
-## 6. 页面结构建议
+## 6. 页面结构
+
+### 6.1 机器人 Tab
 
 ```
-心绪 Tab
-├── 顶栏：孩子名 · 观测 N 天 · 积极信号 {strongCount}
-├── 模式切换（可选）：全部维度 | 筛选 chip（cluster）
-├── 力导向星图（graph 区域）
-├── 点击节点 → 底部抽屉：label / state / evidence / suggest
-├── 帮助按钮：四层结构说明
-└── 通知 toast：有新 instant 通知时展示（也可只做消息中心）
+机器人 Tab
+├── 设备卡片（已有）
+├── 心绪观察 · 本周（wellness-summary）
+│   ├── 整体状态 + 摘要 + chips
+│   ├── 四面向列表
+│   └── [showActions] 去会话 | 查看详情
+├── 成长星图入口（已有，与心绪并列）
+└── 免责一行
 ```
+
+### 6.2 会话 Tab · 消息类型
+
+| msgType | 展示 | 来源 |
+|---------|------|------|
+| `mind_weekly_card` | 周报卡片 + 「查看机器人 Tab」「30 秒安顿自己」 | weekly-digest，周日或首次打开推送 |
+| `mind_instant_card` | 即时提醒 + 「看孩子状态」「知道了」 | notifications `instant` |
+| `mind_parent_support` | 共情短文本（图四「给家长的你」首条） | weekly-digest.parentSupport 或模板 |
+| `mind_parent_tips` | 编号列表 3 条 + 可选呼吸按钮 | weekly-digest.parentTips |
+| `text` | 小智自由回复 | 用户追问 / LLM |
+
+**图四内容全部在会话，不进详情页。**
+
+即时提醒频控：沿用 `rules.weeklyInstantCap`（默认 2）；`知道了` → `POST .../notifications/{id}/read`。
+
+快捷 chips（客户端写死）：`最近心绪怎么样` · `我该怎么少焦虑` · `何时寻专业帮助` —— 可走小智 RAG，上下文注入 wellness-summary。
+
+### 6.3 详情页（二级）
+
+```
+详情页（web-view 或原生页）
+├── 顶栏：孩子名 · 周区间
+├── 整体状态 hero
+├── 近 7 天趋势
+├── 四面向 grid + 点击展开 detail
+└── 何时寻求专业帮助（静态文案）
+```
+
+**不含**：Tab 切换、心谱力导向图、陪伴建议、给家长的你、呼吸练习。
 
 与掌握地图 **不要共用** 路由/state，只共用 `childId` 和家长 token。
 
@@ -261,10 +380,11 @@ Authorization: Bearer <server_secret>
 
 ## 7. 联调步骤
 
-1. 教研 admin 登录 → `teaching-web/mind-admin.html` → 四个 age_band 各 **提交审核 → 通过**
-2. manager-api 跑 Liquibase 迁移（含 `mp_*` 表）
-3. 小程序带 parent token 调 `GET .../graph?childId=`
-4. 手动灌证据测试（可选）：
+1. 教研 admin → `teaching-web/mind-admin.html` → 发布模板
+2. manager-api 跑迁移（`mp_*`）
+3. 小程序调 `GET .../wellness-summary?childId=` 渲染机器人 Tab
+4. 会话拉 `weekly-digest` + `notifications` 渲染卡片
+5. （可选）灌证据测 watch 档位：
 
 ```bash
 curl -X POST 'http://127.0.0.1:8002/config/mind-portrait/evidence' \
@@ -273,8 +393,8 @@ curl -X POST 'http://127.0.0.1:8002/config/mind-portrait/evidence' \
   -d '{"childId":1,"text":"找反例 主动表现","sourceType":"manual"}'
 ```
 
-5. 再拉 graph，看节点 `evidenceCount` / `state` / `visualTier` 变化
-6. 调 notifications 看是否生成 instant 通知
+5. 调 wellness-summary 看 `showActions` / `overallLevel`
+6. 调 notifications 看 instant 卡片
 
 ---
 
@@ -288,34 +408,30 @@ curl -X POST 'http://127.0.0.1:8002/config/mind-portrait/evidence' \
 
 ---
 
-## 9. 原型 → API 字段对照
+## 9. 字段对照
 
-| 原型 mock | API 字段 |
-|-----------|---------|
-| `buildGraph()` nodes | `data.nodes` |
-| links | `data.links` |
-| center 头像 | `data.center.avatarUrl` |
-| `visualIntensity` / `visualTier` | 同名，后端已算 |
-| `LIGHT_STATES` | `node.state` |
-| 家长通知 demo | `notifications` 接口 |
-
-**删除原型里所有** `AGE_DIMS`、`SUB_TEMPLATES`、`seededRandom` —— 改为 API 驱动。
+| UI | API |
+|----|-----|
+| 图一卡片 | `wellness-summary` |
+| 图二详情 | 同上，不含 advice 字段 |
+| 图四会话 | `weekly-digest` + `notifications` + 对话 |
+| ~~力导向心谱~~ | ~~`/graph`~~ 家长端不用 |
 
 ---
 
 ## 10. 交付清单
 
-- [ ] 心绪 Tab 页面 + 路由
-- [ ] graph 渲染（力导向 + 层级光效）
-- [ ] 节点详情抽屉
-- [ ] 通知列表 + 未读角标
-- [ ] 周报页或弹层
-- [ ] 设置页：即时推送 / 周报开关
-- [ ] 空态：模板未发布时的友好提示
+- [ ] `GET /wellness-summary` 后端 VO + 聚合逻辑
+- [ ] 机器人 Tab 心绪卡片 + `showActions` 条件按钮
+- [ ] 详情页（仅状态，无建议）
+- [ ] 会话：weekly_card / instant_card / parent_support 消息组件
+- [ ] 通知已读 + 设置页开关
+- [ ] ~~graph 力导向~~（不做家长端）
+- [ ] 空态：观察天数不足 / 模板未发布
 
 ---
 
-## 12. 黑屏排查（有节点数、无图形）
+## 11. graph 黑屏排查（仅教研/内部 H5）
 
 若 UI 已显示「201 节点」但画布全黑 → **服务端数据 OK，客户端绘制失败**。
 
@@ -342,21 +458,23 @@ data.nodes.forEach(n => {
 ```
 
 ```
-你是微信小程序前端，对接「心绪图谱」功能。
+你是微信小程序前端，对接「心绪陪伴」功能（不是心绪星图）。
 
-参考 UI 原型：docs/mind-portrait-miniprogram-prototype.html（v0.6 视觉规则）
-参考接口文档：docs/mind-portrait-miniprogram-api.md
+参考 Demo：
+- docs/mind-portrait-split-demo.html（机器人 Tab + 会话）
+- docs/mind-portrait-wellness-demo.html（详情页，仅状态）
+
+接口文档：docs/mind-portrait-miniprogram-api.md
 
 任务：
-1. 新建「心绪图谱」Tab，与掌握地图并列
-2. GET /parent-api/mind-portrait/graph?childId= 拉取 nodes/links/center
-3. 按 visualTier 渲染光效，按 cluster 上色，中心显示 avatarUrl
-4. 节点点击展示 state/evidence/suggest
-5. GET /notifications 做消息中心；POST /settings 做通知开关
-6. GET /weekly-digest 做周报
+1. 机器人 Tab：GET /wellness-summary 渲染心绪卡片；showActions=false 时隐藏底部两按钮
+2. 详情页：同接口，展示趋势+四面向，不含任何家长建议
+3. 会话 Tab：weekly-digest + notifications 渲染卡片消息；图四内容全在这里
+4. 快捷提问 chips + 小智对话
+5. POST /settings 通知开关
 
 约束：
-- 不要写死维度/子维度数据，全部来自 API
-- state 与 visualTier 分离：strong 节点不一定 visualTier=high
-- 使用现有家长 login token，与 /parent-api/learning 相同鉴权方式
+- 不要对接 /graph，不要力导向图
+- 详情页与机器人 Tab 只展示孩子状态（What），建议只在会话（So what）
+- 使用现有家长 token
 ```

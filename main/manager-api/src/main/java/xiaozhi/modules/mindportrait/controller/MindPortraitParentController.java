@@ -20,12 +20,13 @@ import xiaozhi.modules.mindportrait.service.MindPortraitService;
 import xiaozhi.modules.mindportrait.vo.MindGraphVO;
 import xiaozhi.modules.mindportrait.vo.MindNotificationPageVO;
 import xiaozhi.modules.mindportrait.vo.MindWeeklyDigestVO;
+import xiaozhi.modules.mindportrait.vo.MindWellnessSummaryVO;
 import xiaozhi.modules.parent.context.ParentContext;
 
 @RestController
 @RequestMapping("/parent-api/mind-portrait")
 @RequiredArgsConstructor
-@Tag(name = "家长端-心绪图谱")
+@Tag(name = "家长端-心绪陪伴")
 public class MindPortraitParentController {
 
     private final MindPortraitService mindPortraitService;
@@ -38,8 +39,16 @@ public class MindPortraitParentController {
         return id;
     }
 
+    @GetMapping("/wellness-summary")
+    @Operation(summary = "心绪陪伴概览（机器人 Tab + 详情页）")
+    public Result<MindWellnessSummaryVO> wellnessSummary(
+            @Parameter(description = "device_child.id", required = true) @RequestParam Long childId) {
+        return new Result<MindWellnessSummaryVO>().ok(
+                mindPortraitService.getWellnessSummary(requireParentUserId(), childId));
+    }
+
     @GetMapping("/graph")
-    @Operation(summary = "心绪图谱渲染数据（节点+状态+光效）")
+    @Operation(summary = "心绪图谱渲染数据（内部/教研，家长端 UI 已下线）")
     public Result<MindGraphVO> graph(
             @Parameter(description = "device_child.id", required = true) @RequestParam Long childId) {
         return new Result<MindGraphVO>().ok(
@@ -64,7 +73,7 @@ public class MindPortraitParentController {
     }
 
     @GetMapping("/weekly-digest")
-    @Operation(summary = "心绪图谱周报")
+    @Operation(summary = "心绪陪伴周报（会话卡片消息）")
     public Result<MindWeeklyDigestVO> weeklyDigest(
             @RequestParam Long childId,
             @RequestParam(required = false) String weekStart) {

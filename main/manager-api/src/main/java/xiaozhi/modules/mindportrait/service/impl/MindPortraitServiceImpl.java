@@ -47,11 +47,13 @@ import xiaozhi.modules.mindportrait.service.MindPortraitClassifyService;
 import xiaozhi.modules.mindportrait.service.MindPortraitService;
 import xiaozhi.modules.growthportrait.util.GrowthAgeBandUtil;
 import xiaozhi.modules.mindportrait.util.MindStateEngine;
+import xiaozhi.modules.mindportrait.util.MindWellnessSupport;
 import xiaozhi.modules.mindportrait.vo.MindGraphVO;
 import xiaozhi.modules.mindportrait.vo.MindLinkVO;
 import xiaozhi.modules.mindportrait.vo.MindNodeVO;
 import xiaozhi.modules.mindportrait.vo.MindNotificationPageVO;
 import xiaozhi.modules.mindportrait.vo.MindWeeklyDigestVO;
+import xiaozhi.modules.mindportrait.vo.MindWellnessSummaryVO;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
@@ -240,6 +242,68 @@ public class MindPortraitServiceImpl implements MindPortraitService {
     }
 
     @Override
+    public MindWellnessSummaryVO getWellnessSummary(Long parentUserId, Long childId) {
+        ParentChildAccessHelper.ensureParentCanAccessChildById(
+                deviceChildDao, parentDeviceBindingDao, parentUserId, childId);
+        return buildWellnessSummaryForChild(childId);
+    }
+
+    private MindWellnessSummaryVO buildWellnessSummaryForChild(Long childId) {
+        DeviceChildEntity child = ParentChildAccessHelper.requireChild(deviceChildDao, childId);
+        MindGraphVO graph;
+        try {
+            graph = getGraphByChildId(childId);
+        } catch (RenException e) {
+            if (StringUtils.contains(e.getMessage(), "暂无已发布的心绪图谱模板")) {
+                return emptyWellnessSummary(child);
+            }
+            throw e;
+        }
+        LocalDate weekStart = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        Date from = MindWellnessSupport.weekStartDate(weekStart.minusDays(7));
+        Date to = new Date();
+        List<LearnerMindEvidenceEntity> recentEvidence = evidenceDao.selectList(
+                new LambdaQueryWrapper<LearnerMindEvidenceEntity>()
+                        .eq(LearnerMindEvidenceEntity::getChildId, childId)
+                        .eq(LearnerMindEvidenceEntity::getReleaseId, graph.getReleaseId())
+                        .ge(LearnerMindEvidenceEntity::getCreateTime, from)
+                        .le(LearnerMindEvidenceEntity::getCreateTime, to)
+                        .orderByAsc(LearnerMindEvidenceEntity::getCreateTime));
+        Map<String, String> clusterByNodeCode = nodeDao.selectList(
+                new LambdaQueryWrapper<MpTemplateNodeEntity>()
+                        .eq(MpTemplateNodeEntity::getReleaseId, graph.getReleaseId()))
+                .stream()
+                .collect(Collectors.toMap(
+                        MpTemplateNodeEntity::getCode,
+                        n -> StringUtils.defaultString(n.getClusterCode()),
+                        (a, b) -> a));
+        return MindWellnessSupport.build(
+                childId,
+                child.getName(),
+                graph,
+                recentEvidence,
+                clusterByNodeCode);
+    }
+
+    private MindWellnessSummaryVO emptyWellnessSummary(DeviceChildEntity child) {
+        MindWellnessSummaryVO vo = new MindWellnessSummaryVO();
+        vo.setChildId(child.getId());
+        vo.setChildName(StringUtils.defaultIfBlank(child.getName(), "孩子"));
+        vo.setObserveDays(14);
+        LocalDate weekStart = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        vo.setWeekStart(weekStart.format(DateTimeFormatter.ISO_LOCAL_DATE));
+        vo.setWeekEnd(weekStart.plusDays(6).format(DateTimeFormatter.ISO_LOCAL_DATE));
+        vo.setOverallLevel("stable");
+        vo.setOverallText("观察数据积累中");
+        vo.setSummary("心绪陪伴模板尚未发布或观察数据不足，请继续让孩子与小智自然聊天。");
+        vo.setChips(List.of());
+        vo.setDimensions(List.of());
+        vo.setWeekTrend(List.of());
+        vo.setShowActions(false);
+        return vo;
+    }
+
+    @Override
     @Transactional
     public void ingestEvidence(MindEvidenceIngestDTO body) {
         if (body == null || body.getChildId() == null) {
@@ -371,6 +435,7 @@ public class MindPortraitServiceImpl implements MindPortraitService {
             MindNotificationPageVO.Item item = new MindNotificationPageVO.Item();
             item.setId(r.getId());
             item.setNotifyType(r.getNotifyType());
+            item.setCardType("instant".equals(r.getNotifyType()) ? "mind_instant_card" : "mind_weekly_card");
             item.setTitle(r.getTitle());
             item.setSummary(r.getSummary());
             item.setNodeCode(r.getNodeCode());
@@ -410,7 +475,12 @@ public class MindPortraitServiceImpl implements MindPortraitService {
         vo.setWeekEnd(end.toString());
         if (release == null) {
             vo.setTopHighlights(List.of());
-            vo.setParentTip("心绪图谱模板尚未发布，敬请期待。");
+            vo.setParentTip("心绪陪伴模板尚未发布，敬请期待。");
+            vo.setTitle("心绪陪伴");
+            vo.setSummary("模板尚未发布，请继续让孩子与小智自然聊天。");
+            vo.setParentActions(List.of());
+            vo.setParentSupport("给家长的你：观察数据积累中，不必焦虑，持续陪伴即可。");
+            vo.setChildTips(List.of());
             vo.setNewStrongCount(0);
             return vo;
         }
@@ -441,10 +511,94 @@ public class MindPortraitServiceImpl implements MindPortraitService {
                     return h;
                 }).toList();
         vo.setTopHighlights(top);
-        vo.setParentTip(top.isEmpty()
-                ? "本周继续观察孩子的自然表现，亮点会在证据积累后慢慢显现。"
-                : "本周亮点「" + top.get(0).getLabel() + "」值得肯定，可以围绕它安排一次轻量亲子活动。");
+        enrichWeeklyDigestForChat(vo, child);
         return vo;
+    }
+
+    private void enrichWeeklyDigestForChat(MindWeeklyDigestVO vo, DeviceChildEntity child) {
+        MindWellnessSummaryVO wellness = buildWellnessSummaryForChild(child.getId());
+        String childName = StringUtils.defaultIfBlank(child.getName(), "孩子");
+        List<MindWeeklyDigestVO.Highlight> top = vo.getTopHighlights() != null ? vo.getTopHighlights() : List.of();
+        if (wellness.getDimensions() != null && !wellness.getDimensions().isEmpty()) {
+            vo.setTitle(buildWeeklyTitle(wellness));
+            vo.setSummary(StringUtils.defaultIfBlank(wellness.getSummary(),
+                    childName + "本周心绪观察已更新。"));
+            vo.setParentActions(buildParentActions(wellness));
+            vo.setParentSupport(buildParentSupport(wellness, childName));
+            vo.setChildTips(buildChildTips(wellness));
+            vo.setParentTip(vo.getParentSupport());
+            return;
+        }
+        vo.setTitle(top.isEmpty()
+                ? childName + " · 本周心绪观察"
+                : "本周亮点：「" + top.get(0).getLabel() + "」");
+        vo.setSummary(top.isEmpty()
+                ? "本周继续观察孩子的自然表现，系统会在证据积累后给出趋势参考。"
+                : "本周在「" + top.get(0).getLabel() + "」方向有积极信号，值得温柔肯定。");
+        vo.setParentActions(List.of(
+                "今晚可先问「今天有没有开心的事」再聊学习",
+                "孩子紧张时，先复述感受，不急着给方案"));
+        vo.setParentSupport("给家长的你：孩子情绪波动不等于你的教育出了问题，持续观察本身就是在陪伴。");
+        vo.setChildTips(List.of(
+                "保留每天 15 分钟「只聊兴趣、不纠正」的专属时间",
+                "当他提到压力话题，先听完整再回应",
+                "用「需要我陪你开始吗」替代「你怎么又不…」"));
+        vo.setParentTip(vo.getParentSupport());
+    }
+
+    private String buildWeeklyTitle(MindWellnessSummaryVO wellness) {
+        MindWellnessSummaryVO.Dimension watch = wellness.getDimensions().stream()
+                .filter(d -> "watch".equals(d.getStatus()))
+                .findFirst()
+                .orElse(null);
+        if (watch != null) {
+            return "整体平稳，「" + watch.getName() + "」值得多陪";
+        }
+        return StringUtils.defaultIfBlank(wellness.getOverallText(), "本周心绪观察");
+    }
+
+    private List<String> buildParentActions(MindWellnessSummaryVO wellness) {
+        List<String> actions = new ArrayList<>();
+        MindWellnessSummaryVO.Dimension stress = wellness.getDimensions().stream()
+                .filter(d -> "stress".equals(d.getCode()))
+                .findFirst()
+                .orElse(null);
+        if (stress != null && "watch".equals(stress.getStatus())) {
+            actions.add("今晚可先问「今天有没有开心的事」再问作业");
+            actions.add("他紧张时，先复述感受，不急着给方案");
+        } else {
+            actions.add("保持日常闲聊，不必刻意「检查」情绪");
+            actions.add("肯定孩子主动表达感受的时刻");
+        }
+        actions.add("详细状态可在机器人 Tab 查看");
+        return actions.stream().limit(3).toList();
+    }
+
+    private String buildParentSupport(MindWellnessSummaryVO wellness, String childName) {
+        if ("concern".equals(wellness.getOverallLevel())) {
+            return "给家长的你：" + childName + "近期压力相关话题增多，不等于你的教育出了问题。"
+                    + "你已经在认真观察，先安顿好自己的情绪，孩子才更容易感到安全。";
+        }
+        if ("watch".equals(wellness.getOverallLevel())) {
+            return "给家长的你：孩子提到压力会紧张，不等于你的教育出了问题。"
+                    + "你已经在持续观察，这本身就是在陪伴。";
+        }
+        return "给家长的你：本周整体平稳。你不需要立刻「解决」每一种情绪，陪伴倾听本身就是支持。";
+    }
+
+    private List<String> buildChildTips(MindWellnessSummaryVO wellness) {
+        boolean watchStress = wellness.getDimensions().stream()
+                .anyMatch(d -> "stress".equals(d.getCode()) && "watch".equals(d.getStatus()));
+        if (watchStress) {
+            return List.of(
+                    "当他提到考试时，先复述感受：「听起来你有点紧张」",
+                    "避免「你怎么又不写」——改成「需要我陪你开始吗」",
+                    "若连续 3 天都提到，可在机器人 Tab 看「面对压力时」详情");
+        }
+        return List.of(
+                "保留每天 15 分钟「只聊兴趣、不纠正」的专属时间",
+                "多问开放式问题：「今天有什么有意思的事？」",
+                "孩子表达不满时，先确认你听懂了，再讨论怎么办");
     }
 
     private void recomputeAllStates(

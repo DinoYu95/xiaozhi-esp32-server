@@ -42,6 +42,7 @@ import xiaozhi.modules.learning.service.LearningKgService;
 import xiaozhi.modules.learning.service.LearningMasteryService;
 import xiaozhi.modules.learning.util.ChildGradeOptionsUtil;
 import xiaozhi.modules.learning.util.LearningChildProfileUtil;
+import xiaozhi.modules.learning.util.LearningKgNodeTypeUtil;
 import xiaozhi.modules.learning.util.LearningMasteryModuleLabels;
 import xiaozhi.modules.learning.util.LearningMasteryStatusUtil;
 import xiaozhi.modules.learning.vo.LearningMasteryMapVO;
@@ -149,7 +150,7 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         String code = skillCode.trim();
         KgNodeEntity node = kgNodeDao.selectOne(
                 new LambdaQueryWrapper<KgNodeEntity>().eq(KgNodeEntity::getCode, code));
-        if (node == null || !NODE_SKILL.equalsIgnoreCase(node.getNodeType())) {
+        if (node == null || !LearningKgNodeTypeUtil.isMasterySkill(node)) {
             throw new RenException("知识点不存在或不是 SKILL");
         }
         int skillGrade = LearningMasteryStatusUtil.gradeFromSkillCode(code);
@@ -315,7 +316,7 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         List<SkillRow> out = new ArrayList<>();
         for (KgNodeRevisionEntity rev : revs) {
             KgNodeEntity node = kgNodeDao.selectById(rev.getNodeId());
-            if (node == null || !NODE_SKILL.equalsIgnoreCase(node.getNodeType())) {
+            if (node == null || !LearningKgNodeTypeUtil.isMasterySkill(node)) {
                 continue;
             }
             SkillRow row = new SkillRow();
@@ -548,7 +549,7 @@ public class LearningMasteryServiceImpl implements LearningMasteryService {
         for (KgEdgeEntity e : edges) {
             Long linkedId = prerequisites ? e.getFromNodeId() : e.getToNodeId();
             KgNodeEntity n = kgNodeDao.selectById(linkedId);
-            if (n == null || !NODE_SKILL.equalsIgnoreCase(n.getNodeType())) {
+            if (n == null || !LearningKgNodeTypeUtil.isMasterySkill(n)) {
                 continue;
             }
             KgNodeRevisionEntity rev = kgNodeRevisionDao.selectOne(

@@ -38,6 +38,7 @@ import xiaozhi.modules.learning.dto.TeachingKgPublishDTO;
 import xiaozhi.modules.learning.service.LearningKgService;
 import xiaozhi.modules.learning.util.LearningKgGraphMatchUtil;
 import xiaozhi.modules.learning.util.LearningGeoConstants;
+import xiaozhi.modules.learning.util.LearningKgNodeTypeUtil;
 import xiaozhi.modules.learning.util.LearningProfileConstants;
 import xiaozhi.modules.learning.vo.KgReleaseVO;
 
@@ -352,15 +353,29 @@ public class LearningKgServiceImpl implements LearningKgService {
         for (String[] region : regionAttempts) {
             for (String[] dim : cityAttempts) {
                 KgGraphReleaseEntity hit =
-                        queryPublishedRelease(sub, region[0], dim[0], region[1], dim[1], graphGrade);
+                        pickReleaseWithSkillsAtGrade(
+                                queryPublishedReleases(
+                                        sub, region[0], dim[0], region[1], dim[1], graphGrade),
+                                graphGrade);
                 if (hit != null) {
                     return hit;
                 }
             }
         }
-        KgGraphReleaseEntity byGrade = queryPublishedReleaseIgnoringRegion(sub, graphGrade);
-        if (byGrade != null) {
-            return byGrade;
+        return pickReleaseWithSkillsAtGrade(
+                queryPublishedReleasesIgnoringRegion(sub, graphGrade), graphGrade);
+    }
+
+    /** 跳过「已发布但尚未导入节点」的空壳 release，避免 UI 显示有覆盖范围却无知识点。 */
+    private KgGraphReleaseEntity pickReleaseWithSkillsAtGrade(
+            List<KgGraphReleaseEntity> candidates, int graphGrade) {
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+        for (KgGraphReleaseEntity candidate : candidates) {
+            if (candidate != null && countSkillNodesAtGrade(candidate.getId(), graphGrade) > 0) {
+                return candidate;
+            }
         }
         return null;
     }
@@ -368,17 +383,17 @@ public class LearningKgServiceImpl implements LearningKgService {
     /**
      * 省/教材四维未命中时：仍要求 graphGrade 落在 release 区间内（不按 min=max 精确相等）。
      */
-    private KgGraphReleaseEntity queryPublishedReleaseIgnoringRegion(String subject, int graphGrade) {
+    private List<KgGraphReleaseEntity> queryPublishedReleasesIgnoringRegion(String subject, int graphGrade) {
         LambdaQueryWrapper<KgGraphReleaseEntity> w =
                 new LambdaQueryWrapper<KgGraphReleaseEntity>()
                         .eq(KgGraphReleaseEntity::getSubject, subject)
                         .eq(KgGraphReleaseEntity::getStatus, KgGraphReleaseEntity.STATUS_PUBLISHED);
         LearningKgGraphMatchUtil.applyGraphGradeWithinRelease(w, graphGrade);
-        w.orderByDesc(KgGraphReleaseEntity::getPublishedAt).last("LIMIT 1");
-        return kgGraphReleaseDao.selectOne(w);
+        w.orderByDesc(KgGraphReleaseEntity::getPublishedAt).last("LIMIT 10");
+        return kgGraphReleaseDao.selectList(w);
     }
 
-    private KgGraphReleaseEntity queryPublishedRelease(
+    private List<KgGraphReleaseEntity> queryPublishedReleases(
             String subject,
             String provinceCode,
             String cityCode,
@@ -416,8 +431,8 @@ public class LearningKgServiceImpl implements LearningKgService {
                                     .eq(KgGraphReleaseEntity::getSemester, LearningGeoConstants.SEMESTER_ANY));
         }
         LearningKgGraphMatchUtil.applyGraphGradeWithinRelease(w, graphGrade);
-        w.orderByDesc(KgGraphReleaseEntity::getPublishedAt).last("LIMIT 1");
-        return kgGraphReleaseDao.selectOne(w);
+        w.orderByDesc(KgGraphReleaseEntity::getPublishedAt).last("LIMIT 10");
+        return kgGraphReleaseDao.selectList(w);
     }
 
     private KgGraphReleaseEntity findActivePublished(String subject) {
@@ -441,22 +456,25 @@ public class LearningKgServiceImpl implements LearningKgService {
         long count = 0;
         for (KgNodeRevisionEntity rev : revs) {
             KgNodeEntity node = kgNodeDao.selectById(rev.getNodeId());
-            if (node != null && "SKILL".equalsIgnoreCase(node.getNodeType())) {
+            if (LearningKgNodeTypeUtil.isMasterySkill(node)) {
                 count++;
             }
         }
         return count;
     }
 
+    /**
+     * 单册 release（如教研 G1 上册）：revision.grade 可能缺失或写错，直接取该 release 下全部 revision。
+     */
     public static LambdaQueryWrapper<KgNodeRevisionEntity> revisionGradeWrapper(
             Long releaseId, KgGraphReleaseEntity release, int grade) {
         LambdaQueryWrapper<KgNodeRevisionEntity> w = new LambdaQueryWrapper<KgNodeRevisionEntity>()
                 .eq(KgNodeRevisionEntity::getGraphReleaseId, releaseId);
+        if (singleGradeRelease(release, grade)) {
+            return w;
+        }
         w.and(q -> {
             q.eq(KgNodeRevisionEntity::getGrade, grade);
-            if (singleGradeRelease(release, grade)) {
-                q.or().isNull(KgNodeRevisionEntity::getGrade);
-            }
         });
         return w;
     }
@@ -620,7 +638,7 @@ public class LearningKgServiceImpl implements LearningKgService {
             }
             KgNodeEntity node = kgNodeDao.selectOne(
                     new LambdaQueryWrapper<KgNodeEntity>().eq(KgNodeEntity::getCode, n.getCode().trim()));
-            String nodeType = normalizeTeachingNodeType(n.getNodeType());
+            String nodeType = LearningKgNodeTypeUtil.normalizeTeachingNodeType(n.getNodeType());
             if (node == null) {
                 node = new KgNodeEntity();
                 node.setCode(n.getCode().trim());
@@ -694,22 +712,5 @@ public class LearningKgServiceImpl implements LearningKgService {
             return releaseGrade;
         }
         return nodeGrade;
-    }
-
-    /** 教研侧常见别名 → 运行时 SKILL / MISCONCEPTION 等 */
-    private static String normalizeTeachingNodeType(String raw) {
-        if (StringUtils.isBlank(raw)) {
-            return "SKILL";
-        }
-        String t = raw.trim();
-        if ("知识点".equals(t) || "知识节点".equals(t)) {
-            return "SKILL";
-        }
-        String upper = t.toUpperCase(java.util.Locale.ROOT);
-        return switch (upper) {
-            case "SKILL", "KNOWLEDGE", "KNOWLEDGE_POINT", "KP", "LEAF" -> "SKILL";
-            case "MISCONCEPTION", "MIS" -> "MISCONCEPTION";
-            default -> upper;
-        };
     }
 }

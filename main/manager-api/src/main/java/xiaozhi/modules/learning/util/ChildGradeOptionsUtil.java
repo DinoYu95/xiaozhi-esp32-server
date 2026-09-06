@@ -50,7 +50,7 @@ public final class ChildGradeOptionsUtil {
         return m;
     }
 
-    /** 保存档案时：幼小衔接自动补全 ageStage，便于成长星图解析 */
+    /** 保存档案时：幼小衔接自动补全 ageStage；升小学后清掉残留学前 ageStage */
     public static void normalizeGradeProfile(DeviceChildEntity entity) {
         if (entity == null || entity.getCurrentGrade() == null) {
             return;
@@ -59,6 +59,13 @@ public final class ChildGradeOptionsUtil {
             entity.setCurrentGrade(GRADE_PRESCHOOL);
             if (StringUtils.isBlank(entity.getAgeStage())) {
                 entity.setAgeStage(PRESCHOOL_AGE_STAGE);
+            }
+            return;
+        }
+        if (StringUtils.isNotBlank(entity.getAgeStage())) {
+            String s = entity.getAgeStage().toLowerCase();
+            if (s.contains("幼小衔接") || s.contains("学前") || s.contains("幼儿") || s.contains("preschool")) {
+                entity.setAgeStage(null);
             }
         }
     }
@@ -69,6 +76,9 @@ public final class ChildGradeOptionsUtil {
 
     public static boolean isPreschoolProfile(DeviceChildEntity child) {
         if (child == null) {
+            return false;
+        }
+        if (child.getCurrentGrade() != null && child.getCurrentGrade() >= 1) {
             return false;
         }
         if (child.getCurrentGrade() != null && child.getCurrentGrade() <= GRADE_PRESCHOOL) {

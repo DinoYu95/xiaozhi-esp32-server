@@ -233,6 +233,7 @@ public class LearningMetaController {
             m.put("textbookEdition", r.getTextbookEdition());
             m.put("gradeMin", r.getGradeMin());
             m.put("gradeMax", r.getGradeMax());
+            m.put("skillCountAtGrade1", learningKgService.countSkillNodesAtGrade(r.getId(), 1));
             out.add(m);
         }
         return out;

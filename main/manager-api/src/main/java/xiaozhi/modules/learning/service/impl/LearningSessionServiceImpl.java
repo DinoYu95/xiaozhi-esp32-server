@@ -45,6 +45,7 @@ import xiaozhi.modules.learning.service.LearningSessionService;
 import xiaozhi.modules.learning.entity.KgGraphReleaseEntity;
 import xiaozhi.modules.learning.util.ChildGradeOptionsUtil;
 import xiaozhi.modules.learning.util.LearningChildProfileUtil;
+import xiaozhi.modules.learning.util.LearningKgNodeTypeUtil;
 import xiaozhi.modules.learning.vo.LearningOverviewVO;
 import xiaozhi.modules.learning.vo.LearningRemedialMissionBriefVO;
 import xiaozhi.modules.learning.vo.LearningSessionDetailVO;
@@ -687,7 +688,7 @@ public class LearningSessionServiceImpl implements LearningSessionService {
         String t = text.toLowerCase();
         for (KgNodeRevisionEntity rev : revs) {
             KgNodeEntity node = kgNodeDao.selectById(rev.getNodeId());
-            if (node == null || !"SKILL".equals(node.getNodeType())) {
+            if (node == null || !LearningKgNodeTypeUtil.isMasterySkill(node)) {
                 continue;
             }
             if (grade != null && rev.getGrade() != null && !grade.equals(rev.getGrade())) {

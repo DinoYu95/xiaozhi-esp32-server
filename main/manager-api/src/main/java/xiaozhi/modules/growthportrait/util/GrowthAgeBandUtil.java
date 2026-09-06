@@ -16,6 +16,16 @@ public final class GrowthAgeBandUtil {
         if (child == null) {
             return "upper";
         }
+        if (child.getCurrentGrade() != null && child.getCurrentGrade() >= 1) {
+            int g = child.getCurrentGrade();
+            if (g <= 2) {
+                return "lower";
+            }
+            if (g <= 6) {
+                return "upper";
+            }
+            return "middle";
+        }
         String stage = StringUtils.trimToEmpty(child.getAgeStage()).toLowerCase();
         String mapped = mapAgeStage(stage);
         if (mapped != null) {

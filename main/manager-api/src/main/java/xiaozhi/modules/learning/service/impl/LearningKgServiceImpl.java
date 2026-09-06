@@ -337,6 +337,9 @@ public class LearningKgServiceImpl implements LearningKgService {
             {city, LearningGeoConstants.SEMESTER_ANY},
             {provinceAll, sem},
             {provinceAll, LearningGeoConstants.SEMESTER_ANY},
+            // 直辖市/教研侧有时 city_code 存 province 本身（beijing），档案侧为 beijing_all
+            {province, sem},
+            {province, LearningGeoConstants.SEMESTER_ANY},
             {LearningGeoConstants.CITY_ANY, sem},
             {LearningGeoConstants.CITY_ANY, LearningGeoConstants.SEMESTER_ANY},
         };

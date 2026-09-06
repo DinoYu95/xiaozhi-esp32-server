@@ -112,15 +112,79 @@
 
     .help-panel {
       display: none;
-      padding: 10px 12px;
-      background: rgba(10,14,24,0.95);
+      padding: 0;
+      background: rgba(10,14,24,0.97);
       border-top: 1px solid rgba(255,255,255,0.06);
-      font-size: 0.68rem; color: #9aa8c4;
       flex-shrink: 0;
-      max-height: 140px;
-      overflow-y: auto;
     }
     .help-panel.open { display: block; }
+    .help-panel-inner {
+      position: relative;
+      max-height: 168px;
+    }
+    .help-scroll {
+      max-height: 168px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      padding: 10px 12px 44px;
+      font-size: 0.68rem;
+      color: #9aa8c4;
+      scroll-behavior: smooth;
+    }
+    .help-scroll-fade {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 56px;
+      pointer-events: none;
+      background: linear-gradient(
+        180deg,
+        rgba(10,14,24,0) 0%,
+        rgba(10,14,24,0.55) 38%,
+        rgba(10,14,24,0.94) 72%,
+        rgba(10,14,24,0.99) 100%
+      );
+      transition: opacity 0.25s ease;
+    }
+    .help-scroll-fade.hidden { opacity: 0; }
+    .help-scroll-hint {
+      position: absolute;
+      left: 50%; bottom: 6px;
+      transform: translateX(-50%);
+      z-index: 2;
+      display: flex; flex-direction: column; align-items: center; gap: 1px;
+      border: 1px solid rgba(129,140,248,0.35);
+      border-radius: 999px;
+      background: rgba(15,22,40,0.92);
+      color: #c7d2fe;
+      font-size: 0.58rem;
+      padding: 5px 14px 4px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      animation: help-hint-float 2.2s ease-in-out infinite;
+    }
+    .help-scroll-hint.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-50%) translateY(6px);
+      animation: none;
+    }
+    .help-scroll-chevron {
+      display: block;
+      font-size: 0.82rem;
+      line-height: 1;
+      color: #a5b4fc;
+      animation: help-chevron-bounce 1.3s ease-in-out infinite;
+    }
+    @keyframes help-chevron-bounce {
+      0%, 100% { transform: translateY(0); opacity: 0.75; }
+      50% { transform: translateY(5px); opacity: 1; }
+    }
+    @keyframes help-hint-float {
+      0%, 100% { box-shadow: 0 4px 16px rgba(0,0,0,0.35); }
+      50% { box-shadow: 0 6px 20px rgba(99,102,241,0.28); }
+    }
     .help-panel .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
     .help-panel .dot-sample { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; }
     .help-panel strong { color: #e2e8f0; font-size: 0.72rem; }
@@ -154,6 +218,18 @@
       background: rgba(99,102,241,0.12); color: #c7d2fe;
       font-size: 0.68rem; padding: 9px 12px; cursor: pointer;
     }
+    .summary-graph-shell {
+      position: relative; width: 100%; height: 220px;
+      border-radius: 14px; overflow: hidden;
+      background: #060912; border: 1px solid rgba(255,255,255,0.06);
+      margin-bottom: 8px;
+    }
+    .summary-graph-shell svg { width: 100%; height: 100%; display: block; }
+    .summary-evidence-row {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.64rem; color: #9aa8c4; margin-top: 4px;
+    }
+    .summary-evidence-row b { color: #c7d2fe; font-weight: 600; }
 
     .notify-toast {
       position: absolute; left: 12px; right: 12px; top: 12px;
@@ -401,14 +477,13 @@
           <svg id="graphSvg"></svg>
           <div class="graph-overlay">
             <div class="float-legend" id="graphLegend">
-              <b>缩略星图</b>
-              <div style="font-size:0.55rem;color:#6b7a99;margin-bottom:3px">仅显示已有进展的维度</div>
+              <b>完整星图</b>
+              <div style="font-size:0.55rem;color:#6b7a99;margin-bottom:3px">全部维度与观测点</div>
               <div><i style="background:#6366f1;border:2px solid #c7d2fe"></i> 孩子中心</div>
               <div><i style="background:#9254de;border:2px solid #efdbff"></i> 维度 Hub</div>
               <div><i style="background:#597ef7"></i> 子能力</div>
               <div><i style="background:#ffb020;box-shadow:0 0 6px #ffb020"></i> 观测信号</div>
             </div>
-            <button type="button" class="graph-mode-toggle" id="graphModeToggle">展开完整星图</button>
             <div class="corner tr" id="zoomLabel">100%</div>
             <div class="zoom-btns">
               <button type="button" id="zoomIn">+</button>
@@ -420,26 +495,35 @@
       </div>
 
       <div class="help-panel" id="helpPanel">
-        <div class="help-section-title">读图说明</div>
-        <div class="row">
-          <div class="dot-sample" style="background:#9254de;border:3px solid #efdbff"></div>
-          <div><strong>维度 Hub（大紫圆）</strong><br>成长大方向。证据达标后整圆变亮，强烈亮点时金色脉冲。</div>
-        </div>
-        <div class="row">
-          <div class="dot-sample" style="background:#597ef7;width:14px;height:14px;margin:4px"></div>
-          <div><strong>子能力</strong> · 如「拆解问题」。收集够证据后从灰变亮。</div>
-        </div>
-        <div class="row">
-          <div class="dot-sample" style="background:#ffb020;box-shadow:0 0 8px #ffb020"></div>
-          <div><strong>观测信号</strong> · 最小证据点。强烈时会闪，并可能通知家长。</div>
-        </div>
-        <div class="help-section-title" style="margin-top:10px">点亮规则</div>
-        <p id="lightIntro" class="help-light-intro">能力随与小智互动自动累积证据，无需刻意「刷点亮」：</p>
-        <div class="help-light-steps">
-          <div class="help-light-step"><span class="help-light-tag locked">① 待观测</span> 证据 &lt; 2 条 → 灰点</div>
-          <div class="help-light-step"><span class="help-light-tag collecting">② 收集中</span> 已有互动，未达目标 → 蓝灰 + 进度环</div>
-          <div class="help-light-step"><span class="help-light-tag visible">③ 已显现</span> 证据达到目标 → 常亮</div>
-          <div class="help-light-step"><span class="help-light-tag strong">④ 强烈亮点</span> 超额达标 → 闪烁 + 可通知家长</div>
+        <div class="help-panel-inner">
+          <div class="help-scroll" id="helpScroll">
+            <div class="help-section-title">读图说明</div>
+            <div class="row">
+              <div class="dot-sample" style="background:#9254de;border:3px solid #efdbff"></div>
+              <div><strong>维度 Hub（大紫圆）</strong><br>成长大方向。证据达标后整圆变亮，强烈亮点时金色脉冲。</div>
+            </div>
+            <div class="row">
+              <div class="dot-sample" style="background:#597ef7;width:14px;height:14px;margin:4px"></div>
+              <div><strong>子能力</strong> · 如「拆解问题」。收集够证据后从灰变亮。</div>
+            </div>
+            <div class="row">
+              <div class="dot-sample" style="background:#ffb020;box-shadow:0 0 8px #ffb020"></div>
+              <div><strong>观测信号</strong> · 最小证据点。强烈时会闪，并可能通知家长。</div>
+            </div>
+            <div class="help-section-title" style="margin-top:10px">点亮规则</div>
+            <p id="lightIntro" class="help-light-intro">能力随与小智互动自动累积证据，无需刻意「刷点亮」：</p>
+            <div class="help-light-steps">
+              <div class="help-light-step"><span class="help-light-tag locked">① 待观测</span> 证据 &lt; 2 条 → 灰点</div>
+              <div class="help-light-step"><span class="help-light-tag collecting">② 收集中</span> 已有互动，未达目标 → 蓝灰 + 进度环</div>
+              <div class="help-light-step"><span class="help-light-tag visible">③ 已显现</span> 证据达到目标 → 常亮</div>
+              <div class="help-light-step"><span class="help-light-tag strong">④ 强烈亮点</span> 超额达标 → 闪烁 + 可通知家长</div>
+            </div>
+          </div>
+          <div class="help-scroll-fade" id="helpScrollFade"></div>
+          <button type="button" class="help-scroll-hint" id="helpScrollHint">
+            <span>下滑查看点亮规则</span>
+            <span class="help-scroll-chevron" aria-hidden="true">⌄</span>
+          </button>
         </div>
       </div>
 
@@ -515,10 +599,9 @@
     let userAdjustedZoom = false;
     let suppressMarkUserZoom = false;
     let pendingToastNode = null;
-    /** 完整星图默认「缩略模式」：只展示已有进展的维度与子节点 */
-    let graphCompactMode = true;
     let graphInitialized = false;
     let currentViewMode = 'summary';
+    let summarySimulation = null;
 
     function parseQuery() {
       const q = {};
@@ -845,6 +928,38 @@
     };
     const STATE_ORDER = { strong: 0, visible: 1, collecting: 2, locked: 3 };
 
+    function updateHelpScrollHint() {
+      const panel = document.getElementById('helpPanel');
+      const scroll = document.getElementById('helpScroll');
+      const fade = document.getElementById('helpScrollFade');
+      const hint = document.getElementById('helpScrollHint');
+      if (!panel?.classList.contains('open') || !scroll) return;
+      const hasOverflow = scroll.scrollHeight > scroll.clientHeight + 6;
+      const atBottom = scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 10;
+      fade?.classList.toggle('hidden', !hasOverflow || atBottom);
+      hint?.classList.toggle('hidden', !hasOverflow || atBottom);
+    }
+
+    function bindHelpScrollUi() {
+      const scroll = document.getElementById('helpScroll');
+      const hint = document.getElementById('helpScrollHint');
+      scroll?.addEventListener('scroll', updateHelpScrollHint, { passive: true });
+      bindTap(hint, () => {
+        if (!scroll) return;
+        scroll.scrollTo({ top: scroll.scrollHeight, behavior: 'smooth' });
+      });
+    }
+
+    function toggleHelpPanel() {
+      const panel = document.getElementById('helpPanel');
+      const scroll = document.getElementById('helpScroll');
+      panel.classList.toggle('open');
+      if (panel.classList.contains('open')) {
+        if (scroll) scroll.scrollTop = 0;
+        requestAnimationFrame(() => requestAnimationFrame(updateHelpScrollHint));
+      }
+    }
+
     function renderLightRules() {
       const days = graphMeta.observeDays || 0;
       const cap = graphMeta.weeklyInstantCap || 2;
@@ -865,15 +980,29 @@
       };
     }
 
-    function hubHasProgress(hub, allNodes) {
-      if (!hub) return false;
-      if (hub.state && hub.state !== 'locked') return true;
-      const subs = allNodes.filter(n => n.parentHub === hub.id);
-      return subs.some(n => n.state && n.state !== 'locked');
+    function nodeHasEvidence(n) {
+      return n && (Number(n.evidenceCount) || 0) > 0;
     }
 
     function nodeHasProgress(n) {
-      return n && n.state && n.state !== 'locked';
+      if (!n) return false;
+      if (nodeHasEvidence(n)) return true;
+      return n.state && n.state !== 'locked';
+    }
+
+    function hubHasProgress(hub, allNodes) {
+      if (!hub) return false;
+      if (nodeHasProgress(hub)) return true;
+      if (hub.cluster) {
+        return allNodes.some(n => n.cluster === hub.cluster && n.id !== hub.id && nodeHasProgress(n));
+      }
+      return allNodes.some(n => n.parentHub === hub.id && nodeHasProgress(n));
+    }
+
+    function countObservedAbilities(nodes) {
+      return nodes.filter(n =>
+        (n.type === 'sub' || n.type === 'signal') && nodeHasEvidence(n)
+      ).length;
     }
 
     function filterGraphForDisplay(allNodes, allLinks, compact) {
@@ -906,36 +1035,122 @@
       return (nodes || []).some(n => n.type !== 'center' && nodeHasProgress(n));
     }
 
-    function updateGraphModeUi() {
-      const btn = document.getElementById('graphModeToggle');
-      const legend = document.getElementById('graphLegend');
-      if (btn) {
-        btn.textContent = graphCompactMode ? '展开完整星图' : '只看有进展';
+    function fitSummaryGraphGroup(svg, group, nodes, W, H) {
+      const xs = nodes.map(n => n.x).filter(v => v != null);
+      const ys = nodes.map(n => n.y).filter(v => v != null);
+      if (!xs.length) return;
+      const pad = 28;
+      const minX = d3.min(xs) - pad;
+      const maxX = d3.max(xs) + pad;
+      const minY = d3.min(ys) - pad;
+      const maxY = d3.max(ys) + pad;
+      const bw = Math.max(1, maxX - minX);
+      const bh = Math.max(1, maxY - minY);
+      const scale = Math.min(W / bw, H / bh, 1.8);
+      const tx = (W - (minX + maxX) * scale) / 2;
+      const ty = (H - (minY + maxY) * scale) / 2;
+      group.attr('transform', `translate(${tx},${ty}) scale(${scale})`);
+    }
+
+    function renderSummaryMiniGraph() {
+      const shell = document.getElementById('summaryGraphShell');
+      const svgEl = document.getElementById('summaryGraphSvg');
+      if (!shell || !svgEl) return;
+      if (summarySimulation) {
+        summarySimulation.stop();
+        summarySimulation = null;
       }
-      if (legend) {
-        const title = legend.querySelector('b');
-        const hint = legend.querySelector('div');
-        if (title) title.textContent = graphCompactMode ? '缩略星图' : '完整星图';
-        if (hint) {
-          hint.textContent = graphCompactMode
-            ? '仅显示已有进展的维度'
-            : '显示全部维度与观测点';
-        }
+      const W = shell.clientWidth || 320;
+      const H = 220;
+      const filtered = filterGraphForDisplay(graphData.nodes, graphData.links, true);
+      const nodes = filtered.nodes.map(n => ({ ...n }));
+      const links = filtered.links.map(l => ({ ...l }));
+
+      d3.select(svgEl).selectAll('*').remove();
+      const svg = d3.select(svgEl).attr('viewBox', `0 0 ${W} ${H}`);
+      svg.append('rect').attr('width', W).attr('height', H).attr('fill', '#060912');
+
+      if (nodes.length <= 1) {
+        svg.append('text').attr('x', W / 2).attr('y', H / 2).attr('text-anchor', 'middle')
+          .attr('fill', '#8b9cc8').attr('font-size', '12px')
+          .text('暂无观察记录，继续和小智互动吧');
+        return;
       }
+
+      const defs = svg.append('defs');
+      defs.append('filter').attr('id', 'summaryBloom').html(`
+        <feGaussianBlur stdDeviation="2.8" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>`);
+      defs.append('filter').attr('id', 'summaryBloomStrong').html(`
+        <feGaussianBlur stdDeviation="3.8" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>`);
+
+      const gMini = svg.append('g');
+      seedNodePositions(nodes, W, H);
+      const cNode = nodes.find(n => n.type === 'center');
+      if (cNode) { cNode.fx = W / 2; cNode.fy = H / 2; }
+
+      summarySimulation = d3.forceSimulation(nodes)
+        .velocityDecay(0.32)
+        .force('link', d3.forceLink(links).id(d => d.id)
+          .distance(l => {
+            const t = typeof l.target === 'object' ? l.target : nodes.find(n => n.id === l.target);
+            if (!t) return 28;
+            if (t.type === 'hub') return 58;
+            if (t.type === 'sub') return 34;
+            return 22;
+          }).strength(0.18))
+        .force('charge', d3.forceManyBody().strength(d => {
+          if (d.type === 'center') return -120;
+          if (d.type === 'hub') return -55;
+          return -18;
+        }))
+        .force('center', d3.forceCenter(W / 2, H / 2))
+        .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 5));
+
+      const link = gMini.selectAll('line').data(links).join('line')
+        .attr('stroke', d => {
+          const tgt = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          return nodeColor(tgt);
+        })
+        .attr('stroke-opacity', 0.28)
+        .attr('stroke-width', 0.8);
+
+      const nodeSel = gMini.selectAll('g.node').data(nodes).join('g')
+        .attr('class', 'node')
+        .style('cursor', d => d.type === 'center' ? 'default' : 'pointer');
+      nodeSel.each(function(d) { drawNode(d3.select(this), d); });
+
+      summarySimulation.on('tick', () => {
+        link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        nodeSel.attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
+      });
+      summarySimulation.on('end', () => fitSummaryGraphGroup(svg, gMini, nodes, W, H));
+
+      nodeSel.on('click', (ev, d) => {
+        ev.stopPropagation();
+        if (d.type !== 'center') jumpToNodeFromSummary(d.id);
+      });
     }
 
     function hubChildSummary(hub) {
       const subs = graphData.nodes.filter(n => n.parentHub === hub.id && n.type === 'sub');
       const st = countByState(subs);
+      const withEvidence = subs.filter(n => nodeHasEvidence(n));
       const parts = [];
       if (st.strong) parts.push(`${st.strong} 个强烈亮点`);
       if (st.visible) parts.push(`${st.visible} 个已显现`);
       if (st.collecting) parts.push(`${st.collecting} 个收集中`);
+      if (withEvidence.length) {
+        const totalEv = withEvidence.reduce((s, n) => s + (Number(n.evidenceCount) || 0), 0);
+        parts.push(`${withEvidence.length} 个已有观察 · 共 ${totalEv} 条证据`);
+      }
       if (!parts.length) return subs.length ? `${subs.length} 个子能力待观测` : '暂无子能力数据';
       return parts.join(' · ');
     }
 
-    function buildSummaryLead(stats, hubs) {
+    function buildSummaryLead(stats, hubs, observedAbilityCount) {
       const strongHubs = hubs.filter(h => h.state === 'strong').map(h => h.label);
       const visibleHubs = hubs.filter(h => h.state === 'visible').map(h => h.label);
       const names = [...strongHubs, ...visibleHubs].slice(0, 3);
@@ -947,6 +1162,9 @@
       }
       if (stats.collecting > 0) {
         return `已有 ${stats.collecting} 处正在收集中，和小智多聊相关话题会加快显现。`;
+      }
+      if (observedAbilityCount > 0) {
+        return `已有 ${observedAbilityCount} 处能力出现观察记录，证据在累积中，继续互动可帮助更多倾向显现。`;
       }
       return '星图刚刚开始记录，继续和小智聊天、做任务，证据会自动累积。';
     }
@@ -973,13 +1191,19 @@
           || (b.evidenceCount || 0) - (a.evidenceCount || 0));
       const activeHubs = hubs.filter(h => hubHasProgress(h, nodes));
       const stats = countByState(nodes);
+      const observedAbilityCount = countObservedAbilities(nodes);
       const days = graphMeta.observeDays || 0;
       const bandLabel = AGE_BAND_LABELS[currentAgeBand] || currentAgeBand;
 
       const strongNodes = nodes.filter(n => n.state === 'strong' && n.type !== 'hub')
         .sort((a, b) => (b.evidenceCount || 0) - (a.evidenceCount || 0));
-      const watchNodes = nodes.filter(n => n.state === 'collecting' && n.type !== 'hub' && (n.evidenceCount || 0) >= 2)
-        .sort((a, b) => {
+      const observedNodes = nodes.filter(n =>
+        (n.type === 'sub' || n.type === 'signal') && nodeHasEvidence(n)
+      ).sort((a, b) => (b.evidenceCount || 0) - (a.evidenceCount || 0)).slice(0, 8);
+      const watchNodes = nodes.filter(n =>
+        n.type !== 'hub'
+        && ((Number(n.evidenceCount) || 0) > 0 || n.state === 'collecting')
+      ).sort((a, b) => {
           const ra = (a.evidenceCount || 0) / Math.max(1, a.requiredCount || 3);
           const rb = (b.evidenceCount || 0) / Math.max(1, b.requiredCount || 3);
           return rb - ra;
@@ -999,6 +1223,7 @@
             </div>
             <div class="summary-card-meta">${hubChildSummary(hub)}${prog}</div>
             ${summaryMiniBar(hub)}
+            <div class="summary-evidence-row"><span>维度证据</span><b>${evidenceProgressLabel(hub)}</b></div>
             ${summaryCardAction(hub.id)}
           </div>`;
       }).join('') : `<div class="summary-empty-hint">还没有明显进展记录。<br>让孩子多和小智聊天、做任务，相关能力会自动出现在这里。</div>`;
@@ -1031,6 +1256,23 @@
           </div>`;
       }).join('') : '';
 
+      }).join('') : '';
+
+      const observedCards = observedNodes.length ? observedNodes.map(n => {
+        const dim = n.cluster ? clusterLabel(n.cluster) : '';
+        return `
+          <div class="summary-card">
+            <div class="summary-card-head">
+              <strong>${n.label}</strong>
+              ${summaryBadge(n.state || 'locked')}
+            </div>
+            <div class="summary-card-meta">${TYPE_META[n.type]?.badge || ''}${dim ? ` · ${dim}` : ''}</div>
+            <div class="summary-evidence-row"><span>证据</span><b>${evidenceProgressLabel(n)}</b></div>
+            ${summaryMiniBar(n)}
+            ${summaryCardAction(n.id)}
+          </div>`;
+      }).join('') : '';
+
       const progressHint = !hasAnyProgress(nodes)
         ? '日常互动即可积累证据，不必刻意「刷点亮」。'
         : `已有 ${activeHubs.length} 个维度出现观察信号，点开可看详情。`;
@@ -1039,9 +1281,9 @@
         <div class="summary-hero">
           <div class="eyebrow">${childName} · ${bandLabel}${days ? ` · 已观测 ${days} 天` : ''}</div>
           <h3>${childName} 现在怎样？</h3>
-          <p class="lead">${buildSummaryLead(stats, activeHubs.length ? activeHubs : hubs)}</p>
+          <p class="lead">${buildSummaryLead(stats, activeHubs.length ? activeHubs : hubs, observedAbilityCount)}</p>
           <div class="hero-row">
-            <span class="hero-num">${stats.strong + stats.visible + stats.collecting}</span>
+            <span class="hero-num">${observedAbilityCount}</span>
             <span class="hero-num-label">处能力有观察记录</span>
           </div>
         </div>
@@ -1052,19 +1294,29 @@
           <div class="summary-stat"><b>${stats.locked}</b><span>待观测</span></div>
         </div>
         <div class="summary-section">
+          <div class="summary-section-title">缩略星图 · 仅有证据部分</div>
+          <div class="summary-graph-shell" id="summaryGraphShell">
+            <svg id="summaryGraphSvg"></svg>
+          </div>
+        </div>
+        ${observedCards ? `<div class="summary-section">
+          <div class="summary-section-title">观察记录与证据</div>
+          ${observedCards}
+        </div>` : ''}
+        ${activeHubs.length ? `<div class="summary-section">
           <div class="summary-section-title">有进展的维度</div>
           ${hubCards}
-        </div>
+        </div>` : ''}
         ${stats.strong > 0 ? `<div class="summary-section">
           <div class="summary-section-title">近期亮点</div>
           ${strongCards}
         </div>` : ''}
-        ${watchNodes.length ? `<div class="summary-section">
+        ${watchNodes.length && !observedCards ? `<div class="summary-section">
           <div class="summary-section-title">值得继续观察</div>
           ${watchCards}
         </div>` : ''}
         <div class="summary-foot">💡 ${progressHint}</div>
-        <button type="button" class="summary-link-btn" id="openGraphFromSummary">查看缩略星图 ›</button>`;
+        <button type="button" class="summary-link-btn" id="openGraphFromSummary">查看完整星图 ›</button>`;
 
       panel.querySelectorAll('.summary-card-action[data-node-id]').forEach(btn => {
         bindTap(btn, (ev) => {
@@ -1073,13 +1325,12 @@
         });
       });
       bindTap(document.getElementById('openGraphFromSummary'), () => {
-        graphCompactMode = true;
         switchViewMode('graph');
       });
+      requestAnimationFrame(() => requestAnimationFrame(() => renderSummaryMiniGraph()));
     }
 
     function jumpToNodeFromSummary(nodeId) {
-      graphCompactMode = true;
       switchViewMode('graph');
       const node = graphData.nodes.find(n => String(n.id) === String(nodeId));
       if (node) selectNode(node, true, { forceFocus: true });
@@ -1098,7 +1349,6 @@
       document.getElementById('helpPanel').classList.remove('open');
       if (isSummary) renderSummaryPanel();
       if (isGraph) {
-        updateGraphModeUi();
         if (!graphInitialized) {
           bootGraphAfterLoad();
         } else {
@@ -1110,9 +1360,10 @@
     function updateMeta() {
       const bandLabel = AGE_BAND_LABELS[currentAgeBand] || currentAgeBand;
       const days = graphMeta.observeDays || 0;
-      const active = (graphData.nodes || []).filter(n => n.type !== 'center' && nodeHasProgress(n)).length;
+      const nodes = (graphData.nodes || []).filter(n => n.type !== 'center');
+      const observed = countObservedAbilities(nodes);
       document.getElementById('profileMeta').textContent = days
-        ? `${childName} · ${bandLabel} · 已观测 ${days} 天 · ${active} 处有记录`
+        ? `${childName} · ${bandLabel} · 已观测 ${days} 天 · ${observed} 处有记录`
         : `${childName} · ${bandLabel}`;
       document.getElementById('observePill').textContent = `强烈 ${graphMeta.strongCount || 0}`;
     }
@@ -1594,18 +1845,10 @@
       }
       bindGraphTouchPan(shell);
 
-      const filtered = filterGraphForDisplay(graphData.nodes, graphData.links, graphCompactMode);
+      const filtered = filterGraphForDisplay(graphData.nodes, graphData.links, false);
       const nodes = filtered.nodes.map(n => ({ ...n }));
       layoutNodes = nodes;
       const links = filtered.links.map(l => ({ ...l }));
-      if (graphCompactMode && nodes.length <= 1) {
-        svg.append('text').attr('x', W / 2).attr('y', H / 2)
-          .attr('text-anchor', 'middle').attr('fill', '#8b9cc8').attr('font-size', '13px')
-          .text('还没有明显进展，继续和小智互动吧');
-        layoutSettling = false;
-        graphInitialized = true;
-        return;
-      }
       seedNodePositions(nodes, W, H);
 
       simulation = d3.forceSimulation(nodes)
@@ -1849,16 +2092,10 @@
     }
 
     function bindUi() {
-      bindTap(document.getElementById('helpBtn'), () => {
-        document.getElementById('helpPanel').classList.toggle('open');
-      });
+      bindTap(document.getElementById('helpBtn'), toggleHelpPanel);
+      bindHelpScrollUi();
       document.querySelectorAll('.mode-tabs button').forEach(btn => {
         bindTap(btn, () => switchViewMode(btn.dataset.mode));
-      });
-      bindTap(document.getElementById('graphModeToggle'), () => {
-        graphCompactMode = !graphCompactMode;
-        updateGraphModeUi();
-        if (currentViewMode === 'graph') initGraph(true);
       });
       bindTap(document.getElementById('toastView'), () => {
         const n = pendingToastNode || graphData.nodes.find(x => x.state === 'strong' && x.type !== 'center');
@@ -1867,7 +2104,10 @@
       });
       bindTap(document.getElementById('retryBtn'), () => loadGraph());
       window.addEventListener('resize', () => {
-        if (document.getElementById('app').classList.contains('ready')) initGraph(true);
+        if (!document.getElementById('app').classList.contains('ready')) return;
+        updateHelpScrollHint();
+        if (currentViewMode === 'graph') initGraph(true);
+        else if (currentViewMode === 'summary') renderSummaryMiniGraph();
       });
     }
 

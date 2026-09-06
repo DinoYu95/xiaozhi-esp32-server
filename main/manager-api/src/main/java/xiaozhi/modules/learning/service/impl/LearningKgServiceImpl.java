@@ -362,7 +362,7 @@ public class LearningKgServiceImpl implements LearningKgService {
         if (byGrade != null) {
             return byGrade;
         }
-        return findActivePublished(sub);
+        return null;
     }
 
     /**
@@ -392,11 +392,21 @@ public class LearningKgServiceImpl implements LearningKgService {
                         .eq(KgGraphReleaseEntity::getTextbookEdition, textbookEdition)
                         .eq(KgGraphReleaseEntity::getStatus, KgGraphReleaseEntity.STATUS_PUBLISHED);
         if (cityCode != null) {
+            String provinceAll = provinceCode + "_all";
             w.and(
-                    q ->
-                            q.eq(KgGraphReleaseEntity::getCityCode, cityCode)
-                                    .or()
-                                    .eq(KgGraphReleaseEntity::getCityCode, LearningGeoConstants.CITY_ANY));
+                    q -> {
+                        q.eq(KgGraphReleaseEntity::getCityCode, cityCode)
+                                .or()
+                                .eq(KgGraphReleaseEntity::getCityCode, LearningGeoConstants.CITY_ANY)
+                                .or()
+                                .eq(KgGraphReleaseEntity::getCityCode, provinceCode)
+                                .or()
+                                .eq(KgGraphReleaseEntity::getCityCode, provinceAll);
+                        if (cityCode.endsWith("_all") && cityCode.length() > 4) {
+                            String provFromAll = cityCode.substring(0, cityCode.length() - 4);
+                            q.or().eq(KgGraphReleaseEntity::getCityCode, provFromAll);
+                        }
+                    });
         }
         if (semester != null) {
             w.and(

@@ -214,6 +214,12 @@ public final class LearningGeoConstants {
         Map<String, List<Map<String, String>>> map = new LinkedHashMap<>();
         map.put("CN", List.of(option("CN_all", "全国")));
         map.put(
+                "beijing",
+                List.of(option("beijing_all", "全市通用"), option("beijing", "北京市")));
+        map.put(
+                "shanghai",
+                List.of(option("shanghai_all", "全市通用"), option("shanghai", "上海市")));
+        map.put(
                 "shandong",
                 List.of(
                         option("shandong_all", "全省通用"),

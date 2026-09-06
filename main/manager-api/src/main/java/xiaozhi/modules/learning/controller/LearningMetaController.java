@@ -126,20 +126,31 @@ public class LearningMetaController {
             long revisionCount = kgNodeRevisionDao.selectCount(
                     LearningKgServiceImpl.revisionGradeWrapper(release.getId(), release, g));
             out.put("matched", true);
-            out.put(
-                    "release",
-                    Map.of(
-                            "id", release.getId(),
-                            "versionLabel", release.getVersionLabel(),
-                            "provinceCode", release.getProvinceCode(),
-                            "cityCode", release.getCityCode(),
-                            "semester", release.getSemester(),
-                            "textbookEdition", release.getTextbookEdition(),
-                            "gradeMin", release.getGradeMin(),
-                            "gradeMax", release.getGradeMax(),
-                            "skillCountAtGrade", skillCount,
-                            "revisionCountAtGrade", revisionCount));
-            if (skillCount == 0) {
+            Map<String, Object> releaseMap = new LinkedHashMap<>();
+            releaseMap.put("id", release.getId());
+            releaseMap.put("versionLabel", release.getVersionLabel());
+            releaseMap.put("provinceCode", release.getProvinceCode());
+            releaseMap.put("cityCode", release.getCityCode());
+            releaseMap.put("semester", release.getSemester());
+            releaseMap.put("textbookEdition", release.getTextbookEdition());
+            releaseMap.put("gradeMin", release.getGradeMin());
+            releaseMap.put("gradeMax", release.getGradeMax());
+            releaseMap.put("skillCountAtGrade", skillCount);
+            releaseMap.put("revisionCountAtGrade", revisionCount);
+            out.put("release", releaseMap);
+            List<String> diffs = dimensionDiffs(
+                    resolvedProvince,
+                    resolvedCity,
+                    resolvedTextbook,
+                    resolvedSemester,
+                    g,
+                    release);
+            if (!diffs.isEmpty()) {
+                out.put("dimensionDiffs", diffs);
+                out.put(
+                        "hint",
+                        "已命中 release 但与档案期望不完全一致（可能是回退匹配）: " + String.join("; ", diffs));
+            } else if (skillCount == 0) {
                 out.put(
                         "hint",
                         "已匹配 release 但该年级无 SKILL 节点（revision 行数="
@@ -150,8 +161,49 @@ public class LearningMetaController {
         } catch (Exception e) {
             out.put("matched", false);
             out.put("hint", e.getMessage());
+            out.put("publishedCandidates", listPublishedCandidates(sub, resolvedProvince));
         }
         return new Result<Map<String, Object>>().ok(out);
+    }
+
+    private static List<String> dimensionDiffs(
+            String province,
+            String city,
+            String textbook,
+            String semester,
+            int grade,
+            KgGraphReleaseEntity release) {
+        List<String> diffs = new ArrayList<>();
+        if (!province.equals(release.getProvinceCode())) {
+            diffs.add("province 期望=" + province + " 实际=" + release.getProvinceCode());
+        }
+        if (release.getCityCode() != null
+                && !city.equals(release.getCityCode())
+                && !LearningGeoConstants.CITY_ANY.equals(release.getCityCode())
+                && !province.equals(release.getCityCode())
+                && !(province + "_all").equals(release.getCityCode())) {
+            diffs.add("city 期望=" + city + " 实际=" + release.getCityCode());
+        }
+        if (!textbook.equals(release.getTextbookEdition())) {
+            diffs.add("textbook 期望=" + textbook + " 实际=" + release.getTextbookEdition());
+        }
+        if (release.getSemester() != null
+                && !semester.equals(release.getSemester())
+                && !LearningGeoConstants.SEMESTER_ANY.equals(release.getSemester())) {
+            diffs.add("semester 期望=" + semester + " 实际=" + release.getSemester());
+        }
+        if (release.getGradeMin() != null
+                && release.getGradeMax() != null
+                && (grade < release.getGradeMin() || grade > release.getGradeMax())) {
+            diffs.add(
+                    "grade 期望="
+                            + grade
+                            + " 不在 release 范围 "
+                            + release.getGradeMin()
+                            + "-"
+                            + release.getGradeMax());
+        }
+        return diffs;
     }
 
     /** 同省已发布图谱列表，便于对照 city_code / semester / textbook 是否一致 */

@@ -124,6 +124,36 @@
     .help-panel .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
     .help-panel .dot-sample { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; }
     .help-panel strong { color: #e2e8f0; font-size: 0.72rem; }
+    .help-section-title { font-size: 0.68rem; font-weight: 700; color: #c7d2fe; margin-bottom: 6px; }
+    .help-light-intro { font-size: 0.64rem; color: #9aa8c4; margin-bottom: 8px; line-height: 1.55; }
+    .help-light-steps { display: flex; flex-direction: column; gap: 6px; }
+    .help-light-step {
+      padding: 7px 9px; border-radius: 9px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+      font-size: 0.62rem; color: #9aa8c4; line-height: 1.5;
+    }
+    .help-light-tag { font-weight: 600; margin-right: 4px; }
+    .help-light-tag.locked { color: #6b7a99; }
+    .help-light-tag.collecting { color: #91caff; }
+    .help-light-tag.visible { color: #5cdbd3; }
+    .help-light-tag.strong { color: #ffd591; }
+    .graph-mode-toggle {
+      position: absolute; left: 10px; bottom: 10px; z-index: 4;
+      border: 1px solid rgba(129,140,248,0.35); border-radius: 999px;
+      background: rgba(15,22,40,0.88); color: #c7d2fe;
+      font-size: 0.6rem; padding: 5px 10px; cursor: pointer;
+    }
+    .summary-empty-hint {
+      padding: 12px; border-radius: 12px; text-align: center;
+      background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.08);
+      color: #8b9cc8; font-size: 0.68rem; line-height: 1.6;
+    }
+    .summary-link-btn {
+      display: block; width: 100%; margin-top: 10px;
+      border: 1px solid rgba(129,140,248,0.3); border-radius: 10px;
+      background: rgba(99,102,241,0.12); color: #c7d2fe;
+      font-size: 0.68rem; padding: 9px 12px; cursor: pointer;
+    }
 
     .notify-toast {
       position: absolute; left: 12px; right: 12px; top: 12px;
@@ -244,14 +274,11 @@
 
     #app { display: none; flex: 1; flex-direction: column; min-height: 0; }
     #app.ready { display: flex; }
-    #graphPanel { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+    #graphPanel { display: none; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+    #graphPanel.active { display: flex; }
     #lightPanel {
-      display: none; flex: 1; flex-direction: column; min-height: 0;
-      overflow-y: auto; -webkit-overflow-scrolling: touch;
-      padding: 12px; background: rgba(10,14,24,0.95);
-      color: #9aa8c4; font-size: 0.72rem;
+      display: none;
     }
-    #lightPanel.active { display: flex; }
     #summaryPanel {
       display: none; flex: 1; flex-direction: column; min-height: 0;
       overflow-y: auto; -webkit-overflow-scrolling: touch;
@@ -353,16 +380,15 @@
             <div class="meta" id="profileMeta">—</div>
           </div>
           <div class="top-actions">
-            <button type="button" class="icon-btn" id="helpBtn" title="读图说明">?</button>
+            <button type="button" class="icon-btn" id="helpBtn" title="帮助与点亮规则">?</button>
             <span class="stat-pill" id="observePill">强烈 0</span>
           </div>
         </div>
       </div>
 
       <div class="mode-tabs">
-        <button type="button" class="on" data-mode="graph">星图</button>
-        <button type="button" data-mode="summary">成长概览</button>
-        <button type="button" data-mode="light">点亮规则</button>
+        <button type="button" class="on" data-mode="summary">成长概览</button>
+        <button type="button" data-mode="graph">完整星图</button>
       </div>
 
       <div id="graphPanel">
@@ -374,14 +400,15 @@
           </div>
           <svg id="graphSvg"></svg>
           <div class="graph-overlay">
-            <div class="float-legend">
-              <b>节点含义</b>
-              <div style="font-size:0.55rem;color:#6b7a99;margin-bottom:3px">颜色表示层级</div>
+            <div class="float-legend" id="graphLegend">
+              <b>缩略星图</b>
+              <div style="font-size:0.55rem;color:#6b7a99;margin-bottom:3px">仅显示已有进展的维度</div>
               <div><i style="background:#6366f1;border:2px solid #c7d2fe"></i> 孩子中心</div>
               <div><i style="background:#9254de;border:2px solid #efdbff"></i> 维度 Hub</div>
               <div><i style="background:#597ef7"></i> 子能力</div>
               <div><i style="background:#ffb020;box-shadow:0 0 6px #ffb020"></i> 观测信号</div>
             </div>
+            <button type="button" class="graph-mode-toggle" id="graphModeToggle">展开完整星图</button>
             <div class="corner tr" id="zoomLabel">100%</div>
             <div class="zoom-btns">
               <button type="button" id="zoomIn">+</button>
@@ -393,9 +420,10 @@
       </div>
 
       <div class="help-panel" id="helpPanel">
+        <div class="help-section-title">读图说明</div>
         <div class="row">
           <div class="dot-sample" style="background:#9254de;border:3px solid #efdbff"></div>
-          <div><strong>维度 Hub（你圈的大紫圆）</strong><br>8 个成长大方向。证据达标后会<strong style="color:#d3adf7">整圆变亮</strong>，强烈亮点时金色脉冲。</div>
+          <div><strong>维度 Hub（大紫圆）</strong><br>成长大方向。证据达标后整圆变亮，强烈亮点时金色脉冲。</div>
         </div>
         <div class="row">
           <div class="dot-sample" style="background:#597ef7;width:14px;height:14px;margin:4px"></div>
@@ -403,29 +431,19 @@
         </div>
         <div class="row">
           <div class="dot-sample" style="background:#ffb020;box-shadow:0 0 8px #ffb020"></div>
-          <div><strong>观测信号</strong> · 最小证据点。强烈时会闪，并可能触发家长通知。</div>
+          <div><strong>观测信号</strong> · 最小证据点。强烈时会闪，并可能通知家长。</div>
+        </div>
+        <div class="help-section-title" style="margin-top:10px">点亮规则</div>
+        <p id="lightIntro" class="help-light-intro">能力随与小智互动自动累积证据，无需刻意「刷点亮」：</p>
+        <div class="help-light-steps">
+          <div class="help-light-step"><span class="help-light-tag locked">① 待观测</span> 证据 &lt; 2 条 → 灰点</div>
+          <div class="help-light-step"><span class="help-light-tag collecting">② 收集中</span> 已有互动，未达目标 → 蓝灰 + 进度环</div>
+          <div class="help-light-step"><span class="help-light-tag visible">③ 已显现</span> 证据达到目标 → 常亮</div>
+          <div class="help-light-step"><span class="help-light-tag strong">④ 强烈亮点</span> 超额达标 → 闪烁 + 可通知家长</div>
         </div>
       </div>
 
       <div id="summaryPanel"></div>
-
-      <div id="lightPanel">
-        <p id="lightIntro" style="margin-bottom:10px;color:#c5d0e8;">能力不会「一键点亮」，而是随与小智互动自动累积证据：</p>
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          <div style="padding:8px 10px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06)">
-            <span style="color:#6b7a99">① 未解锁</span> · 证据 &lt; 2 条 → 灰点
-          </div>
-          <div style="padding:8px 10px;border-radius:10px;background:rgba(89,126,247,0.08);border:1px solid rgba(89,126,247,0.2)">
-            <span style="color:#91caff">② 收集中</span> · 已有互动，未达目标条数 → 蓝灰 + 进度环
-          </div>
-          <div style="padding:8px 10px;border-radius:10px;background:rgba(54,207,201,0.08);border:1px solid rgba(54,207,201,0.2)">
-            <span style="color:#5cdbd3">③ 已显现</span> · 证据达到目标条数 → 常亮
-          </div>
-          <div style="padding:8px 10px;border-radius:10px;background:rgba(255,176,32,0.1);border:1px solid rgba(255,176,32,0.35)">
-            <span style="color:#ffd591">④ 强烈亮点</span> · 超额达标或表现突出 → <strong style="color:#ffb020">闪烁 + 可通知家长</strong>
-          </div>
-        </div>
-      </div>
 
       <div class="sheet" id="detailSheet"></div>
     </div>
@@ -497,6 +515,10 @@
     let userAdjustedZoom = false;
     let suppressMarkUserZoom = false;
     let pendingToastNode = null;
+    /** 完整星图默认「缩略模式」：只展示已有进展的维度与子节点 */
+    let graphCompactMode = true;
+    let graphInitialized = false;
+    let currentViewMode = 'summary';
 
     function parseQuery() {
       const q = {};
@@ -843,6 +865,65 @@
       };
     }
 
+    function hubHasProgress(hub, allNodes) {
+      if (!hub) return false;
+      if (hub.state && hub.state !== 'locked') return true;
+      const subs = allNodes.filter(n => n.parentHub === hub.id);
+      return subs.some(n => n.state && n.state !== 'locked');
+    }
+
+    function nodeHasProgress(n) {
+      return n && n.state && n.state !== 'locked';
+    }
+
+    function filterGraphForDisplay(allNodes, allLinks, compact) {
+      if (!compact) return { nodes: allNodes, links: allLinks };
+      const byId = Object.fromEntries(allNodes.map(n => [n.id, n]));
+      const keep = new Set(['center']);
+      allNodes.forEach(n => {
+        if (n.type === 'center') return;
+        if (nodeHasProgress(n)) keep.add(n.id);
+      });
+      allNodes.forEach(n => {
+        if (!keep.has(n.id)) return;
+        if (n.parentHub && byId[n.parentHub]) keep.add(n.parentHub);
+        if (n.parentSub && byId[n.parentSub]) keep.add(n.parentSub);
+      });
+      allNodes.filter(n => n.type === 'hub').forEach(hub => {
+        if (hubHasProgress(hub, allNodes)) keep.add(hub.id);
+      });
+      const nodes = allNodes.filter(n => keep.has(n.id));
+      const ids = new Set(nodes.map(n => n.id));
+      const links = allLinks.filter(l => {
+        const s = typeof l.source === 'object' ? l.source.id : l.source;
+        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        return ids.has(String(s)) && ids.has(String(t));
+      });
+      return { nodes, links };
+    }
+
+    function hasAnyProgress(nodes) {
+      return (nodes || []).some(n => n.type !== 'center' && nodeHasProgress(n));
+    }
+
+    function updateGraphModeUi() {
+      const btn = document.getElementById('graphModeToggle');
+      const legend = document.getElementById('graphLegend');
+      if (btn) {
+        btn.textContent = graphCompactMode ? '展开完整星图' : '只看有进展';
+      }
+      if (legend) {
+        const title = legend.querySelector('b');
+        const hint = legend.querySelector('div');
+        if (title) title.textContent = graphCompactMode ? '缩略星图' : '完整星图';
+        if (hint) {
+          hint.textContent = graphCompactMode
+            ? '仅显示已有进展的维度'
+            : '显示全部维度与观测点';
+        }
+      }
+    }
+
     function hubChildSummary(hub) {
       const subs = graphData.nodes.filter(n => n.parentHub === hub.id && n.type === 'sub');
       const st = countByState(subs);
@@ -890,6 +971,7 @@
       const hubs = nodes.filter(n => n.type === 'hub')
         .sort((a, b) => (STATE_ORDER[a.state] ?? 9) - (STATE_ORDER[b.state] ?? 9)
           || (b.evidenceCount || 0) - (a.evidenceCount || 0));
+      const activeHubs = hubs.filter(h => hubHasProgress(h, nodes));
       const stats = countByState(nodes);
       const days = graphMeta.observeDays || 0;
       const bandLabel = AGE_BAND_LABELS[currentAgeBand] || currentAgeBand;
@@ -904,7 +986,7 @@
         })
         .slice(0, 5);
 
-      const hubCards = hubs.length ? hubs.map(hub => {
+      const hubCards = activeHubs.length ? activeHubs.map(hub => {
         const remain = Math.max(0, (hub.requiredCount || 6) - (hub.evidenceCount || 0));
         const prog = hub.state === 'collecting' && remain > 0
           ? ` · 还差 ${remain} 条证据可显现`
@@ -919,7 +1001,7 @@
             ${summaryMiniBar(hub)}
             ${summaryCardAction(hub.id)}
           </div>`;
-      }).join('') : '<div class="summary-empty">暂无维度数据</div>';
+      }).join('') : `<div class="summary-empty-hint">还没有明显进展记录。<br>让孩子多和小智聊天、做任务，相关能力会自动出现在这里。</div>`;
 
       const strongCards = strongNodes.length ? strongNodes.slice(0, 6).map(n => {
         const typeName = TYPE_META[n.type]?.badge || n.type;
@@ -947,16 +1029,20 @@
             ${summaryMiniBar(n)}
             ${summaryCardAction(n.id)}
           </div>`;
-      }).join('') : '<div class="summary-empty">暂无接近显现的观察点</div>';
+      }).join('') : '';
+
+      const progressHint = !hasAnyProgress(nodes)
+        ? '日常互动即可积累证据，不必刻意「刷点亮」。'
+        : `已有 ${activeHubs.length} 个维度出现观察信号，点开可看详情。`;
 
       panel.innerHTML = `
         <div class="summary-hero">
           <div class="eyebrow">${childName} · ${bandLabel}${days ? ` · 已观测 ${days} 天` : ''}</div>
-          <h3>成长概览</h3>
-          <p class="lead">${buildSummaryLead(stats, hubs)}</p>
+          <h3>${childName} 现在怎样？</h3>
+          <p class="lead">${buildSummaryLead(stats, activeHubs.length ? activeHubs : hubs)}</p>
           <div class="hero-row">
-            <span class="hero-num">${stats.strong}</span>
-            <span class="hero-num-label">个强烈亮点</span>
+            <span class="hero-num">${stats.strong + stats.visible + stats.collecting}</span>
+            <span class="hero-num-label">处能力有观察记录</span>
           </div>
         </div>
         <div class="summary-stats">
@@ -966,18 +1052,19 @@
           <div class="summary-stat"><b>${stats.locked}</b><span>待观测</span></div>
         </div>
         <div class="summary-section">
-          <div class="summary-section-title">各维度进展</div>
+          <div class="summary-section-title">有进展的维度</div>
           ${hubCards}
         </div>
-        <div class="summary-section">
+        ${stats.strong > 0 ? `<div class="summary-section">
           <div class="summary-section-title">近期亮点</div>
           ${strongCards}
-        </div>
-        <div class="summary-section">
+        </div>` : ''}
+        ${watchNodes.length ? `<div class="summary-section">
           <div class="summary-section-title">值得继续观察</div>
           ${watchCards}
-        </div>
-        <div class="summary-foot">💡 无需刻意「刷点亮」，日常和小智聊天、做任务即可。需要看详情时点「在星图中查看」。</div>`;
+        </div>` : ''}
+        <div class="summary-foot">💡 ${progressHint}</div>
+        <button type="button" class="summary-link-btn" id="openGraphFromSummary">查看缩略星图 ›</button>`;
 
       panel.querySelectorAll('.summary-card-action[data-node-id]').forEach(btn => {
         bindTap(btn, (ev) => {
@@ -985,37 +1072,48 @@
           jumpToNodeFromSummary(btn.dataset.nodeId);
         });
       });
+      bindTap(document.getElementById('openGraphFromSummary'), () => {
+        graphCompactMode = true;
+        switchViewMode('graph');
+      });
     }
 
     function jumpToNodeFromSummary(nodeId) {
+      graphCompactMode = true;
       switchViewMode('graph');
       const node = graphData.nodes.find(n => String(n.id) === String(nodeId));
       if (node) selectNode(node, true, { forceFocus: true });
     }
 
     function switchViewMode(mode) {
+      currentViewMode = mode;
       const isGraph = mode === 'graph';
       const isSummary = mode === 'summary';
-      const isLight = mode === 'light';
       document.querySelectorAll('.mode-tabs button').forEach(b => {
         b.classList.toggle('on', b.dataset.mode === mode);
       });
-      document.getElementById('graphPanel').style.display = isGraph ? 'flex' : 'none';
+      document.getElementById('graphPanel').classList.toggle('active', isGraph);
       document.getElementById('summaryPanel').classList.toggle('active', isSummary);
-      document.getElementById('lightPanel').classList.toggle('active', isLight);
       document.getElementById('detailSheet').style.display = isGraph ? 'block' : 'none';
       document.getElementById('helpPanel').classList.remove('open');
       if (isSummary) renderSummaryPanel();
-      if (isGraph && layoutNodes.length) {
-        requestAnimationFrame(() => initGraph(true));
+      if (isGraph) {
+        updateGraphModeUi();
+        if (!graphInitialized) {
+          bootGraphAfterLoad();
+        } else {
+          requestAnimationFrame(() => initGraph(true));
+        }
       }
     }
 
     function updateMeta() {
       const bandLabel = AGE_BAND_LABELS[currentAgeBand] || currentAgeBand;
-      const days = graphMeta.observeDays || '—';
-      const total = graphData.nodes ? graphData.nodes.length : 0;
-      document.getElementById('profileMeta').textContent = `${childName} · ${bandLabel} · 观测 ${days} 天 · ${total} 节点`;
+      const days = graphMeta.observeDays || 0;
+      const active = (graphData.nodes || []).filter(n => n.type !== 'center' && nodeHasProgress(n)).length;
+      document.getElementById('profileMeta').textContent = days
+        ? `${childName} · ${bandLabel} · 已观测 ${days} 天 · ${active} 处有记录`
+        : `${childName} · ${bandLabel}`;
       document.getElementById('observePill').textContent = `强烈 ${graphMeta.strongCount || 0}`;
     }
 
@@ -1496,9 +1594,18 @@
       }
       bindGraphTouchPan(shell);
 
-      const nodes = graphData.nodes.map(n => ({ ...n }));
+      const filtered = filterGraphForDisplay(graphData.nodes, graphData.links, graphCompactMode);
+      const nodes = filtered.nodes.map(n => ({ ...n }));
       layoutNodes = nodes;
-      const links = graphData.links.map(l => ({ ...l }));
+      const links = filtered.links.map(l => ({ ...l }));
+      if (graphCompactMode && nodes.length <= 1) {
+        svg.append('text').attr('x', W / 2).attr('y', H / 2)
+          .attr('text-anchor', 'middle').attr('fill', '#8b9cc8').attr('font-size', '13px')
+          .text('还没有明显进展，继续和小智互动吧');
+        layoutSettling = false;
+        graphInitialized = true;
+        return;
+      }
       seedNodePositions(nodes, W, H);
 
       simulation = d3.forceSimulation(nodes)
@@ -1686,6 +1793,7 @@
       resetGraphInteractionState();
       waitForGraphShell(() => {
         initGraph(false);
+        graphInitialized = true;
         showDetail(null);
         updateDimming();
         fetchUnreadNotification();
@@ -1718,9 +1826,10 @@
         graphData = mapApiToGraph(data);
         selectedId = null;
         renderLightRules();
-        renderSummaryPanel();
+        updateMeta();
         showApp();
-        requestAnimationFrame(() => requestAnimationFrame(bootGraphAfterLoad));
+        switchViewMode('summary');
+        fetchUnreadNotification();
       } catch (e) {
         showError(e.message || '网络错误，请稍后重试');
       }
@@ -1745,6 +1854,11 @@
       });
       document.querySelectorAll('.mode-tabs button').forEach(btn => {
         bindTap(btn, () => switchViewMode(btn.dataset.mode));
+      });
+      bindTap(document.getElementById('graphModeToggle'), () => {
+        graphCompactMode = !graphCompactMode;
+        updateGraphModeUi();
+        if (currentViewMode === 'graph') initGraph(true);
       });
       bindTap(document.getElementById('toastView'), () => {
         const n = pendingToastNode || graphData.nodes.find(x => x.state === 'strong' && x.type !== 'center');

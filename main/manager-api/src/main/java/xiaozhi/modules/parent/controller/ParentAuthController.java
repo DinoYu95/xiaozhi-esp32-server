@@ -5,6 +5,7 @@ import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -105,26 +106,41 @@ public class ParentAuthController {
     }
 
     @GetMapping("/avatar/file/{filename:.+}")
-    @Operation(summary = "获取已上传的家长头像（匿名，供小程序 image 等展示）")
-    public ResponseEntity<byte[]> getAvatarFile(@PathVariable("filename") String filename) {
-        if (filename == null || !PARENT_AVATAR_FILE_PATTERN.matcher(filename).matches()) {
+    @Operation(summary = "获取已上传的家长头像（匿名，供小程序 image 等展示；支持本地 uuid 文件名或 OSS objectKey）")
+    public ResponseEntity<?> getAvatarFile(@PathVariable("filename") String filename) {
+        if (StringUtils.isBlank(filename)) {
             return ResponseEntity.notFound().build();
         }
-        byte[] bytes = parentStorageService.readLocalFile(ParentStorageCategory.AVATAR, filename);
-        if (bytes == null) {
-            return ResponseEntity.notFound().build();
+        if (PARENT_AVATAR_FILE_PATTERN.matcher(filename).matches()) {
+            byte[] bytes = parentStorageService.readLocalFile(ParentStorageCategory.AVATAR, filename);
+            if (bytes == null) {
+                return ResponseEntity.notFound().build();
+            }
+            String ext = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400")
+                    .contentType(mediaTypeForExt(ext))
+                    .body(bytes);
         }
-        String ext = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
-        MediaType mt = switch (ext) {
+        if (parentStorageService.isManagedAvatarReference(filename)) {
+            String url = parentStorageService.resolveAccessUrl(ParentStorageCategory.AVATAR, filename);
+            if (StringUtils.isNotBlank(url)) {
+                return ResponseEntity.status(HttpStatus.FOUND)
+                        .header(HttpHeaders.LOCATION, url)
+                        .header(HttpHeaders.CACHE_CONTROL, "public, max-age=300")
+                        .build();
+            }
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    private static MediaType mediaTypeForExt(String ext) {
+        return switch (ext) {
             case "png" -> MediaType.IMAGE_PNG;
             case "gif" -> MediaType.IMAGE_GIF;
             case "webp" -> MediaType.parseMediaType("image/webp");
             default -> MediaType.IMAGE_JPEG;
         };
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400")
-                .contentType(mt)
-                .body(bytes);
     }
 
     @PutMapping("/profile")

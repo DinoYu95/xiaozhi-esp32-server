@@ -5,7 +5,9 @@ import java.util.List;
 import xiaozhi.modules.parent.dto.DeviceInviteAcceptDTO;
 import xiaozhi.modules.parent.dto.DeviceInviteCreateDTO;
 import xiaozhi.modules.parent.dto.DeviceInviteRevokeDTO;
+import xiaozhi.modules.parent.dto.DeviceMemberFamilyRoleUpdateDTO;
 import xiaozhi.modules.parent.dto.DeviceMemberLeaveDTO;
+import xiaozhi.modules.parent.util.DeviceFamilyRole;
 import xiaozhi.modules.parent.vo.DeviceInviteAcceptVO;
 import xiaozhi.modules.parent.vo.DeviceInviteCreateVO;
 import xiaozhi.modules.parent.vo.DeviceInviteItemVO;
@@ -34,6 +36,10 @@ public interface DeviceInviteService {
     void removeMember(Long ownerParentUserId, String deviceId, Long targetParentId);
 
     void leave(Long parentUserId, DeviceMemberLeaveDTO dto);
+
+    void updateMemberFamilyRole(Long operatorParentUserId, DeviceMemberFamilyRoleUpdateDTO dto);
+
+    List<DeviceFamilyRole.DeviceFamilyRoleOption> listFamilyRoleOptions();
 
     void revoke(Long parentUserId, DeviceInviteRevokeDTO dto);
 

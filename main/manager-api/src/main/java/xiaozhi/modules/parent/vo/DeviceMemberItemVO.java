@@ -20,4 +20,10 @@ public class DeviceMemberItemVO {
     private Boolean receiveRiskNotify;
     @Schema(description = "Owner 是否可在设置页编辑该成员开关")
     private Boolean canEdit;
+    @Schema(description = "家庭角色 code：father/mother/paternal_grandfather/…/other；未设置时为 null")
+    private String familyRole;
+    @Schema(description = "家庭角色中文展示，如「爸爸」")
+    private String familyRoleLabel;
+    @Schema(description = "当前登录用户是否可编辑该成员的家庭角色（Owner 可改全员；Member 仅可改本人）")
+    private Boolean canEditFamilyRole;
 }

@@ -197,7 +197,7 @@ public class ParentUserServiceImpl implements ParentUserService {
         ParentUserVO u = new ParentUserVO();
         u.setId(user.getId());
         u.setNickname(user.getNickname());
-        u.setAvatarUrl(user.getAvatarUrl());
+        u.setAvatarUrl(parentStorageService.resolveAccessUrl(ParentStorageCategory.AVATAR, user.getAvatarUrl()));
         u.setPhone(getMaskedPhoneForUser(user.getId()));
         vo.setUser(u);
         return vo;

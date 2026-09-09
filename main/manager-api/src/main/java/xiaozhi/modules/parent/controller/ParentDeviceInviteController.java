@@ -26,7 +26,9 @@ import xiaozhi.modules.parent.context.ParentContext;
 import xiaozhi.modules.parent.dto.DeviceInviteAcceptDTO;
 import xiaozhi.modules.parent.dto.DeviceInviteCreateDTO;
 import xiaozhi.modules.parent.dto.DeviceInviteRevokeDTO;
+import xiaozhi.modules.parent.dto.DeviceMemberFamilyRoleUpdateDTO;
 import xiaozhi.modules.parent.dto.DeviceMemberLeaveDTO;
+import xiaozhi.modules.parent.util.DeviceFamilyRole;
 import xiaozhi.modules.parent.dto.DeviceRiskNotifySubscriberUpdateDTO;
 import xiaozhi.modules.parent.service.DeviceInviteService;
 import xiaozhi.modules.parent.service.DeviceRiskNotifyService;
@@ -111,6 +113,25 @@ public class ParentDeviceInviteController {
             @RequestParam("parentId") Long parentId) {
         Long parentUserId = requireParentUserId();
         deviceInviteService.removeMember(parentUserId, decodeDeviceId(deviceId), parentId);
+        return new Result<Void>().ok(null);
+    }
+
+    @GetMapping("/family-role-options")
+    @Operation(summary = "家庭角色备注可选项（爸爸/妈妈/爷爷…）")
+    public Result<List<DeviceFamilyRole.DeviceFamilyRoleOption>> listFamilyRoleOptions() {
+        requireParentUserId();
+        return new Result<List<DeviceFamilyRole.DeviceFamilyRoleOption>>().ok(
+                deviceInviteService.listFamilyRoleOptions());
+    }
+
+    @PutMapping("/members/family-role")
+    @Operation(summary = "设置成员家庭角色备注（Owner 可改全员；Member 仅可改本人）")
+    public Result<Void> updateMemberFamilyRole(@RequestBody @Valid DeviceMemberFamilyRoleUpdateDTO dto) {
+        Long parentUserId = requireParentUserId();
+        if (StringUtils.isNotBlank(dto.getDeviceId())) {
+            dto.setDeviceId(decodeDeviceId(dto.getDeviceId()));
+        }
+        deviceInviteService.updateMemberFamilyRole(parentUserId, dto);
         return new Result<Void>().ok(null);
     }
 

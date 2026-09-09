@@ -37,6 +37,7 @@ import xiaozhi.modules.parent.dao.ParentUserDao;
 import xiaozhi.modules.parent.dto.DeviceInviteAcceptDTO;
 import xiaozhi.modules.parent.dto.DeviceInviteCreateDTO;
 import xiaozhi.modules.parent.dto.DeviceInviteRevokeDTO;
+import xiaozhi.modules.parent.dto.DeviceMemberFamilyRoleUpdateDTO;
 import xiaozhi.modules.parent.dto.DeviceMemberLeaveDTO;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.entity.DeviceInviteEntity;
@@ -44,6 +45,8 @@ import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.service.DeviceInviteService;
 import xiaozhi.modules.parent.storage.ParentStorageService;
+import xiaozhi.modules.parent.util.DeviceFamilyRole;
+import xiaozhi.modules.parent.util.DeviceMemberItemMapper;
 import xiaozhi.modules.parent.util.ParentDeviceAccessHelper;
 import xiaozhi.modules.parent.util.ParentDeviceDisplayResolver;
 import xiaozhi.modules.parent.util.ParentUserProfileHelper;
@@ -171,6 +174,7 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
             return vo;
         }
 
+        String familyRole = DeviceFamilyRole.normalizeOrNull(dto.getFamilyRole());
         Date now = new Date();
         ParentDeviceBindingEntity anyBinding =
                 ParentDeviceAccessHelper.findAnyBinding(parentDeviceBindingDao, parentUserId, deviceId);
@@ -182,6 +186,7 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
             anyBinding.setStatus(ParentDeviceBindingEntity.STATUS_ACTIVE);
             anyBinding.setBindTime(now);
             anyBinding.setBindSource("invite");
+            anyBinding.setFamilyRole(familyRole);
             anyBinding.setUpdatedAt(now);
             ParentDeviceAccessHelper.applyRiskNotifyDefaults(anyBinding);
             parentDeviceBindingDao.updateById(anyBinding);
@@ -195,6 +200,7 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
             binding.setIsPrimary(0);
             binding.setInvitedBy(invite.getInviterParentId());
             binding.setStatus(ParentDeviceBindingEntity.STATUS_ACTIVE);
+            binding.setFamilyRole(familyRole);
             binding.setCreateTime(now);
             binding.setUpdatedAt(now);
             ParentDeviceAccessHelper.applyRiskNotifyDefaults(binding);
@@ -229,27 +235,56 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
 
     @Override
     public List<DeviceMemberItemVO> listMembers(Long parentUserId, String deviceId) {
-        String resolvedDeviceId = ParentDeviceAccessHelper.requireActiveBinding(
-                parentDeviceBindingDao, parentUserId, deviceId).getDeviceId();
+        ParentDeviceBindingEntity viewerBinding = ParentDeviceAccessHelper.requireActiveBinding(
+                parentDeviceBindingDao, parentUserId, deviceId);
+        String resolvedDeviceId = viewerBinding.getDeviceId();
+        boolean viewerIsOwner = ParentDeviceAccessHelper.isOwner(viewerBinding);
         List<ParentDeviceBindingEntity> bindings =
                 ParentDeviceAccessHelper.findActiveBindingsForDevice(parentDeviceBindingDao, resolvedDeviceId);
         List<DeviceMemberItemVO> result = new ArrayList<>();
         for (ParentDeviceBindingEntity b : bindings) {
-            DeviceMemberItemVO item = new DeviceMemberItemVO();
-            item.setParentId(b.getParentUserId());
             ParentUserEntity user = parentUserDao.selectById(b.getParentUserId());
-            item.setNickname(ParentUserProfileHelper.resolveNickname(user));
-            item.setAvatarUrl(ParentUserProfileHelper.resolveSharingAvatarUrl(user, parentStorageService));
-            item.setRole(b.getRole());
-            item.setIsPrimary(b.getIsPrimary() != null && b.getIsPrimary() == 1);
-            item.setInvitedBy(b.getInvitedBy());
-            item.setJoinedAt(b.getBindTime());
-            boolean owner = ParentDeviceAccessHelper.isOwner(b);
-            item.setReceiveRiskNotify(ParentDeviceAccessHelper.isReceiveRiskNotifyEnabled(b));
-            item.setCanEdit(!owner);
-            result.add(item);
+            result.add(DeviceMemberItemMapper.toItem(
+                    b, user, parentUserId, viewerIsOwner, parentStorageService));
         }
         return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateMemberFamilyRole(Long operatorParentUserId, DeviceMemberFamilyRoleUpdateDTO dto) {
+        if (dto == null || StringUtils.isBlank(dto.getDeviceId()) || dto.getParentId() == null) {
+            throw new RenException(ErrorCode.PARAMS_GET_ERROR);
+        }
+        ParentDeviceBindingEntity operatorBinding = ParentDeviceAccessHelper.requireActiveBinding(
+                parentDeviceBindingDao, operatorParentUserId, dto.getDeviceId().trim());
+        String resolvedDeviceId = operatorBinding.getDeviceId();
+        boolean operatorIsOwner = ParentDeviceAccessHelper.isOwner(operatorBinding);
+        boolean editingSelf = operatorParentUserId.equals(dto.getParentId());
+        if (!editingSelf && !operatorIsOwner) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_MEMBER_READONLY);
+        }
+        ParentDeviceBindingEntity target = ParentDeviceAccessHelper.findActiveBinding(
+                parentDeviceBindingDao, dto.getParentId(), resolvedDeviceId);
+        if (target == null) {
+            throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
+        }
+        String normalized = DeviceFamilyRole.normalizeOrNull(dto.getFamilyRole());
+        if (StringUtils.equals(normalized, target.getFamilyRole())) {
+            return;
+        }
+        ParentDeviceBindingEntity patch = new ParentDeviceBindingEntity();
+        patch.setId(target.getId());
+        patch.setFamilyRole(normalized);
+        patch.setUpdatedAt(new Date());
+        parentDeviceBindingDao.updateById(patch);
+        log.info("device member family role updated: deviceId={}, target={}, role={}, by={}",
+                resolvedDeviceId, dto.getParentId(), normalized, operatorParentUserId);
+    }
+
+    @Override
+    public List<DeviceFamilyRole.DeviceFamilyRoleOption> listFamilyRoleOptions() {
+        return DeviceFamilyRole.listOptions();
     }
 
     @Override

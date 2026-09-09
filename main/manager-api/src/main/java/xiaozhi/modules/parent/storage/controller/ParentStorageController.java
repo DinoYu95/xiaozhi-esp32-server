@@ -114,12 +114,35 @@ public class ParentStorageController {
             String base = parentPublicBaseUrl.trim();
             return base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
         }
-        String scheme = request.getScheme();
-        String host = request.getServerName();
-        int port = request.getServerPort();
-        boolean defaultPort = ("http".equals(scheme) && port == 80) || ("https".equals(scheme) && port == 443);
+        String scheme = request.getHeader("X-Forwarded-Proto");
+        if (StringUtils.isBlank(scheme)) {
+            scheme = request.getScheme();
+        }
+        String hostHeader = request.getHeader("X-Forwarded-Host");
+        String hostPart;
+        if (StringUtils.isNotBlank(hostHeader)) {
+            hostPart = hostHeader.split(",")[0].trim();
+            if (!hostPart.contains(":")) {
+                String fp = request.getHeader("X-Forwarded-Port");
+                if (StringUtils.isNotBlank(fp)) {
+                    fp = fp.split(",")[0].trim();
+                    boolean defaultPort = ("80".equals(fp) && "http".equalsIgnoreCase(scheme))
+                            || ("443".equals(fp) && "https".equalsIgnoreCase(scheme));
+                    if (!defaultPort) {
+                        hostPart = hostPart + ":" + fp;
+                    }
+                }
+            }
+        } else {
+            hostPart = request.getServerName();
+            int port = request.getServerPort();
+            boolean defaultPort = ("http".equalsIgnoreCase(scheme) && port == 80)
+                    || ("https".equalsIgnoreCase(scheme) && port == 443);
+            if (!defaultPort) {
+                hostPart = hostPart + ":" + port;
+            }
+        }
         String ctx = request.getContextPath() != null ? request.getContextPath() : "";
-        String hostPart = defaultPort ? host : host + ":" + port;
         return scheme + "://" + hostPart + ctx;
     }
 }

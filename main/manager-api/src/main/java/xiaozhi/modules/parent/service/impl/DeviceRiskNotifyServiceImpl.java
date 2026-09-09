@@ -23,9 +23,9 @@ import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.service.DeviceRiskNotifyService;
 import xiaozhi.modules.parent.storage.ParentStorageService;
+import xiaozhi.modules.parent.util.DeviceMemberItemMapper;
 import xiaozhi.modules.parent.util.ParentDeviceAccessHelper;
 import xiaozhi.modules.parent.util.ParentDeviceDisplayResolver;
-import xiaozhi.modules.parent.util.ParentUserProfileHelper;
 import xiaozhi.modules.parent.vo.DeviceMemberItemVO;
 import xiaozhi.modules.parent.vo.DeviceRiskNotifyAccessVO;
 import xiaozhi.modules.parent.vo.DeviceRiskNotifySubscribersVO;
@@ -122,19 +122,8 @@ public class DeviceRiskNotifyServiceImpl implements DeviceRiskNotifyService {
     private List<DeviceMemberItemVO> buildMemberItems(List<ParentDeviceBindingEntity> bindings) {
         List<DeviceMemberItemVO> result = new ArrayList<>();
         for (ParentDeviceBindingEntity b : bindings) {
-            DeviceMemberItemVO item = new DeviceMemberItemVO();
-            item.setParentId(b.getParentUserId());
             ParentUserEntity user = parentUserDao.selectById(b.getParentUserId());
-            item.setNickname(ParentUserProfileHelper.resolveNickname(user));
-            item.setAvatarUrl(ParentUserProfileHelper.resolveSharingAvatarUrl(user, parentStorageService));
-            item.setRole(b.getRole());
-            item.setIsPrimary(b.getIsPrimary() != null && b.getIsPrimary() == 1);
-            item.setInvitedBy(b.getInvitedBy());
-            item.setJoinedAt(b.getBindTime());
-            boolean owner = ParentDeviceAccessHelper.isOwner(b);
-            item.setReceiveRiskNotify(ParentDeviceAccessHelper.isReceiveRiskNotifyEnabled(b));
-            item.setCanEdit(!owner);
-            result.add(item);
+            result.add(DeviceMemberItemMapper.toItem(b, user, null, true, parentStorageService));
         }
         return result;
     }

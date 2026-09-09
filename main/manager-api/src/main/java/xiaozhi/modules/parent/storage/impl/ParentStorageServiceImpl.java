@@ -125,11 +125,9 @@ public class ParentStorageServiceImpl implements ParentStorageService {
             return buildOssAccessUrl(ref, cfg);
         }
         if (LOCAL_FILENAME_PATTERN.matcher(ref).matches() && category != null) {
+            String path = localAccessPath(category, ref);
             String base = trimSlash(parentPublicBaseUrlFromConfig);
-            if (StringUtils.isBlank(base)) {
-                return null;
-            }
-            return base + localAccessPath(category, ref);
+            return StringUtils.isNotBlank(base) ? base + path : path;
         }
         return ref;
     }
@@ -142,7 +140,18 @@ public class ParentStorageServiceImpl implements ParentStorageService {
         String ref = objectKeyOrUrl.trim();
         OssConfig cfg = loadOssConfig();
 
-        if (ref.startsWith("http://") || ref.startsWith("https://")) {
+        if (ref.startsWith("/")) {
+            if (isLegacyApiUrl(ref)) {
+                String filename = extractLegacyFilename(ref);
+                if (filename != null && LOCAL_FILENAME_PATTERN.matcher(filename).matches()) {
+                    ref = filename;
+                } else {
+                    throw new RenException(ErrorCode.PARENT_STORAGE_OBJECT_INVALID);
+                }
+            } else {
+                throw new RenException(ErrorCode.PARENT_STORAGE_OBJECT_INVALID);
+            }
+        } else if (ref.startsWith("http://") || ref.startsWith("https://")) {
             String objectKey = extractObjectKeyFromUrl(ref, cfg);
             if (objectKey != null) {
                 ref = objectKey;

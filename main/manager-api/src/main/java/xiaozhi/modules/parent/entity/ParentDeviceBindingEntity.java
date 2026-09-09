@@ -29,6 +29,8 @@ public class ParentDeviceBindingEntity {
     private String status;
     /** 是否接收该设备儿童风险提示；Owner 恒为 1，Member 由 Owner 配置 */
     private Integer receiveRiskNotify;
+    /** 在本设备上的家庭角色备注：father/mother/…/other，可为空 */
+    private String familyRole;
     private Date createTime;
     private Date updatedAt;
 }

@@ -4,8 +4,10 @@ import java.util.List;
 
 import org.springframework.web.multipart.MultipartFile;
 
+import xiaozhi.modules.parent.vo.MemberVoicePrintContextVO;
 import xiaozhi.modules.parent.vo.ParentDeviceVoicePrintVO;
 import xiaozhi.modules.parent.dto.ChildVoicePrintSaveDTO;
+import xiaozhi.modules.parent.dto.MemberVoicePrintSaveDTO;
 
 /**
  * 家长端-设备主孩子声纹
@@ -29,6 +31,16 @@ public interface ParentDeviceChildVoicePrintService {
      * @param dto          声纹信息
      */
     void saveVoicePrint(Long parentUserId, ChildVoicePrintSaveDTO dto);
+
+    /**
+     * 成员声纹录入页上下文：锁定身份名称、是否须先设家庭角色等
+     */
+    MemberVoicePrintContextVO getMemberVoicePrintContext(Long parentUserId, String deviceId);
+
+    /**
+     * 添加或更新当前家长在本设备的成员声纹（sourceName 由家庭角色锁定）
+     */
+    void saveMemberVoicePrint(Long parentUserId, MemberVoicePrintSaveDTO dto);
 
     /**
      * 查询该设备下全部声纹（主孩子 + 后台录入），供声纹管理卡片与详情页使用

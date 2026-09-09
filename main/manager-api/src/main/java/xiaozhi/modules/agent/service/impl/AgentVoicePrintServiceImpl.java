@@ -496,6 +496,48 @@ public class AgentVoicePrintServiceImpl extends ServiceImpl<AgentVoicePrintDao, 
     }
 
     @Override
+    public void saveMemberVoicePrint(String agentId, Long parentUserId, String audioId, String sourceName,
+            String introduce) {
+        ByteArrayResource resource = getVoicePrintAudioWAVByAudioIdOnly(audioId);
+        AgentVoicePrintEntity existing = baseMapper.selectOne(
+                new LambdaQueryWrapper<AgentVoicePrintEntity>()
+                        .eq(AgentVoicePrintEntity::getAgentId, agentId)
+                        .eq(AgentVoicePrintEntity::getParentUserId, parentUserId));
+        Boolean ok = transactionTemplate.execute(status -> {
+            try {
+                if (existing != null) {
+                    cancelVoicePrint(existing.getId());
+                    existing.setAudioId(audioId);
+                    existing.setSourceName(sourceName);
+                    existing.setIntroduce(introduce);
+                    baseMapper.updateById(existing);
+                    registerVoicePrint(existing.getId(), resource);
+                } else {
+                    AgentVoicePrintEntity entity = new AgentVoicePrintEntity();
+                    entity.setAgentId(agentId);
+                    entity.setParentUserId(parentUserId);
+                    entity.setAudioId(audioId);
+                    entity.setSourceName(sourceName);
+                    entity.setIntroduce(introduce);
+                    java.util.Date now = new java.util.Date();
+                    entity.setCreateDate(now);
+                    entity.setUpdateDate(now);
+                    baseMapper.insert(entity);
+                    registerVoicePrint(entity.getId(), resource);
+                }
+                return true;
+            } catch (Exception e) {
+                status.setRollbackOnly();
+                log.error("保存家长成员声纹失败: {}", e.getMessage());
+                throw new RenException(ErrorCode.VOICE_PRINT_SAVE_ERROR);
+            }
+        });
+        if (!Boolean.TRUE.equals(ok)) {
+            throw new RenException(ErrorCode.VOICE_PRINT_SAVE_ERROR);
+        }
+    }
+
+    @Override
     public void deleteByVoicePrintId(String voicePrintId) {
         AgentVoicePrintEntity entity = baseMapper.selectById(voicePrintId);
         if (entity == null) {

@@ -67,6 +67,11 @@ public interface AgentVoicePrintService {
     void saveChildVoicePrint(String agentId, Long childId, String audioId, String sourceName, String introduce);
 
     /**
+     * 添加或更新家长成员声纹（一家长一 agent 一条；childId 为空，parentUserId 非空）
+     */
+    void saveMemberVoicePrint(String agentId, Long parentUserId, String audioId, String sourceName, String introduce);
+
+    /**
      * 按声纹ID删除（不校验 creator，用于家长端删除孩子声纹时，校验由调用方完成）
      *
      * @param voicePrintId 声纹ID

@@ -279,5 +279,7 @@ public interface ErrorCode {
     int PARENT_LIVE_DEVICE_BUSY = 20030; // 设备忙，无法开启监控
     int PARENT_LIVE_ALREADY_ACTIVE = 20031; // 已有进行中的监控会话
     int PARENT_LIVE_SESSION_NOT_FOUND = 20032; // 监控会话不存在
+    int PARENT_FAMILY_ROLE_REQUIRED = 20033; // 须先在家庭共享中设置家庭角色
+    int PARENT_VOICEPRINT_ROLE_MISMATCH = 20034; // 声纹身份与家庭角色不一致
 
 }

@@ -29,6 +29,8 @@ import xiaozhi.common.utils.Result;
 import xiaozhi.modules.parent.vo.ParentDeviceVoicePrintVO;
 import xiaozhi.modules.parent.context.ParentContext;
 import xiaozhi.modules.parent.dto.ChildVoicePrintSaveDTO;
+import xiaozhi.modules.parent.dto.MemberVoicePrintSaveDTO;
+import xiaozhi.modules.parent.vo.MemberVoicePrintContextVO;
 import xiaozhi.modules.parent.service.ParentDeviceChildVoicePrintService;
 
 @RestController
@@ -51,6 +53,33 @@ public class ParentDeviceChildVoicePrintController {
         deviceId = decodeDeviceId(deviceId);
         String audioId = parentDeviceChildVoicePrintService.uploadAudio(parentUserId, deviceId, file);
         return new Result<String>().ok(audioId);
+    }
+
+    @GetMapping("/member-context")
+    @Operation(summary = "成员声纹录入上下文（锁定身份、是否须先设家庭角色）")
+    public Result<MemberVoicePrintContextVO> memberContext(
+            @Parameter(description = "设备ID", required = true) @RequestParam String deviceId) {
+        Long parentUserId = ParentContext.getParentUserId();
+        if (parentUserId == null) {
+            throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
+        }
+        return new Result<MemberVoicePrintContextVO>().ok(
+                parentDeviceChildVoicePrintService.getMemberVoicePrintContext(
+                        parentUserId, decodeDeviceId(deviceId)));
+    }
+
+    @PostMapping("/member")
+    @Operation(summary = "添加或更新当前家长的成员声纹（身份由家庭角色锁定，不可代录他人）")
+    public Result<Void> saveMember(@RequestBody @Valid MemberVoicePrintSaveDTO dto) {
+        Long parentUserId = ParentContext.getParentUserId();
+        if (parentUserId == null) {
+            throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
+        }
+        if (StringUtils.isNotBlank(dto.getDeviceId())) {
+            dto.setDeviceId(decodeDeviceId(dto.getDeviceId()));
+        }
+        parentDeviceChildVoicePrintService.saveMemberVoicePrint(parentUserId, dto);
+        return new Result<Void>().ok(null);
     }
 
     @PostMapping

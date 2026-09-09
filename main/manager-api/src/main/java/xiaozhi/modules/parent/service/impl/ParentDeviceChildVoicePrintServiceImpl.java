@@ -26,9 +26,13 @@ import xiaozhi.modules.device.entity.DeviceEntity;
 import xiaozhi.modules.parent.dao.DeviceChildDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
 import xiaozhi.modules.parent.dto.ChildVoicePrintSaveDTO;
+import xiaozhi.modules.parent.dto.MemberVoicePrintSaveDTO;
 import xiaozhi.modules.parent.entity.DeviceChildEntity;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.service.ParentDeviceChildVoicePrintService;
+import xiaozhi.modules.parent.util.DeviceFamilyRole;
+import xiaozhi.modules.parent.util.ParentDeviceAccessHelper;
+import xiaozhi.modules.parent.vo.MemberVoicePrintContextVO;
 
 @Service
 @RequiredArgsConstructor
@@ -78,6 +82,7 @@ public class ParentDeviceChildVoicePrintServiceImpl implements ParentDeviceChild
     @Override
     public void saveVoicePrint(Long parentUserId, ChildVoicePrintSaveDTO dto) {
         ensureDeviceBoundToParent(parentUserId, dto.getDeviceId());
+        rejectAdultRoleSourceName(parentUserId, dto.getDeviceId(), dto.getSourceName());
         DeviceChildEntity child = deviceChildDao.selectById(dto.getChildId());
         if (child == null || !child.getDeviceId().equals(dto.getDeviceId())) {
             throw new RenException("孩子与设备不匹配");
@@ -95,30 +100,74 @@ public class ParentDeviceChildVoicePrintServiceImpl implements ParentDeviceChild
     }
 
     @Override
-    public List<ParentDeviceVoicePrintVO> listVoicePrint(Long parentUserId, String deviceId) {
-        ensureDeviceBoundToParent(parentUserId, deviceId);
-        DeviceEntity device = deviceDao.selectById(deviceId);
-        if (device == null) {
-            device = deviceDao.selectByIdOrMacVariant(deviceId);
+    public MemberVoicePrintContextVO getMemberVoicePrintContext(Long parentUserId, String deviceId) {
+        ParentDeviceBindingEntity binding = requireActiveBinding(parentUserId, deviceId);
+        String resolvedDeviceId = binding.getDeviceId();
+        DeviceEntity device = resolveDevice(resolvedDeviceId);
+        MemberVoicePrintContextVO vo = new MemberVoicePrintContextVO();
+        String familyRole = binding.getFamilyRole();
+        String familyRoleLabel = DeviceFamilyRole.resolveLabel(familyRole);
+        boolean roleSet = StringUtils.isNotBlank(familyRoleLabel);
+        vo.setFamilyRoleSet(roleSet);
+        vo.setFamilyRole(familyRole);
+        vo.setFamilyRoleLabel(familyRoleLabel);
+        vo.setLockedSourceName(familyRoleLabel);
+        vo.setRequireFamilyRoleFirst(!roleSet);
+        vo.setCanManage(roleSet);
+        vo.setHasVoicePrint(false);
+        vo.setVoicePrintId(null);
+        if (device == null || StringUtils.isBlank(device.getAgentId())) {
+            return vo;
         }
+        AgentVoicePrintEntity existing = agentVoicePrintDao.selectOne(
+                new LambdaQueryWrapper<AgentVoicePrintEntity>()
+                        .eq(AgentVoicePrintEntity::getAgentId, device.getAgentId())
+                        .eq(AgentVoicePrintEntity::getParentUserId, parentUserId));
+        if (existing != null) {
+            vo.setHasVoicePrint(true);
+            vo.setVoicePrintId(existing.getId());
+        }
+        return vo;
+    }
+
+    @Override
+    public void saveMemberVoicePrint(Long parentUserId, MemberVoicePrintSaveDTO dto) {
+        if (dto == null || StringUtils.isBlank(dto.getDeviceId()) || StringUtils.isBlank(dto.getAudioId())) {
+            throw new RenException(ErrorCode.PARAMS_GET_ERROR);
+        }
+        ParentDeviceBindingEntity binding = requireActiveBinding(parentUserId, dto.getDeviceId());
+        String familyRoleLabel = DeviceFamilyRole.resolveLabel(binding.getFamilyRole());
+        if (StringUtils.isBlank(familyRoleLabel)) {
+            throw new RenException(ErrorCode.PARENT_FAMILY_ROLE_REQUIRED);
+        }
+        DeviceEntity device = resolveDevice(binding.getDeviceId());
+        if (device == null || StringUtils.isBlank(device.getAgentId())) {
+            throw new RenException(ErrorCode.AGENT_NOT_FOUND);
+        }
+        agentVoicePrintService.saveMemberVoicePrint(
+                device.getAgentId(),
+                parentUserId,
+                dto.getAudioId(),
+                familyRoleLabel,
+                dto.getIntroduce());
+    }
+
+    @Override
+    public List<ParentDeviceVoicePrintVO> listVoicePrint(Long parentUserId, String deviceId) {
+        ParentDeviceBindingEntity viewerBinding = requireActiveBinding(parentUserId, deviceId);
+        String resolvedDeviceId = viewerBinding.getDeviceId();
+        boolean viewerIsOwner = ParentDeviceAccessHelper.isOwner(viewerBinding);
+        DeviceEntity device = resolveDevice(resolvedDeviceId);
         if (device == null || StringUtils.isBlank(device.getAgentId())) {
             return List.of();
         }
         DeviceChildEntity child = deviceChildDao.selectOne(
-                new LambdaQueryWrapper<DeviceChildEntity>().eq(DeviceChildEntity::getDeviceId, deviceId));
+                new LambdaQueryWrapper<DeviceChildEntity>().eq(DeviceChildEntity::getDeviceId, resolvedDeviceId));
         Long mainChildId = child != null ? child.getId() : null;
         List<AgentVoicePrintEntity> entities = agentVoicePrintService.listByAgentIdForDevice(
                 device.getAgentId(), mainChildId);
-        return entities.stream().map(e -> {
-            ParentDeviceVoicePrintVO vo = new ParentDeviceVoicePrintVO();
-            vo.setId(e.getId());
-            vo.setAudioId(e.getAudioId());
-            vo.setSourceName(e.getSourceName());
-            vo.setIntroduce(e.getIntroduce());
-            vo.setCreateDate(e.getCreateDate());
-            vo.setCanManage(mainChildId != null && mainChildId.equals(e.getChildId()));
-            return vo;
-        }).collect(Collectors.toList());
+        return entities.stream().map(e -> toListItem(e, parentUserId, viewerIsOwner, mainChildId))
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -127,16 +176,22 @@ public class ParentDeviceChildVoicePrintServiceImpl implements ParentDeviceChild
         if (entity == null) {
             return;
         }
-        if (entity.getChildId() == null) {
-            throw new RenException("仅可删除主孩子声纹");
-        }
-        DeviceChildEntity child = deviceChildDao.selectById(entity.getChildId());
-        if (child == null) {
+        if (entity.getChildId() != null) {
+            DeviceChildEntity child = deviceChildDao.selectById(entity.getChildId());
+            if (child == null) {
+                agentVoicePrintService.deleteByVoicePrintId(voicePrintId);
+                return;
+            }
+            ensureDeviceBoundToParent(parentUserId, child.getDeviceId());
             agentVoicePrintService.deleteByVoicePrintId(voicePrintId);
             return;
         }
-        ensureDeviceBoundToParent(parentUserId, child.getDeviceId());
-        agentVoicePrintService.deleteByVoicePrintId(voicePrintId);
+        if (entity.getParentUserId() != null) {
+            ensureCanManageMemberVoicePrint(parentUserId, entity);
+            agentVoicePrintService.deleteByVoicePrintId(voicePrintId);
+            return;
+        }
+        throw new RenException("后台录入声纹不可删除");
     }
 
     @Override
@@ -184,17 +239,89 @@ public class ParentDeviceChildVoicePrintServiceImpl implements ParentDeviceChild
     }
 
     private void ensureDeviceBoundToParent(Long parentUserId, String deviceId) {
+        requireActiveBinding(parentUserId, deviceId);
+    }
+
+    private ParentDeviceBindingEntity requireActiveBinding(Long parentUserId, String deviceId) {
         if (StringUtils.isBlank(deviceId)) {
             throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
         }
-        String normalized = deviceId.replace(":", "_").toLowerCase();
-        ParentDeviceBindingEntity binding = parentDeviceBindingDao.selectOne(
-                new LambdaQueryWrapper<ParentDeviceBindingEntity>()
-                        .eq(ParentDeviceBindingEntity::getParentUserId, parentUserId)
-                        .and(w -> w.eq(ParentDeviceBindingEntity::getDeviceId, deviceId)
-                                .or().eq(ParentDeviceBindingEntity::getDeviceId, normalized)));
+        ParentDeviceBindingEntity binding = ParentDeviceAccessHelper.findActiveBinding(
+                parentDeviceBindingDao, parentUserId, deviceId);
         if (binding == null) {
             throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
         }
+        return binding;
+    }
+
+    private DeviceEntity resolveDevice(String deviceId) {
+        DeviceEntity device = deviceDao.selectById(deviceId);
+        if (device == null) {
+            device = deviceDao.selectByIdOrMacVariant(deviceId);
+        }
+        return device;
+    }
+
+    private ParentDeviceVoicePrintVO toListItem(
+            AgentVoicePrintEntity e, Long viewerParentUserId, boolean viewerIsOwner, Long mainChildId) {
+        ParentDeviceVoicePrintVO vo = new ParentDeviceVoicePrintVO();
+        vo.setId(e.getId());
+        vo.setAudioId(e.getAudioId());
+        vo.setSourceName(e.getSourceName());
+        vo.setIntroduce(e.getIntroduce());
+        vo.setCreateDate(e.getCreateDate());
+        if (e.getChildId() != null) {
+            vo.setVoicePrintType("child");
+            vo.setCanManage(mainChildId != null && mainChildId.equals(e.getChildId()));
+            vo.setMine(false);
+        } else if (e.getParentUserId() != null) {
+            vo.setVoicePrintType("member");
+            vo.setParentUserId(e.getParentUserId());
+            boolean mine = viewerParentUserId != null && viewerParentUserId.equals(e.getParentUserId());
+            vo.setMine(mine);
+            vo.setCanManage(mine || viewerIsOwner);
+        } else {
+            vo.setVoicePrintType("admin");
+            vo.setCanManage(false);
+            vo.setMine(false);
+        }
+        return vo;
+    }
+
+    /**
+     * 已设置家庭角色的家长，不得用「孩子声纹」接口录入爸爸/妈妈等成人身份。
+     */
+    private void rejectAdultRoleSourceName(Long parentUserId, String deviceId, String sourceName) {
+        if (StringUtils.isBlank(sourceName)) {
+            return;
+        }
+        ParentDeviceBindingEntity binding = ParentDeviceAccessHelper.findActiveBinding(
+                parentDeviceBindingDao, parentUserId, deviceId);
+        if (binding == null || StringUtils.isBlank(binding.getFamilyRole())) {
+            return;
+        }
+        String lockedLabel = DeviceFamilyRole.resolveLabel(binding.getFamilyRole());
+        if (lockedLabel != null && lockedLabel.equals(sourceName.trim())) {
+            throw new RenException(ErrorCode.PARENT_VOICEPRINT_ROLE_MISMATCH);
+        }
+    }
+
+    private void ensureCanManageMemberVoicePrint(Long viewerParentUserId, AgentVoicePrintEntity entity) {
+        if (entity.getParentUserId() == null) {
+            throw new RenException("无权删除该声纹");
+        }
+        if (viewerParentUserId.equals(entity.getParentUserId())) {
+            return;
+        }
+        List<DeviceEntity> devices = deviceDao.selectList(
+                new LambdaQueryWrapper<DeviceEntity>().eq(DeviceEntity::getAgentId, entity.getAgentId()));
+        for (DeviceEntity device : devices) {
+            ParentDeviceBindingEntity ownerBinding = ParentDeviceAccessHelper.findActiveBinding(
+                    parentDeviceBindingDao, viewerParentUserId, device.getId());
+            if (ownerBinding != null && ParentDeviceAccessHelper.isOwner(ownerBinding)) {
+                return;
+            }
+        }
+        throw new RenException("无权删除该声纹");
     }
 }

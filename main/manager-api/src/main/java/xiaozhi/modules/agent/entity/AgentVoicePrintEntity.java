@@ -36,6 +36,10 @@ public class AgentVoicePrintEntity {
      */
     private Long childId;
     /**
+     * 家长成员声纹归属 parent_user.id；与 childId 互斥，非空表示该家长在本 agent 下的声纹
+     */
+    private Long parentUserId;
+    /**
      * 声纹来源的人姓名
      */
     private String sourceName;

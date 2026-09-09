@@ -27,4 +27,13 @@ public class ParentDeviceVoicePrintVO {
      * false=后台录入声纹，仅可查看。
      */
     private Boolean canManage;
+
+    /** child=主孩子声纹；member=家长成员声纹；admin=后台录入 */
+    private String voicePrintType;
+
+    /** 成员声纹归属家长 ID；voicePrintType=member 时有值 */
+    private Long parentUserId;
+
+    /** 是否为当前登录用户的成员声纹 */
+    private Boolean mine;
 }

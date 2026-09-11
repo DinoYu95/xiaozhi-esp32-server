@@ -165,12 +165,14 @@ public class ParentUserServiceImpl implements ParentUserService {
         if (StringUtils.isNotBlank(dto.getNickname())) {
             user.setNickname(dto.getNickname());
         }
-        if (dto.getAvatarUrl() != null) {
-            if (StringUtils.isBlank(dto.getAvatarUrl())) {
+        String avatarInput = resolveAvatarInput(dto);
+        if (avatarInput != null || dto.getAvatarUrl() != null || dto.getObjectKey() != null
+                || dto.getAccessUrl() != null) {
+            if (StringUtils.isBlank(avatarInput)) {
                 user.setAvatarUrl(null);
             } else {
                 user.setAvatarUrl(parentStorageService.normalizeAndValidate(
-                        parentUserId, ParentStorageCategory.AVATAR, dto.getAvatarUrl()));
+                        parentUserId, ParentStorageCategory.AVATAR, avatarInput));
             }
         }
         if (StringUtils.isNotBlank(dto.getPhone())) {
@@ -188,6 +190,25 @@ public class ParentUserServiceImpl implements ParentUserService {
     @Override
     public void logout(String token) {
         parentUserTokenService.invalidateToken(token);
+    }
+
+    private static String resolveAvatarInput(ParentProfileDTO dto) {
+        if (dto == null) {
+            return null;
+        }
+        if (StringUtils.isNotBlank(dto.getAvatarUrl())) {
+            return dto.getAvatarUrl().trim();
+        }
+        if (StringUtils.isNotBlank(dto.getObjectKey())) {
+            return dto.getObjectKey().trim();
+        }
+        if (StringUtils.isNotBlank(dto.getAccessUrl())) {
+            return dto.getAccessUrl().trim();
+        }
+        if (dto.getAvatarUrl() != null || dto.getObjectKey() != null || dto.getAccessUrl() != null) {
+            return "";
+        }
+        return null;
     }
 
     private ParentLoginVO buildLoginVO(String token, Date expireTime, ParentUserEntity user) {

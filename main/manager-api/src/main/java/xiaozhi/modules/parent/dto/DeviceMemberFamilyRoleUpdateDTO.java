@@ -17,6 +17,17 @@ public class DeviceMemberFamilyRoleUpdateDTO {
     @Schema(description = "目标成员 parentId", requiredMode = Schema.RequiredMode.REQUIRED)
     private Long parentId;
 
-    @Schema(description = "家庭角色 code；传空字符串或 null 表示清除。可选：father/mother/paternal_grandfather/paternal_grandmother/maternal_grandfather/maternal_grandmother/other")
+    @Schema(description = "家庭角色 code；传空字符串或 null 表示清除。可选：father/mother/… 或中文：爸爸/妈妈/…")
     private String familyRole;
+
+    @Schema(description = "家庭角色中文（与 familyRole 二选一，小程序 picker 可直接传 label）")
+    private String familyRoleLabel;
+
+    /** 优先 familyRole，否则 familyRoleLabel */
+    public String resolveRoleInput() {
+        if (familyRole != null && !familyRole.isBlank()) {
+            return familyRole;
+        }
+        return familyRoleLabel;
+    }
 }

@@ -25,6 +25,8 @@ public enum DeviceFamilyRole {
 
     private static final Map<String, DeviceFamilyRole> BY_CODE = Arrays.stream(values())
             .collect(Collectors.toMap(r -> r.code, r -> r, (a, b) -> a));
+    private static final Map<String, DeviceFamilyRole> BY_LABEL = Arrays.stream(values())
+            .collect(Collectors.toMap(r -> r.label, r -> r, (a, b) -> a));
 
     private final String code;
     private final String label;
@@ -51,17 +53,22 @@ public enum DeviceFamilyRole {
     }
 
     /**
-     * @return 规范化 code；blank 表示清除备注
+     * @return 规范化 code；blank 表示清除备注。支持 code（father）或中文 label（爸爸）。
      */
     public static String normalizeOrNull(String raw) {
         if (raw == null || StringUtils.isBlank(raw)) {
             return null;
         }
-        String code = raw.trim().toLowerCase(Locale.ROOT);
-        if (!BY_CODE.containsKey(code)) {
-            throw new RenException("家庭角色无效，可选：father/mother/paternal_grandfather/paternal_grandmother/maternal_grandfather/maternal_grandmother/other");
+        String trimmed = raw.trim();
+        DeviceFamilyRole byLabel = BY_LABEL.get(trimmed);
+        if (byLabel != null) {
+            return byLabel.code;
         }
-        return code;
+        String code = trimmed.toLowerCase(Locale.ROOT);
+        if (BY_CODE.containsKey(code)) {
+            return code;
+        }
+        throw new RenException("家庭角色无效，请传 code（father）或中文（爸爸）");
     }
 
     public static List<DeviceFamilyRoleOption> listOptions() {

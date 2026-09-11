@@ -269,7 +269,7 @@ public class DeviceInviteServiceImpl implements DeviceInviteService {
         if (target == null) {
             throw new RenException(ErrorCode.PARENT_DEVICE_NOT_BOUND);
         }
-        String normalized = DeviceFamilyRole.normalizeOrNull(dto.getFamilyRole());
+        String normalized = DeviceFamilyRole.normalizeOrNull(dto.resolveRoleInput());
         if (StringUtils.equals(normalized, target.getFamilyRole())) {
             return;
         }

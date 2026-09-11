@@ -23,6 +23,12 @@ class DeviceFamilyRoleTest {
     }
 
     @Test
+    void normalizeOrNull_acceptsChineseLabel() {
+        assertEquals("father", DeviceFamilyRole.normalizeOrNull("爸爸"));
+        assertEquals("maternal_grandmother", DeviceFamilyRole.normalizeOrNull("外婆"));
+    }
+
+    @Test
     void normalizeOrNull_rejectsUnknown() {
         assertThrows(RenException.class, () -> DeviceFamilyRole.normalizeOrNull("uncle"));
     }

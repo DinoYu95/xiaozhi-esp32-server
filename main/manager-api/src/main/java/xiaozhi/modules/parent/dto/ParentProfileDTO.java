@@ -10,6 +10,12 @@ public class ParentProfileDTO {
     private String nickname;
     @Schema(description = "头像：上传接口返回的 objectKey 或 accessUrl")
     private String avatarUrl;
+
+    @Schema(description = "与 avatarUrl 等价：POST storage/upload 返回的 objectKey")
+    private String objectKey;
+
+    @Schema(description = "与 avatarUrl 等价：POST storage/upload 返回的 accessUrl")
+    private String accessUrl;
     @Schema(description = "手机号")
     private String phone;
 }

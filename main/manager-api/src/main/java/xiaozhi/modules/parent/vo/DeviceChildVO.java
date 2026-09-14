@@ -64,8 +64,17 @@ public class DeviceChildVO {
     @Schema(description = "省/地区代码")
     private String provinceCode;
 
+    @Schema(description = "省/地区展示名")
+    private String provinceLabel;
+
     @Schema(description = "地市编码")
     private String cityCode;
+
+    @Schema(description = "地市/区县展示名")
+    private String cityLabel;
+
+    @Schema(description = "是否为直辖市档案（区当市）")
+    private Boolean municipality;
 
     @Schema(description = "上下册 upper/lower")
     private String semester;

@@ -116,5 +116,8 @@ public final class ChildGradeOptionsUtil {
         vo.setGrowthAgeBand(resolveGrowthAgeBand(entity));
         vo.setPreschoolProfile(isPreschoolProfile(entity));
         vo.setGradeConfigured(isGradeConfigured(entity));
+        vo.setProvinceLabel(LearningGeoConstants.provinceLabel(entity.getProvinceCode()));
+        vo.setCityLabel(LearningGeoConstants.cityLabel(entity.getProvinceCode(), entity.getCityCode()));
+        vo.setMunicipality(LearningGeoConstants.isMunicipality(entity.getProvinceCode()));
     }
 }

@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +25,10 @@ public final class LearningGeoConstants {
     public static final String SEMESTER_LOWER = "lower";
     public static final String SEMESTER_ANY = "all";
     public static final String CITY_ANY = "all";
+
+    /** 直辖市 provinceCode；小程序侧「省=直辖市、市=区」与此一致 */
+    private static final Set<String> MUNICIPALITIES =
+            Set.of("beijing", "shanghai", "tianjin", "chongqing");
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final List<Map<String, String>> PROVINCES;
@@ -70,6 +75,48 @@ public final class LearningGeoConstants {
 
     public static Map<String, List<Map<String, String>>> citiesByProvince() {
         return CITIES_BY_PROVINCE;
+    }
+
+    public static List<String> municipalities() {
+        return List.copyOf(MUNICIPALITIES);
+    }
+
+    public static boolean isMunicipality(String provinceCode) {
+        return MUNICIPALITIES.contains(normalizeProvince(provinceCode));
+    }
+
+    public static String provinceLabel(String provinceCode) {
+        if (provinceCode == null || provinceCode.isBlank()) {
+            return "";
+        }
+        String code = normalizeProvince(provinceCode);
+        for (Map<String, String> p : PROVINCES) {
+            if (code.equals(p.get("code"))) {
+                return p.get("label");
+            }
+        }
+        return provinceCode.trim();
+    }
+
+    /** 展示用：已知 code 取 label；未知区县级 code 尽量从后缀推断 */
+    public static String cityLabel(String provinceCode, String cityCode) {
+        if (cityCode == null || cityCode.isBlank()) {
+            return "";
+        }
+        String province = normalizeProvince(provinceCode);
+        String normalized = normalizeCity(province, cityCode);
+        for (Map<String, String> c : citiesOf(province)) {
+            if (normalized.equals(c.get("code"))) {
+                return c.get("label");
+            }
+        }
+        if (normalized.endsWith("_all")) {
+            return isMunicipality(province) ? "全市通用" : "全省通用";
+        }
+        if (normalized.startsWith(province + "_")) {
+            return normalized.substring(province.length() + 1);
+        }
+        return cityCode.trim();
     }
 
     public static List<Map<String, String>> citiesOf(String provinceCode) {
@@ -132,6 +179,18 @@ public final class LearningGeoConstants {
             }
         }
         if (raw.contains("_")) {
+            String lower = raw.toLowerCase(Locale.ROOT);
+            // 区县级等扩展编码：beijing_dongcheng，只要省前缀正确则原样入库，勿静默改回 *_all
+            if (lower.startsWith(province + "_") && !lower.equals(province + "_all")) {
+                return lower;
+            }
+            int sep = lower.indexOf('_');
+            if (sep > 0) {
+                String otherProvince = lower.substring(0, sep);
+                if (CITIES_BY_PROVINCE.containsKey(otherProvince) && !otherProvince.equals(province)) {
+                    throw new RenException("城市与省份不匹配，请重新选择");
+                }
+            }
             log.warn("Unknown city code {} for province {}, fallback to {}_all", raw, province, province);
             return province + "_all";
         }
@@ -215,10 +274,15 @@ public final class LearningGeoConstants {
         map.put("CN", List.of(option("CN_all", "全国")));
         map.put(
                 "beijing",
-                List.of(option("beijing_all", "全市通用"), option("beijing", "北京市")));
+                List.of(
+                        option("beijing_all", "全市通用"),
+                        option("beijing_dongcheng", "东城区"),
+                        option("beijing_haidian", "海淀区")));
         map.put(
                 "shanghai",
-                List.of(option("shanghai_all", "全市通用"), option("shanghai", "上海市")));
+                List.of(
+                        option("shanghai_all", "全市通用"),
+                        option("shanghai_pudong", "浦东新区")));
         map.put(
                 "shandong",
                 List.of(

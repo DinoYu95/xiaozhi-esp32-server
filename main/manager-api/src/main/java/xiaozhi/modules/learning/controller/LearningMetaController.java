@@ -53,6 +53,16 @@ public class LearningMetaController {
             body.put("provinces", LearningGeoConstants.provinces());
             body.put("semesters", LearningGeoConstants.semesters());
             body.put("citiesByProvince", LearningGeoConstants.citiesByProvince());
+            body.put("municipalities", LearningGeoConstants.municipalities());
+            body.put(
+                    "geoConvention",
+                    Map.of(
+                            "municipalityRule",
+                            "直辖市：provinceCode=beijing，cityCode=beijing_dongcheng（小程序「省=直辖市、市=区」）",
+                            "provinceRule",
+                            "普通省：provinceCode=shandong，cityCode=shandong_qingdao",
+                            "graphFallback",
+                            "区县 code 未单独发布图谱时，服务端会回退 beijing_all / beijing 等同省图谱"));
             body.put(
                     "textbooks",
                     LearningProfileConstants.TEXTBOOKS.entrySet().stream()

@@ -1,0 +1,256 @@
+{
+  "provinces": [
+    { "code": "CN", "label": "全国通用" },
+    { "code": "beijing", "label": "北京市" },
+    { "code": "tianjin", "label": "天津市" },
+    { "code": "hebei", "label": "河北省" },
+    { "code": "shanxi", "label": "山西省" },
+    { "code": "neimenggu", "label": "内蒙古自治区" },
+    { "code": "liaoning", "label": "辽宁省" },
+    { "code": "jilin", "label": "吉林省" },
+    { "code": "heilongjiang", "label": "黑龙江省" },
+    { "code": "shanghai", "label": "上海市" },
+    { "code": "jiangsu", "label": "江苏省" },
+    { "code": "zhejiang", "label": "浙江省" },
+    { "code": "anhui", "label": "安徽省" },
+    { "code": "fujian", "label": "福建省" },
+    { "code": "jiangxi", "label": "江西省" },
+    { "code": "shandong", "label": "山东省" },
+    { "code": "henan", "label": "河南省" },
+    { "code": "hubei", "label": "湖北省" },
+    { "code": "hunan", "label": "湖南省" },
+    { "code": "guangdong", "label": "广东省" },
+    { "code": "guangxi", "label": "广西壮族自治区" },
+    { "code": "hainan", "label": "海南省" },
+    { "code": "chongqing", "label": "重庆市" },
+    { "code": "sichuan", "label": "四川省" },
+    { "code": "guizhou", "label": "贵州省" },
+    { "code": "yunnan", "label": "云南省" },
+    { "code": "xizang", "label": "西藏自治区" },
+    { "code": "shaanxi", "label": "陕西省" },
+    { "code": "gansu", "label": "甘肃省" },
+    { "code": "qinghai", "label": "青海省" },
+    { "code": "ningxia", "label": "宁夏回族自治区" },
+    { "code": "xinjiang", "label": "新疆维吾尔自治区" },
+    { "code": "hongkong", "label": "香港特别行政区" },
+    { "code": "macao", "label": "澳门特别行政区" },
+    { "code": "taiwan", "label": "台湾省" }
+  ],
+  "semesters": [
+    { "code": "upper", "label": "上册" },
+    { "code": "lower", "label": "下册" }
+  ],
+  "citiesByProvince": {
+    "CN": [{ "code": "CN_all", "label": "全国" }],
+    "beijing": [
+      { "code": "beijing_all", "label": "全市通用" },
+      { "code": "beijing_dongcheng", "label": "东城区" },
+      { "code": "beijing_xicheng", "label": "西城区" },
+      { "code": "beijing_chaoyang", "label": "朝阳区" },
+      { "code": "beijing_fengtai", "label": "丰台区" },
+      { "code": "beijing_shijingshan", "label": "石景山区" },
+      { "code": "beijing_haidian", "label": "海淀区" },
+      { "code": "beijing_mentougou", "label": "门头沟区" },
+      { "code": "beijing_fangshan", "label": "房山区" },
+      { "code": "beijing_tongzhou", "label": "通州区" },
+      { "code": "beijing_shunyi", "label": "顺义区" },
+      { "code": "beijing_changping", "label": "昌平区" },
+      { "code": "beijing_daxing", "label": "大兴区" },
+      { "code": "beijing_huairou", "label": "怀柔区" },
+      { "code": "beijing_pinggu", "label": "平谷区" },
+      { "code": "beijing_miyun", "label": "密云区" },
+      { "code": "beijing_yanqing", "label": "延庆区" }
+    ],
+    "tianjin": [
+      { "code": "tianjin_all", "label": "全市通用" },
+      { "code": "tianjin_heping", "label": "和平区" },
+      { "code": "tianjin_hedong", "label": "河东区" },
+      { "code": "tianjin_hexi", "label": "河西区" },
+      { "code": "tianjin_nankai", "label": "南开区" },
+      { "code": "tianjin_hebei", "label": "河北区" },
+      { "code": "tianjin_hongqiao", "label": "红桥区" },
+      { "code": "tianjin_binhai", "label": "滨海新区" },
+      { "code": "tianjin_dongli", "label": "东丽区" },
+      { "code": "tianjin_xiqing", "label": "西青区" },
+      { "code": "tianjin_jinnan", "label": "津南区" },
+      { "code": "tianjin_beichen", "label": "北辰区" },
+      { "code": "tianjin_wuqing", "label": "武清区" },
+      { "code": "tianjin_baodi", "label": "宝坻区" },
+      { "code": "tianjin_jinghai", "label": "静海区" },
+      { "code": "tianjin_ninghe", "label": "宁河区" },
+      { "code": "tianjin_jizhou", "label": "蓟州区" }
+    ],
+    "shanghai": [
+      { "code": "shanghai_all", "label": "全市通用" },
+      { "code": "shanghai_huangpu", "label": "黄浦区" },
+      { "code": "shanghai_xuhui", "label": "徐汇区" },
+      { "code": "shanghai_changning", "label": "长宁区" },
+      { "code": "shanghai_jingan", "label": "静安区" },
+      { "code": "shanghai_putuo", "label": "普陀区" },
+      { "code": "shanghai_hongkou", "label": "虹口区" },
+      { "code": "shanghai_yangpu", "label": "杨浦区" },
+      { "code": "shanghai_minhang", "label": "闵行区" },
+      { "code": "shanghai_baoshan", "label": "宝山区" },
+      { "code": "shanghai_jiading", "label": "嘉定区" },
+      { "code": "shanghai_pudong", "label": "浦东新区" },
+      { "code": "shanghai_jinshan", "label": "金山区" },
+      { "code": "shanghai_songjiang", "label": "松江区" },
+      { "code": "shanghai_qingpu", "label": "青浦区" },
+      { "code": "shanghai_fengxian", "label": "奉贤区" },
+      { "code": "shanghai_chongming", "label": "崇明区" }
+    ],
+    "chongqing": [
+      { "code": "chongqing_all", "label": "全市通用" },
+      { "code": "chongqing_yuzhong", "label": "渝中区" },
+      { "code": "chongqing_jiangbei", "label": "江北区" },
+      { "code": "chongqing_jiulongpo", "label": "九龙坡区" },
+      { "code": "chongqing_shapingba", "label": "沙坪坝区" },
+      { "code": "chongqing_nanan", "label": "南岸区" },
+      { "code": "chongqing_beibei", "label": "北碚区" },
+      { "code": "chongqing_yubei", "label": "渝北区" },
+      { "code": "chongqing_banan", "label": "巴南区" },
+      { "code": "chongqing_dadukou", "label": "大渡口区" },
+      { "code": "chongqing_jiangjin", "label": "江津区" },
+      { "code": "chongqing_hechuan", "label": "合川区" },
+      { "code": "chongqing_yongchuan", "label": "永川区" },
+      { "code": "chongqing_nanchuan", "label": "南川区" },
+      { "code": "chongqing_wanzhou", "label": "万州区" },
+      { "code": "chongqing_fuling", "label": "涪陵区" }
+    ],
+    "hebei": [
+      { "code": "hebei_all", "label": "全省通用" },
+      { "code": "hebei_shijiazhuang", "label": "石家庄市" },
+      { "code": "hebei_tangshan", "label": "唐山市" },
+      { "code": "hebei_baoding", "label": "保定市" }
+    ],
+    "shanxi": [
+      { "code": "shanxi_all", "label": "全省通用" },
+      { "code": "shanxi_taiyuan", "label": "太原市" },
+      { "code": "shanxi_datong", "label": "大同市" }
+    ],
+    "neimenggu": [
+      { "code": "neimenggu_all", "label": "全区通用" },
+      { "code": "neimenggu_hohhot", "label": "呼和浩特市" },
+      { "code": "neimenggu_baotou", "label": "包头市" }
+    ],
+    "liaoning": [
+      { "code": "liaoning_all", "label": "全省通用" },
+      { "code": "liaoning_shenyang", "label": "沈阳市" },
+      { "code": "liaoning_dalian", "label": "大连市" }
+    ],
+    "jilin": [
+      { "code": "jilin_all", "label": "全省通用" },
+      { "code": "jilin_changchun", "label": "长春市" },
+      { "code": "jilin_jilin", "label": "吉林市" }
+    ],
+    "heilongjiang": [
+      { "code": "heilongjiang_all", "label": "全省通用" },
+      { "code": "heilongjiang_harbin", "label": "哈尔滨市" },
+      { "code": "heilongjiang_daqing", "label": "大庆市" }
+    ],
+    "jiangsu": [
+      { "code": "jiangsu_all", "label": "全省通用" },
+      { "code": "jiangsu_nanjing", "label": "南京市" },
+      { "code": "jiangsu_suzhou", "label": "苏州市" },
+      { "code": "jiangsu_wuxi", "label": "无锡市" },
+      { "code": "jiangsu_nantong", "label": "南通市" }
+    ],
+    "zhejiang": [
+      { "code": "zhejiang_all", "label": "全省通用" },
+      { "code": "zhejiang_hangzhou", "label": "杭州市" },
+      { "code": "zhejiang_ningbo", "label": "宁波市" },
+      { "code": "zhejiang_wenzhou", "label": "温州市" }
+    ],
+    "anhui": [
+      { "code": "anhui_all", "label": "全省通用" },
+      { "code": "anhui_hefei", "label": "合肥市" },
+      { "code": "anhui_wuhu", "label": "芜湖市" }
+    ],
+    "fujian": [
+      { "code": "fujian_all", "label": "全省通用" },
+      { "code": "fujian_fuzhou", "label": "福州市" },
+      { "code": "fujian_xiamen", "label": "厦门市" },
+      { "code": "fujian_quanzhou", "label": "泉州市" }
+    ],
+    "jiangxi": [
+      { "code": "jiangxi_all", "label": "全省通用" },
+      { "code": "jiangxi_nanchang", "label": "南昌市" },
+      { "code": "jiangxi_ganzhou", "label": "赣州市" }
+    ],
+    "shandong": [
+      { "code": "shandong_all", "label": "全省通用" },
+      { "code": "shandong_jinan", "label": "济南市" },
+      { "code": "shandong_qingdao", "label": "青岛市" },
+      { "code": "shandong_yantai", "label": "烟台市" },
+      { "code": "shandong_weifang", "label": "潍坊市" },
+      { "code": "shandong_linyi", "label": "临沂市" },
+      { "code": "shandong_zibo", "label": "淄博市" }
+    ],
+    "henan": [
+      { "code": "henan_all", "label": "全省通用" },
+      { "code": "henan_zhengzhou", "label": "郑州市" },
+      { "code": "henan_luoyang", "label": "洛阳市" }
+    ],
+    "hubei": [
+      { "code": "hubei_all", "label": "全省通用" },
+      { "code": "hubei_wuhan", "label": "武汉市" },
+      { "code": "hubei_yichang", "label": "宜昌市" }
+    ],
+    "hunan": [
+      { "code": "hunan_all", "label": "全省通用" },
+      { "code": "hunan_changsha", "label": "长沙市" },
+      { "code": "hunan_zhuzhou", "label": "株洲市" }
+    ],
+    "guangdong": [
+      { "code": "guangdong_all", "label": "全省通用" },
+      { "code": "guangdong_guangzhou", "label": "广州市" },
+      { "code": "guangdong_shenzhen", "label": "深圳市" },
+      { "code": "guangdong_dongguan", "label": "东莞市" },
+      { "code": "guangdong_foshan", "label": "佛山市" }
+    ],
+    "guangxi": [
+      { "code": "guangxi_all", "label": "全区通用" },
+      { "code": "guangxi_nanning", "label": "南宁市" },
+      { "code": "guangxi_guilin", "label": "桂林市" }
+    ],
+    "hainan": [
+      { "code": "hainan_all", "label": "全省通用" },
+      { "code": "hainan_haikou", "label": "海口市" },
+      { "code": "hainan_sanya", "label": "三亚市" }
+    ],
+    "sichuan": [
+      { "code": "sichuan_all", "label": "全省通用" },
+      { "code": "sichuan_chengdu", "label": "成都市" },
+      { "code": "sichuan_mianyang", "label": "绵阳市" }
+    ],
+    "guizhou": [
+      { "code": "guizhou_all", "label": "全省通用" },
+      { "code": "guizhou_guiyang", "label": "贵阳市" }
+    ],
+    "yunnan": [
+      { "code": "yunnan_all", "label": "全省通用" },
+      { "code": "yunnan_kunming", "label": "昆明市" }
+    ],
+    "xizang": [{ "code": "xizang_all", "label": "全区通用" }, { "code": "xizang_lhasa", "label": "拉萨市" }],
+    "shaanxi": [
+      { "code": "shaanxi_all", "label": "全省通用" },
+      { "code": "shaanxi_xian", "label": "西安市" }
+    ],
+    "gansu": [
+      { "code": "gansu_all", "label": "全省通用" },
+      { "code": "gansu_lanzhou", "label": "兰州市" }
+    ],
+    "qinghai": [{ "code": "qinghai_all", "label": "全省通用" }, { "code": "qinghai_xining", "label": "西宁市" }],
+    "ningxia": [
+      { "code": "ningxia_all", "label": "全区通用" },
+      { "code": "ningxia_yinchuan", "label": "银川市" }
+    ],
+    "xinjiang": [
+      { "code": "xinjiang_all", "label": "全区通用" },
+      { "code": "xinjiang_urumqi", "label": "乌鲁木齐市" }
+    ],
+    "hongkong": [{ "code": "hongkong_all", "label": "香港" }],
+    "macao": [{ "code": "macao_all", "label": "澳门" }],
+    "taiwan": [{ "code": "taiwan_all", "label": "台湾" }]
+  }
+}

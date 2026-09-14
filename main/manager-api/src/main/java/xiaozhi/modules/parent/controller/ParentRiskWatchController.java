@@ -67,7 +67,7 @@ public class ParentRiskWatchController {
     }
 
     @PostMapping
-    @Operation(summary = "提交观察（进入待审核）")
+    @Operation(summary = "提交观察（立即启用，参与风险扫描）")
     public Result<ParentRiskWatchVO> create(@RequestBody @Valid ParentRiskWatchCreateDTO dto) {
         return new Result<ParentRiskWatchVO>().ok(parentRiskWatchService.create(requireParent(), dto));
     }
@@ -79,7 +79,7 @@ public class ParentRiskWatchController {
     }
 
     @PutMapping("/{id}/disable")
-    @Operation(summary = "停用或撤回待审核观察")
+    @Operation(summary = "停用观察（历史 pending 记录将直接删除）")
     public Result<Void> disable(@PathVariable Long id) {
         parentRiskWatchService.disable(requireParent(), id);
         return new Result<Void>().ok(null);

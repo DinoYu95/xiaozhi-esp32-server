@@ -121,6 +121,7 @@ public class ParentRiskWatchServiceImpl implements ParentRiskWatchService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public ParentRiskWatchVO create(Long parentUserId, ParentRiskWatchCreateDTO dto) {
         ParentChildAccessHelper.ensureParentCanAccessChildById(
                 deviceChildDao, parentDeviceBindingDao, parentUserId, dto.getChildId());
@@ -149,13 +150,13 @@ public class ParentRiskWatchServiceImpl implements ParentRiskWatchService {
             }
             e.setAllowedCategories(normalizeCategoriesJson(dto.getAllowedCategories(), e.getRiskDomain()));
         }
-        e.setStatus(ParentRiskWatchEntity.STATUS_PENDING);
         e.setVersion(1);
         e.setSortOrder(0);
         Date now = new Date();
         e.setCreateTime(now);
         e.setUpdateTime(now);
         parentRiskWatchDao.insert(e);
+        enableWatch(e, now, null);
         return toVo(e, domainNameMap());
     }
 
@@ -221,28 +222,7 @@ public class ParentRiskWatchServiceImpl implements ParentRiskWatchService {
         String action = StringUtils.trimToEmpty(dto.getAction()).toLowerCase(Locale.ROOT);
         Date now = new Date();
         if ("approve".equals(action)) {
-            e.setStatus(ParentRiskWatchEntity.STATUS_ENABLED);
-            e.setAuditNote(StringUtils.trimToNull(dto.getAuditNote()));
-            e.setRejectReason(null);
-            e.setUpdateTime(now);
-            if (ParentRiskWatchEntity.TYPE_KEYWORD.equals(e.getWatchType())) {
-                ChildRiskRuleEntity rule = new ChildRiskRuleEntity();
-                rule.setName("[家长]" + e.getName());
-                rule.setRuleType(ChildRiskRuleEntity.TYPE_KEYWORD);
-                rule.setPattern(e.getPattern());
-                rule.setRiskLevel(e.getRiskLevel());
-                rule.setCategory(e.getCategory());
-                rule.setRuleScope("PARENT");
-                rule.setParentUserId(e.getParentUserId());
-                rule.setChildId(e.getChildId());
-                rule.setStatus(1);
-                rule.setSortOrder(1000 + (e.getSortOrder() != null ? e.getSortOrder() : 0));
-                rule.setCreateTime(now);
-                rule.setUpdateTime(now);
-                childRiskRuleDao.insert(rule);
-                e.setLinkedRuleId(rule.getId());
-            }
-            parentRiskWatchDao.updateById(e);
+            enableWatch(e, now, StringUtils.trimToNull(dto.getAuditNote()));
             return;
         }
         if ("reject".equals(action)) {
@@ -254,6 +234,32 @@ public class ParentRiskWatchServiceImpl implements ParentRiskWatchService {
             return;
         }
         throw new RenException("action 须为 approve 或 reject");
+    }
+
+    /** 启用观察：EVALUATOR 直接 enabled；KEYWORD 同步写入 child_risk_rule */
+    private void enableWatch(ParentRiskWatchEntity e, Date now, String auditNote) {
+        e.setStatus(ParentRiskWatchEntity.STATUS_ENABLED);
+        e.setAuditNote(auditNote);
+        e.setRejectReason(null);
+        e.setUpdateTime(now);
+        if (ParentRiskWatchEntity.TYPE_KEYWORD.equals(e.getWatchType()) && e.getLinkedRuleId() == null) {
+            ChildRiskRuleEntity rule = new ChildRiskRuleEntity();
+            rule.setName("[家长]" + e.getName());
+            rule.setRuleType(ChildRiskRuleEntity.TYPE_KEYWORD);
+            rule.setPattern(e.getPattern());
+            rule.setRiskLevel(e.getRiskLevel());
+            rule.setCategory(e.getCategory());
+            rule.setRuleScope("PARENT");
+            rule.setParentUserId(e.getParentUserId());
+            rule.setChildId(e.getChildId());
+            rule.setStatus(1);
+            rule.setSortOrder(1000 + (e.getSortOrder() != null ? e.getSortOrder() : 0));
+            rule.setCreateTime(now);
+            rule.setUpdateTime(now);
+            childRiskRuleDao.insert(rule);
+            e.setLinkedRuleId(rule.getId());
+        }
+        parentRiskWatchDao.updateById(e);
     }
 
     /** 供 ChildRiskService 合并智伴规则 */

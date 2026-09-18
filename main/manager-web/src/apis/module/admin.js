@@ -192,6 +192,37 @@ export default {
             }).send();
     },
 
+    /** 智伴 Agent 配置 */
+    getZhibanAgentConfig(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/zhiban-agent/config`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getZhibanAgentConfig(callback)
+                })
+            }).send()
+    },
+    saveZhibanAgentConfig(data, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/zhiban-agent/config`)
+            .method('PUT')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.saveZhibanAgentConfig(data, callback)
+                })
+            }).send()
+    },
+
     /** 儿童风险：全局配置 */
     getChildRiskConfig(callback) {
         RequestService.sendRequest()

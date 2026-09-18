@@ -152,6 +152,9 @@
             <el-dropdown-item @click.native="goChildRiskManagement">
               {{ $t("header.childRiskManagement") }}
             </el-dropdown-item>
+            <el-dropdown-item @click.native="goZhibanAgentConfig">
+              智伴 Agent 配置
+            </el-dropdown-item>
             <el-dropdown-item @click.native="goBetaFeedbackManagement">
               {{ $t("header.betaFeedbackManagement") }}
             </el-dropdown-item>
@@ -414,6 +417,9 @@ export default {
     },
     goChildRiskManagement() {
       this.$router.push("/child-risk-management");
+    },
+    goZhibanAgentConfig() {
+      this.$router.push("/zhiban-agent-config");
     },
     goBetaFeedbackManagement() {
       this.$router.push("/beta-feedback-management");

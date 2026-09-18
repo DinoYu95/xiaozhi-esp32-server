@@ -121,6 +121,17 @@ const routes = [
     }
   },
   {
+    path: '/zhiban-agent-config',
+    name: 'ZhibanAgentConfig',
+    component: function () {
+      return import('../views/ZhibanAgentConfig.vue')
+    },
+    meta: {
+      requiresAuth: true,
+      title: '智伴 Agent 配置'
+    }
+  },
+  {
     path: '/beta-feedback-management',
     name: 'BetaFeedbackManagement',
     component: function () {

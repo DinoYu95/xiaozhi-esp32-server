@@ -4,6 +4,7 @@
 设备不直连 zhiban-agent，由 xiaozhi-server 在需要时调用本客户端，再将回复经 TTS 返回设备。
 """
 import json
+import uuid
 from dataclasses import dataclass
 from typing import Optional, Iterator, Dict, Any, List, Tuple, Union
 
@@ -34,7 +35,13 @@ def make_zhiban_meta_marker(meta: Dict[str, Any]) -> Dict[str, Any]:
     return {ZHIBAN_META_KEY: meta}
 
 
-def _log_zhiban_payload_diagnostics(payload: dict, mode: str) -> None:
+def _zhiban_trace_headers(session_id: str) -> Dict[str, str]:
+    """与 zhiban-agent 对齐：便于 grep trace_id 串联 xiaozhi ↔ zhiban 日志。"""
+    trace_id = uuid.uuid4().hex[:12]
+    return {"X-Trace-Id": trace_id, "X-Session-Id": (session_id or "").strip()}
+
+
+def _log_zhiban_payload_diagnostics(payload: dict, mode: str, trace_id: str = "") -> None:
     """排查是否带上成长陪伴 / 家长规则：看 text 前缀与 environment_context 键。"""
     text = payload.get("text") or ""
     env = payload.get("environment_context") or {}
@@ -44,8 +51,10 @@ def _log_zhiban_payload_diagnostics(payload: dict, mode: str) -> None:
     has_growth_block = "【成长陪伴与对话风格】" in text
     has_rules_block = "【家长为本设备设置的规则" in text
     logger.bind(tag=TAG).info(
-        "zhiban-agent {}: text总长度={}, 含成长陪伴前缀={}, companion_env长度={}, 家长规则条数={}, 含规则前缀={}, speaker_name={}",
+        "zhiban-agent {}: trace_id={} session_id={} text总长度={}, 含成长陪伴前缀={}, companion_env长度={}, 家长规则条数={}, 含规则前缀={}, speaker_name={}",
         mode,
+        trace_id or "-",
+        payload.get("session_id") or "-",
         len(text),
         has_growth_block,
         len(cg),
@@ -141,7 +150,8 @@ class ZhibanAgentClient:
         if messages:
             payload["messages"] = messages
 
-        _log_zhiban_payload_diagnostics(payload, "非流式")
+        trace_headers = _zhiban_trace_headers(session_id)
+        _log_zhiban_payload_diagnostics(payload, "非流式", trace_headers["X-Trace-Id"])
 
         try:
             client = self._get_client()
@@ -150,6 +160,7 @@ class ZhibanAgentClient:
             r = client.post(
                 "%s/api/chat" % self.base_url,
                 json=payload,
+                headers=trace_headers,
             )
             r.raise_for_status()
             data = r.json()
@@ -212,7 +223,8 @@ class ZhibanAgentClient:
         if not persist_memory:
             payload["persist_memory"] = False
 
-        _log_zhiban_payload_diagnostics(payload, "流式")
+        trace_headers = _zhiban_trace_headers(session_id)
+        _log_zhiban_payload_diagnostics(payload, "流式", trace_headers["X-Trace-Id"])
 
         try:
             client = self._get_client()
@@ -223,6 +235,7 @@ class ZhibanAgentClient:
                 "POST",
                 "%s/api/chat/stream" % self.base_url,
                 json=payload,
+                headers=trace_headers,
             ) as r:
                 r.raise_for_status()
                 for line in r.iter_lines():

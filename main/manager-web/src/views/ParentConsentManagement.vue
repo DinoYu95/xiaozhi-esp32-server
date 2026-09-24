@@ -69,6 +69,12 @@
 
         <el-tab-pane :label="$t('parentConsent.tab.pending')" name="pending">
           <el-card shadow="never" class="cr-card" v-loading="pendingLoading">
+            <div style="margin-bottom: 12px">
+              <el-button size="small" :loading="pendingLoading" @click="loadPending">
+                {{ $t('parentConsent.reload') }}
+              </el-button>
+              <span class="pending-hint">{{ $t('parentConsent.pendingRefreshHint') }}</span>
+            </div>
             <el-table :data="pendingUsers" border>
               <el-table-column prop="parentUserId" label="ID" width="100" />
               <el-table-column prop="nickname" :label="$t('parentConsent.col.nickname')" min-width="160" />
@@ -129,8 +135,9 @@ export default {
   },
   methods: {
     onTabChange(tab) {
-      if (tab.name === 'history') this.loadHistory()
-      if (tab.name === 'pending') this.loadPending()
+      const name = tab && tab.name ? tab.name : this.activeTab
+      if (name === 'history') this.loadHistory()
+      if (name === 'pending') this.loadPending()
     },
     loadOverview() {
       this.loading = true
@@ -227,5 +234,10 @@ export default {
   gap: 24px;
   color: #606266;
   font-size: 14px;
+}
+.pending-hint {
+  margin-left: 12px;
+  color: #909399;
+  font-size: 13px;
 }
 </style>

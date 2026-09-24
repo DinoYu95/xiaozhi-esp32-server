@@ -57,6 +57,10 @@ public class ParentBetaConfController {
                 dto,
                 request.getRemoteAddr(),
                 request.getHeader("User-Agent"));
-        return new Result<ParentBetaConfStatusVO>().ok(parentBetaConfService.getStatus(parentUserId));
+        ParentBetaConfStatusVO status = parentBetaConfService.getStatus(parentUserId);
+        if (Boolean.TRUE.equals(status.getBetaConfEnabled()) && Boolean.TRUE.equals(status.getBlocking())) {
+            throw new RenException(ErrorCode.PARENT_BETA_CONF_VERSION_INVALID);
+        }
+        return new Result<ParentBetaConfStatusVO>().ok(status);
     }
 }

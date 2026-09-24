@@ -22,6 +22,12 @@ public final class ParentContext {
             return null;
         }
         Object v = request.getAttribute(Constant.PARENT_USER_KEY);
-        return v instanceof Long ? (Long) v : null;
+        if (v instanceof Long l) {
+            return l;
+        }
+        if (v instanceof Number n) {
+            return n.longValue();
+        }
+        return null;
     }
 }

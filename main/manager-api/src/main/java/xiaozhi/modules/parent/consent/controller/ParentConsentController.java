@@ -58,6 +58,10 @@ public class ParentConsentController {
                 dto,
                 request.getRemoteAddr(),
                 request.getHeader("User-Agent"));
-        return new Result<ParentConsentStatusVO>().ok(parentConsentService.getStatus(parentUserId));
+        ParentConsentStatusVO status = parentConsentService.getStatus(parentUserId);
+        if (Boolean.TRUE.equals(status.getConsentEnabled()) && Boolean.TRUE.equals(status.getBlocking())) {
+            throw new RenException(ErrorCode.PARENT_CONSENT_VERSION_INVALID);
+        }
+        return new Result<ParentConsentStatusVO>().ok(status);
     }
 }

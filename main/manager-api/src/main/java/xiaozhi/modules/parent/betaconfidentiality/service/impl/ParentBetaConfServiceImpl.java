@@ -6,9 +6,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -89,9 +86,6 @@ public class ParentBetaConfServiceImpl implements ParentBetaConfService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void agree(Long parentUserId, ParentBetaConfAgreeDTO dto, String clientIp, String userAgent) {
-        if (!isBetaConfEnabled()) {
-            return;
-        }
         ParentBetaConfDocumentEntity doc = findPublished();
         if (doc == null) {
             throw new RenException(ErrorCode.PARENT_BETA_CONF_VERSION_INVALID);
@@ -219,17 +213,13 @@ public class ParentBetaConfServiceImpl implements ParentBetaConfService {
         }
         int page = parseInt(params, "page", 1);
         int limit = parseInt(params, "limit", 20);
-        Set<Long> agreedIds = parentBetaConfRecordDao.selectList(
-                new LambdaQueryWrapper<ParentBetaConfRecordEntity>()
-                        .eq(ParentBetaConfRecordEntity::getVersion, doc.getVersion()))
-                .stream()
-                .map(ParentBetaConfRecordEntity::getParentUserId)
-                .collect(Collectors.toSet());
+        String currentVersion = doc.getVersion();
         LambdaQueryWrapper<ParentUserEntity> q = new LambdaQueryWrapper<ParentUserEntity>()
+                .apply(
+                        "NOT EXISTS (SELECT 1 FROM parent_beta_conf_record r "
+                                + "WHERE r.parent_user_id = parent_user.id AND r.version = {0})",
+                        currentVersion)
                 .orderByDesc(ParentUserEntity::getId);
-        if (!agreedIds.isEmpty()) {
-            q.notIn(ParentUserEntity::getId, agreedIds);
-        }
         Page<ParentUserEntity> pg = parentUserDao.selectPage(new Page<>(page, limit), q);
         List<ParentBetaConfPendingUserVO> list = new ArrayList<>();
         for (ParentUserEntity u : pg.getRecords()) {
@@ -296,6 +286,7 @@ public class ParentBetaConfServiceImpl implements ParentBetaConfService {
     private static ParentBetaConfDocumentVO toDocumentVo(ParentBetaConfDocumentEntity doc) {
         ParentBetaConfDocumentVO vo = new ParentBetaConfDocumentVO();
         vo.setVersion(doc.getVersion());
+        vo.setCurrentVersion(doc.getVersion());
         vo.setTitle(doc.getTitle());
         vo.setSummary(doc.getSummary());
         vo.setContent(doc.getContent());

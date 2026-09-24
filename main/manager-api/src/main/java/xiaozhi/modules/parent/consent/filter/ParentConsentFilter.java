@@ -9,8 +9,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import xiaozhi.common.constant.Constant;
 import xiaozhi.common.exception.ErrorCode;
+import xiaozhi.modules.parent.context.ParentContext;
 import xiaozhi.common.utils.HttpContextUtils;
 import xiaozhi.common.utils.JsonUtils;
 import xiaozhi.common.utils.Result;
@@ -37,7 +37,7 @@ public class ParentConsentFilter extends jakarta.servlet.http.HttpFilter {
             chain.doFilter(request, response);
             return;
         }
-        Long parentUserId = (Long) request.getAttribute(Constant.PARENT_USER_KEY);
+        Long parentUserId = ParentContext.getParentUserId();
         if (parentUserId == null) {
             chain.doFilter(request, response);
             return;

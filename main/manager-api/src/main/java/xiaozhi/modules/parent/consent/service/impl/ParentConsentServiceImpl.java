@@ -7,9 +7,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -102,9 +99,6 @@ public class ParentConsentServiceImpl implements ParentConsentService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void agree(Long parentUserId, ParentConsentAgreeDTO dto, String clientIp, String userAgent) {
-        if (!isConsentEnabled()) {
-            return;
-        }
         ParentConsentDocumentEntity doc = findPublished();
         if (doc == null) {
             throw new RenException(ErrorCode.PARENT_CONSENT_VERSION_INVALID);
@@ -304,17 +298,13 @@ public class ParentConsentServiceImpl implements ParentConsentService {
         }
         int page = parseInt(params, "page", 1);
         int limit = parseInt(params, "limit", 20);
-        Set<Long> agreedIds = parentConsentRecordDao.selectList(
-                new LambdaQueryWrapper<ParentConsentRecordEntity>()
-                        .eq(ParentConsentRecordEntity::getVersion, doc.getVersion()))
-                .stream()
-                .map(ParentConsentRecordEntity::getParentUserId)
-                .collect(Collectors.toSet());
+        String currentVersion = doc.getVersion();
         LambdaQueryWrapper<ParentUserEntity> q = new LambdaQueryWrapper<ParentUserEntity>()
+                .apply(
+                        "NOT EXISTS (SELECT 1 FROM parent_consent_record r "
+                                + "WHERE r.parent_user_id = parent_user.id AND r.version = {0})",
+                        currentVersion)
                 .orderByDesc(ParentUserEntity::getId);
-        if (!agreedIds.isEmpty()) {
-            q.notIn(ParentUserEntity::getId, agreedIds);
-        }
         Page<ParentUserEntity> pg = parentUserDao.selectPage(new Page<>(page, limit), q);
         List<ParentConsentPendingUserVO> list = new ArrayList<>();
         for (ParentUserEntity u : pg.getRecords()) {
@@ -432,6 +422,7 @@ public class ParentConsentServiceImpl implements ParentConsentService {
     private static ParentConsentDocumentVO toDocumentVo(ParentConsentDocumentEntity doc) {
         ParentConsentDocumentVO vo = new ParentConsentDocumentVO();
         vo.setVersion(doc.getVersion());
+        vo.setCurrentVersion(doc.getVersion());
         vo.setTitle(doc.getTitle());
         vo.setSummary(doc.getSummary());
         vo.setContent(doc.getContent());

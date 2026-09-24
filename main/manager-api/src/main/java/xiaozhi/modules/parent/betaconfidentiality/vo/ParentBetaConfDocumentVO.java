@@ -10,6 +10,8 @@ import lombok.Data;
 public class ParentBetaConfDocumentVO {
 
     private String version;
+    @Schema(description = "当前 published 版本号（与 version 一致）")
+    private String currentVersion;
     private String title;
     private String summary;
     private String content;

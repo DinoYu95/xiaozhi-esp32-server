@@ -96,6 +96,7 @@
             $route.path === '/beta-feedback-management' ||
             $route.path === '/beta-mission-management' ||
             $route.path === '/parent-consent-management' ||
+            $route.path === '/parent-beta-conf-management' ||
             $route.path === '/parent-user-management',
         }" @visible-change="handleParamDropdownVisibleChange">
           <span class="el-dropdown-link">
@@ -114,6 +115,7 @@
                     $route.path === '/beta-feedback-management' ||
                     $route.path === '/beta-mission-management' ||
                     $route.path === '/parent-consent-management' ||
+                    $route.path === '/parent-beta-conf-management' ||
                     $route.path === '/parent-user-management'
                   ? 'brightness(0) invert(1)'
                   : 'None',
@@ -163,6 +165,9 @@
             </el-dropdown-item>
             <el-dropdown-item @click.native="goParentConsentManagement">
               {{ $t("header.parentConsentManagement") }}
+            </el-dropdown-item>
+            <el-dropdown-item @click.native="goParentBetaConfManagement">
+              {{ $t("header.parentBetaConfManagement") }}
             </el-dropdown-item>
             <el-dropdown-item @click.native="goParentUserManagement">
               {{ $t("header.parentUserManagement") }}
@@ -429,6 +434,9 @@ export default {
     },
     goParentConsentManagement() {
       this.$router.push("/parent-consent-management");
+    },
+    goParentBetaConfManagement() {
+      this.$router.push("/parent-beta-conf-management");
     },
     goParentUserManagement() {
       this.$router.push("/parent-user-management");

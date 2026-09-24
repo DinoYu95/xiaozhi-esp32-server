@@ -1,4 +1,4 @@
-package xiaozhi.modules.parent.consent.filter;
+package xiaozhi.modules.parent.betaconfidentiality.filter;
 
 import java.io.IOException;
 
@@ -14,16 +14,16 @@ import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.utils.HttpContextUtils;
 import xiaozhi.common.utils.JsonUtils;
 import xiaozhi.common.utils.Result;
-import xiaozhi.modules.parent.consent.service.ParentConsentService;
+import xiaozhi.modules.parent.betaconfidentiality.service.ParentBetaConfService;
 
 /**
- * 家长端协议门禁：已登录但未同意当前版本时，拦截除白名单外的 parent-api。
+ * 内测保密协议门禁：已登录且已通过儿童隐私协议后，仍未签署内测保密协议时拦截 parent-api。
  */
 @Component
 @RequiredArgsConstructor
-public class ParentConsentFilter extends jakarta.servlet.http.HttpFilter {
+public class ParentBetaConfFilter extends jakarta.servlet.http.HttpFilter {
 
-    private final ParentConsentService parentConsentService;
+    private final ParentBetaConfService parentBetaConfService;
 
     @Override
     protected void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
@@ -33,7 +33,7 @@ public class ParentConsentFilter extends jakarta.servlet.http.HttpFilter {
             chain.doFilter(request, response);
             return;
         }
-        if (isConsentExemptPath(uri)) {
+        if (isBetaConfExemptPath(uri)) {
             chain.doFilter(request, response);
             return;
         }
@@ -42,14 +42,14 @@ public class ParentConsentFilter extends jakarta.servlet.http.HttpFilter {
             chain.doFilter(request, response);
             return;
         }
-        if (!parentConsentService.isConsentRequired(parentUserId)) {
+        if (!parentBetaConfService.isBetaConfRequired(parentUserId)) {
             chain.doFilter(request, response);
             return;
         }
-        writeConsentRequired(response);
+        writeBetaConfRequired(response);
     }
 
-    private static boolean isConsentExemptPath(String uri) {
+    static boolean isBetaConfExemptPath(String uri) {
         return uri.contains("/parent-api/auth/wechat")
                 || uri.contains("/parent-api/auth/phone/code")
                 || uri.contains("/parent-api/auth/phone/login")
@@ -64,10 +64,10 @@ public class ParentConsentFilter extends jakarta.servlet.http.HttpFilter {
                 || uri.contains("/parent-api/chat/snapshot/device-upload");
     }
 
-    private static void writeConsentRequired(HttpServletResponse response) throws IOException {
+    private static void writeBetaConfRequired(HttpServletResponse response) throws IOException {
         response.setContentType("application/json;charset=utf-8");
         response.setHeader("Access-Control-Allow-Credentials", "true");
         response.setHeader("Access-Control-Allow-Origin", HttpContextUtils.getOrigin());
-        response.getWriter().print(JsonUtils.toJsonString(new Result<Void>().error(ErrorCode.PARENT_CONSENT_REQUIRED)));
+        response.getWriter().print(JsonUtils.toJsonString(new Result<Void>().error(ErrorCode.PARENT_BETA_CONF_REQUIRED)));
     }
 }

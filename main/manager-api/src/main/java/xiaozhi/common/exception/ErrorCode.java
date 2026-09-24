@@ -275,6 +275,8 @@ public interface ErrorCode {
     int PARENT_RISK_NOTIFY_MEMBER_INVALID = 20026; // 非该设备 Member，无法配置风险通知
     int PARENT_CONSENT_REQUIRED = 20027; // 须先同意儿童隐私协议
     int PARENT_CONSENT_VERSION_INVALID = 20028; // 协议版本无效或已过期，请刷新后重试
+    int PARENT_BETA_CONF_REQUIRED = 20029; // 须先同意内测保密协议
+    int PARENT_BETA_CONF_VERSION_INVALID = 20030; // 内测保密协议版本无效或已过期，请刷新后重试
     int PARENT_LIVE_DISABLED = 20029; // 远程监控未开放
     int PARENT_LIVE_DEVICE_BUSY = 20030; // 设备忙，无法开启监控
     int PARENT_LIVE_ALREADY_ACTIVE = 20031; // 已有进行中的监控会话

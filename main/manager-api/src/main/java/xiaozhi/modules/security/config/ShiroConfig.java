@@ -17,6 +17,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import jakarta.servlet.Filter;
+import xiaozhi.modules.parent.betaconfidentiality.filter.ParentBetaConfFilter;
 import xiaozhi.modules.parent.consent.filter.ParentConsentFilter;
 import xiaozhi.modules.parent.filter.ParentTokenFilter;
 import xiaozhi.modules.security.oauth2.Oauth2Filter;
@@ -56,7 +57,8 @@ public class ShiroConfig {
 
     @Bean("shiroFilter")
     public ShiroFilterFactoryBean shirFilter(SecurityManager securityManager, SysParamsService sysParamsService,
-            ParentTokenFilter parentTokenFilter, ParentConsentFilter parentConsentFilter) {
+            ParentTokenFilter parentTokenFilter, ParentConsentFilter parentConsentFilter,
+            ParentBetaConfFilter parentBetaConfFilter) {
         ShiroFilterConfiguration config = new ShiroFilterConfiguration();
         config.setFilterOncePerRequest(true);
 
@@ -70,6 +72,7 @@ public class ShiroConfig {
         // 家长端 token 过滤
         filters.put("parentToken", parentTokenFilter);
         filters.put("parentConsent", parentConsentFilter);
+        filters.put("parentBetaConf", parentBetaConfFilter);
         // 服务密钥过滤
         filters.put("server", new ServerSecretFilter(sysParamsService));
         filters.put("devopsOta", new DevopsOtaTokenFilter(sysParamsService, devopsOtaServiceToken));
@@ -117,8 +120,9 @@ public class ShiroConfig {
         filterMap.put("/parent-api/auth/phone/login", "anon");
         filterMap.put("/parent-api/auth/avatar/file/**", "anon");
         filterMap.put("/parent-api/consent/document", "anon");
+        filterMap.put("/parent-api/beta-confidentiality/document", "anon");
         filterMap.put("/parent-api/chat/snapshot/device-upload", "anon");
-        filterMap.put("/parent-api/**", "parentToken,parentConsent");
+        filterMap.put("/parent-api/**", "parentToken,parentConsent,parentBetaConf");
         filterMap.put("/internal/teaching/**", "anon");
         filterMap.put("/**", "oauth2");
         shiroFilter.setFilterChainDefinitionMap(filterMap);

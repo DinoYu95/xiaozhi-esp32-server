@@ -653,6 +653,82 @@ export default {
             }).send()
     },
 
+    getParentBetaConfOverview(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-beta-confidentiality/overview`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getParentBetaConfOverview(callback)
+                })
+            }).send()
+    },
+    saveParentBetaConfSettings(data, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-beta-confidentiality/settings`)
+            .method('PUT')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.saveParentBetaConfSettings(data, callback)
+                })
+            }).send()
+    },
+    publishParentBetaConf(data, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-beta-confidentiality/publish`)
+            .method('POST')
+            .data(data)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.publishParentBetaConf(data, callback)
+                })
+            }).send()
+    },
+    getParentBetaConfHistory(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-beta-confidentiality/history`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getParentBetaConfHistory(callback)
+                })
+            }).send()
+    },
+    getParentBetaConfPendingUsers(params, callback) {
+        const q = new URLSearchParams()
+        if (params.page) q.set('page', params.page)
+        if (params.limit) q.set('limit', params.limit)
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-beta-confidentiality/pending-users?${q.toString()}`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getParentBetaConfPendingUsers(params, callback)
+                })
+            }).send()
+    },
+
     getParentUserPage(params, callback) {
         const q = new URLSearchParams()
         if (params.page) q.set('page', params.page)

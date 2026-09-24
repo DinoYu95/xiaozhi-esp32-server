@@ -165,6 +165,17 @@ const routes = [
     }
   },
   {
+    path: '/parent-beta-conf-management',
+    name: 'ParentBetaConfManagement',
+    component: function () {
+      return import('../views/ParentBetaConfManagement.vue')
+    },
+    meta: {
+      requiresAuth: true,
+      title: '内测保密协议'
+    }
+  },
+  {
     path: '/parent-user-management',
     name: 'ParentUserManagement',
     component: function () {

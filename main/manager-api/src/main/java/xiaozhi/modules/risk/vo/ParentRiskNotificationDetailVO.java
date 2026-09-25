@@ -13,8 +13,10 @@ public class ParentRiskNotificationDetailVO {
     private Long childId;
     private Long eventId;
     private String title;
-    /** 列表摘要，可能与 reasonPublic 同源截断 */
+    /** 列表/卡片用短摘要（与 reasonPublic 区分，不含完整说明正文） */
     private String summary;
+    /** 风险类目中文（详情页「摘要」区可展示） */
+    private String categoryLabel;
     /** 1 最严重，3 最轻 */
     private Integer riskLevel;
     /** 0 未读，1 已读 */

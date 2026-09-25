@@ -49,10 +49,12 @@ import xiaozhi.modules.parent.entity.ParentChatAudioEntity;
 import xiaozhi.modules.parent.entity.ParentChatHistoryEntity;
 import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
+import xiaozhi.modules.parent.service.DailyBriefService;
 import xiaozhi.modules.parent.service.ParentChatService;
 import xiaozhi.modules.parent.service.ParentDeviceRuleService;
 import xiaozhi.modules.parent.service.ParentShadowMissionService;
 import xiaozhi.modules.parent.service.ParentSnapshotService;
+import xiaozhi.modules.parent.vo.DailyBriefVO;
 import xiaozhi.modules.parent.storage.ParentStorageCategory;
 import xiaozhi.modules.parent.storage.ParentStorageService;
 import xiaozhi.modules.sys.service.SysParamsService;
@@ -90,6 +92,7 @@ public class ParentChatServiceImpl implements ParentChatService {
     private final RedisUtils redisUtils;
     private final RestTemplate restTemplate;
     private final SysParamsService sysParamsService;
+    private final DailyBriefService dailyBriefService;
 
     private static final String PARAM_XIAOZHI_SERVER_URL = "xiaozhi.server.url";
 
@@ -295,6 +298,14 @@ public class ParentChatServiceImpl implements ParentChatService {
                     : deviceId;
             childContext.put("mac_address", macForEnv);
             childContext.put("agent_id", agentId);
+            if (parentUserId != null && child != null) {
+                try {
+                    DailyBriefVO brief = dailyBriefService.getDailyBrief(parentUserId, child.getId());
+                    childContext.put("child_today_device_chat_brief", formatDeviceChatBrief(brief));
+                } catch (Exception ex) {
+                    log.debug("家长聊天：今日设备对话简报注入跳过 childId={} {}", child.getId(), ex.getMessage());
+                }
+            }
             // 家长规则：供智伴在家长聊天时也能遵守（如家长问「你跟孩子说话时要遵守哪些规则」）
             List<String> parentRulesList = parentDeviceRuleService.getRuleTextsByDeviceId(device.getId());
             if (parentRulesList == null || parentRulesList.isEmpty()) {
@@ -488,5 +499,31 @@ public class ParentChatServiceImpl implements ParentChatService {
         }
         vo.setCreateTime(e.getCreateTime());
         return vo;
+    }
+
+    /** 供 zhiban 区分「设备端孩子对话」与「家长小程序会话」。 */
+    private static String formatDeviceChatBrief(DailyBriefVO brief) {
+        if (brief == null) {
+            return "";
+        }
+        String name = StringUtils.defaultIfBlank(brief.getChildName(), "孩子");
+        String date = StringUtils.defaultIfBlank(brief.getDate(), "");
+        int count = brief.getMessageCount() != null ? brief.getMessageCount() : 0;
+        if (count <= 0) {
+            return name + "（" + date + "）：今日**设备端**尚无对话入库（指孩子在智能硬件上与助手聊天，不含家长在本小程序会话里的消息）。";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(name).append("（").append(date).append("）：今日设备端共 ").append(count).append(" 条消息");
+        if (StringUtils.isNotBlank(brief.getFirstChatAt())) {
+            sb.append("，首次 ").append(brief.getFirstChatAt());
+        }
+        if (StringUtils.isNotBlank(brief.getLastChatAt())) {
+            sb.append("，最近 ").append(brief.getLastChatAt());
+        }
+        if (brief.getHighlights() != null && !brief.getHighlights().isEmpty()) {
+            sb.append("；亮点摘录：").append(String.join("；", brief.getHighlights()));
+        }
+        sb.append("。");
+        return sb.toString();
     }
 }

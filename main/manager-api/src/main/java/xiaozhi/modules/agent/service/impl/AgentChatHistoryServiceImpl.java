@@ -1,6 +1,11 @@
 package xiaozhi.modules.agent.service.impl;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -38,6 +43,9 @@ import xiaozhi.modules.agent.vo.AgentChatHistoryUserVO;
 @Service
 public class AgentChatHistoryServiceImpl extends ServiceImpl<AiAgentChatHistoryDao, AgentChatHistoryEntity>
         implements AgentChatHistoryService {
+
+    private static final ZoneId ZONE_SHANGHAI = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter HISTORY_TIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     @Override
     public PageData<AgentChatSessionDTO> getSessionListByAgentId(Map<String, Object> params) {
@@ -98,20 +106,64 @@ public class AgentChatHistoryServiceImpl extends ServiceImpl<AiAgentChatHistoryD
 
     @Override
     public String getFormattedRecentByAgentAndMac(String agentId, String macAddress, int limit, String childDisplayName) {
-        List<AgentChatHistoryDTO> list = getRecentByAgentAndMac(agentId, macAddress, limit);
-        if (list == null || list.isEmpty()) {
+        String childName = org.apache.commons.lang3.StringUtils.isNotBlank(childDisplayName) ? childDisplayName : "孩子";
+        LocalDate today = LocalDate.now(ZONE_SHANGHAI);
+        Date dateStart = Date.from(today.atStartOfDay(ZONE_SHANGHAI).toInstant());
+        Date dateEnd = Date.from(today.plusDays(1).atStartOfDay(ZONE_SHANGHAI).toInstant());
+        List<AgentChatHistoryDTO> todayList = getTodayByAgentAndMac(agentId, macAddress, dateStart, dateEnd);
+        List<AgentChatHistoryDTO> recentList = getRecentByAgentAndMac(agentId, macAddress, limit);
+        if ((todayList == null || todayList.isEmpty()) && (recentList == null || recentList.isEmpty())) {
             return "";
         }
-        String childName = org.apache.commons.lang3.StringUtils.isNotBlank(childDisplayName) ? childDisplayName : "孩子";
         StringBuilder sb = new StringBuilder();
-        for (AgentChatHistoryDTO dto : list) {
-            String lineContent = extractContentFromString(dto.getContent());
-            if (lineContent == null || lineContent.isBlank()) continue;
-            String role = (dto.getChatType() != null && dto.getChatType() == AgentChatHistoryType.AGENT.getValue())
-                    ? "助手" : childName;
-            sb.append(role).append("：").append(lineContent.trim()).append("\n");
+        sb.append("【时区】Asia/Shanghai\n");
+        int todayCount = todayList != null ? todayList.size() : 0;
+        sb.append("【今日 ").append(today).append(" 设备端对话】共 ").append(todayCount).append(" 条消息。\n");
+        if (todayCount > 0) {
+            for (AgentChatHistoryDTO dto : todayList) {
+                appendFormattedHistoryLine(sb, dto, childName);
+            }
+        } else {
+            sb.append("（今日尚无消息入库。家长问「今天聊了吗」应明确说今天还没有；下方「更早对话」仅作背景，")
+                    .append("不得称为今天说过的话，也不得说「我刚调取了今天的聊天记录」却引用更早内容。）\n");
         }
-        return sb.length() > 0 ? sb.toString().trim() : "";
+        List<AgentChatHistoryDTO> earlier = new ArrayList<>();
+        if (recentList != null) {
+            for (AgentChatHistoryDTO dto : recentList) {
+                if (dto.getCreatedAt() == null) {
+                    earlier.add(dto);
+                    continue;
+                }
+                LocalDate d = dto.getCreatedAt().toInstant().atZone(ZONE_SHANGHAI).toLocalDate();
+                if (!today.equals(d)) {
+                    earlier.add(dto);
+                }
+            }
+        }
+        if (!earlier.isEmpty()) {
+            sb.append("\n【更早对话（背景参考，勿说成「今天」）】\n");
+            for (AgentChatHistoryDTO dto : earlier) {
+                appendFormattedHistoryLine(sb, dto, childName);
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    private void appendFormattedHistoryLine(StringBuilder sb, AgentChatHistoryDTO dto, String childName) {
+        String lineContent = extractContentFromString(dto.getContent());
+        if (lineContent == null || lineContent.isBlank()) {
+            return;
+        }
+        String role = (dto.getChatType() != null && dto.getChatType() == AgentChatHistoryType.AGENT.getValue())
+                ? "助手" : childName;
+        String ts = "";
+        if (dto.getCreatedAt() != null) {
+            ts = dto.getCreatedAt().toInstant().atZone(ZONE_SHANGHAI).format(HISTORY_TIME_FMT);
+        }
+        if (org.apache.commons.lang3.StringUtils.isNotBlank(ts)) {
+            sb.append("[").append(ts).append("] ");
+        }
+        sb.append(role).append("：").append(lineContent.trim()).append("\n");
     }
 
     @Override

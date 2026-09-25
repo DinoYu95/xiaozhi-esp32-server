@@ -6,6 +6,10 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
@@ -680,8 +684,15 @@ public class ChildRiskServiceImpl implements ChildRiskService {
                                 .eq(ParentRiskNotificationEntity::getParentUserId, parentUserId)
                                 .eq(ParentRiskNotificationEntity::getChildId, childId)
                                 .orderByDesc(ParentRiskNotificationEntity::getCreateTime));
-        List<ParentRiskNotificationVO> list =
-                pg.getRecords().stream().map(this::toNotifVo).collect(Collectors.toList());
+        List<ParentRiskNotificationEntity> records = pg.getRecords();
+        Map<Long, ChildRiskEventEntity> eventsById = loadEventsByIds(
+                records.stream()
+                        .map(ParentRiskNotificationEntity::getEventId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet()));
+        List<ParentRiskNotificationVO> list = records.stream()
+                .map(n -> toNotifVo(n, eventsById.get(n.getEventId())))
+                .collect(Collectors.toList());
         ParentRiskNotificationPageVO vo = new ParentRiskNotificationPageVO();
         vo.setList(list);
         vo.setTotal(pg.getTotal());
@@ -691,13 +702,14 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         return vo;
     }
 
-    private ParentRiskNotificationVO toNotifVo(ParentRiskNotificationEntity e) {
+    private ParentRiskNotificationVO toNotifVo(
+            ParentRiskNotificationEntity e, ChildRiskEventEntity event) {
         ParentRiskNotificationVO v = new ParentRiskNotificationVO();
         v.setId(e.getId());
         v.setChildId(e.getChildId());
         v.setEventId(e.getEventId());
         v.setTitle(e.getTitle());
-        v.setSummary(e.getSummary());
+        v.setSummary(resolveNotificationSummary(e.getSummary(), event));
         v.setRiskLevel(e.getRiskLevel());
         v.setIsRead(e.getIsRead());
         v.setCreateTime(e.getCreateTime());
@@ -739,7 +751,6 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         vo.setChildId(n.getChildId());
         vo.setEventId(n.getEventId());
         vo.setTitle(n.getTitle());
-        vo.setSummary(n.getSummary());
         vo.setRiskLevel(n.getRiskLevel());
         vo.setIsRead(n.getIsRead());
         vo.setCreateTime(n.getCreateTime());
@@ -748,12 +759,18 @@ public class ChildRiskServiceImpl implements ChildRiskService {
             ChildRiskEventEntity ev = childRiskEventDao.selectById(n.getEventId());
             if (ev != null) {
                 vo.setCategory(ev.getCategory());
-                vo.setReasonPublic(ev.getReasonPublic());
+                vo.setCategoryLabel(resolveCategoryDisplay(ev.getCategory()));
+                vo.setReasonPublic(StringUtils.trimToEmpty(ev.getReasonPublic()));
+                vo.setSummary(resolveNotificationSummary(n.getSummary(), ev));
                 vo.setSessionId(ev.getSessionId());
                 vo.setSource(ev.getSource());
                 vo.setEventStatus(ev.getStatus());
                 vo.setEventCreateTime(ev.getCreateTime());
+            } else {
+                vo.setSummary(n.getSummary());
             }
+        } else {
+            vo.setSummary(n.getSummary());
         }
         return vo;
     }
@@ -796,7 +813,7 @@ public class ChildRiskServiceImpl implements ChildRiskService {
             n.setChildId(ev.getChildId());
             n.setEventId(ev.getId());
             n.setTitle(title);
-            n.setSummary(StringUtils.abbreviate(StringUtils.defaultString(ev.getReasonPublic()), 500));
+            n.setSummary(buildNotificationListSummary(ev));
             n.setRiskLevel(ev.getRiskLevel());
             n.setIsRead(0);
             n.setCreateTime(now);
@@ -812,5 +829,98 @@ public class ChildRiskServiceImpl implements ChildRiskService {
         op.setStatus(ChildRiskOutboxEntity.ST_SUCCESS);
         op.setUpdateTime(now);
         childRiskOutboxDao.updateById(op);
+    }
+
+    private Map<Long, ChildRiskEventEntity> loadEventsByIds(Set<Long> eventIds) {
+        if (eventIds == null || eventIds.isEmpty()) {
+            return Map.of();
+        }
+        List<ChildRiskEventEntity> events = childRiskEventDao.selectBatchIds(eventIds);
+        Map<Long, ChildRiskEventEntity> map = new LinkedHashMap<>();
+        for (ChildRiskEventEntity e : events) {
+            if (e.getId() != null) {
+                map.put(e.getId(), e);
+            }
+        }
+        return map;
+    }
+
+    /** 列表摘要：类目 + 来源，不重复粘贴 reasonPublic 全文。 */
+    private static String buildNotificationListSummary(ChildRiskEventEntity ev) {
+        if (ev == null) {
+            return "对话安全 · 请关注";
+        }
+        String tag = resolveCategoryDisplay(ev.getCategory());
+        String via = switch (StringUtils.defaultString(ev.getSource()).toUpperCase(Locale.ROOT)) {
+            case "RULE", "KEYWORD" -> "命中观察规则";
+            case "EVALUATOR" -> "领域扫描";
+            default -> "智能扫描";
+        };
+        return tag + " · " + via;
+    }
+
+    private static String resolveNotificationSummary(String storedSummary, ChildRiskEventEntity event) {
+        if (event == null) {
+            return storedSummary;
+        }
+        if (isSummaryDuplicateOfReason(storedSummary, event.getReasonPublic())) {
+            return buildNotificationListSummary(event);
+        }
+        if (StringUtils.isNotBlank(storedSummary)) {
+            return storedSummary;
+        }
+        return buildNotificationListSummary(event);
+    }
+
+    private static boolean isSummaryDuplicateOfReason(String summary, String reasonPublic) {
+        String s = StringUtils.trimToEmpty(summary);
+        String r = StringUtils.trimToEmpty(reasonPublic);
+        if (s.isEmpty() || r.isEmpty()) {
+            return false;
+        }
+        return s.equals(r) || s.equals(StringUtils.abbreviate(r, 500));
+    }
+
+    private static String resolveCategoryDisplay(String category) {
+        if (StringUtils.isBlank(category)) {
+            return "对话安全";
+        }
+        String c = category.trim().toLowerCase(Locale.ROOT);
+        return CATEGORY_DISPLAY.getOrDefault(c, category);
+    }
+
+    private static final Map<String, String> CATEGORY_DISPLAY = buildCategoryDisplayMap();
+
+    private static Map<String, String> buildCategoryDisplayMap() {
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put("psychological", "心理情绪");
+        m.put("peer_relation", "同伴关系");
+        m.put("family", "家庭关系");
+        m.put("school", "学业校园");
+        m.put("online_safety", "网络安全");
+        m.put("physical_health", "身心健康");
+        m.put("emotion_distress", "心理情绪 · 情绪困扰");
+        m.put("self_harm_hint", "心理情绪 · 自伤倾向");
+        m.put("hopelessness", "心理情绪 · 绝望无助");
+        m.put("anxiety_severe", "心理情绪 · 严重焦虑");
+        m.put("social_exclusion", "同伴关系 · 社交排斥");
+        m.put("bullying", "同伴关系 · 欺凌");
+        m.put("peer_conflict", "同伴关系 · 同伴冲突");
+        m.put("loneliness_school", "同伴关系 · 在校孤独");
+        m.put("family_conflict", "家庭关系 · 家庭冲突");
+        m.put("neglect_hint", "家庭关系 · 忽视信号");
+        m.put("abuse_hint", "家庭关系 · 虐待信号");
+        m.put("school_stress", "学业校园 · 学业压力");
+        m.put("academic_burnout", "学业校园 · 学业倦怠");
+        m.put("school_refusal", "学业校园 · 拒学");
+        m.put("grooming_hint", "网络安全 · 诱导风险");
+        m.put("privacy_leak", "网络安全 · 隐私泄露");
+        m.put("cyberbullying", "网络安全 · 网络欺凌");
+        m.put("inappropriate_content", "网络安全 · 不当内容");
+        m.put("eating_disorder_hint", "身心健康 · 饮食异常");
+        m.put("substance_hint", "身心健康 · 物质滥用");
+        m.put("sleep_severe", "身心健康 · 严重睡眠问题");
+        m.put("other", "其他");
+        return Map.copyOf(m);
     }
 }

@@ -34,6 +34,7 @@ import xiaozhi.modules.parent.storage.ParentStorageService;
 import xiaozhi.modules.parent.vo.ParentLoginVO;
 import xiaozhi.modules.parent.vo.ParentUserVO;
 import xiaozhi.modules.parent.util.ParentBetaAccessHelper;
+import xiaozhi.modules.parent.wechat.ParentWechatJscode2SessionService;
 import xiaozhi.modules.security.service.CaptchaService;
 import xiaozhi.modules.sys.service.SysParamsService;
 
@@ -41,10 +42,7 @@ import xiaozhi.modules.sys.service.SysParamsService;
 @RequiredArgsConstructor
 public class ParentUserServiceImpl implements ParentUserService {
 
-    private static final String WECHAT_URL = "https://api.weixin.qq.com/sns/jscode2session?appid={appid}&secret={secret}&js_code={code}&grant_type=authorization_code";
     private static final String PARAM_PHONE_ENCRYPT_KEY = "parent.phone_encrypt_key";
-    private static final String PARAM_WECHAT_APP_ID = "parent.wechat.app_id";
-    private static final String PARAM_WECHAT_SECRET = "parent.wechat.secret";
 
     private final ParentUserDao parentUserDao;
     private final ParentDeviceBindingDao parentDeviceBindingDao;
@@ -56,6 +54,7 @@ public class ParentUserServiceImpl implements ParentUserService {
     private final ObjectMapper objectMapper;
     private final ParentStorageService parentStorageService;
     private final ParentAppAccessService parentAppAccessService;
+    private final ParentWechatJscode2SessionService parentWechatJscode2SessionService;
 
     @Value("${parent.phone_encrypt_key:}")
     private String phoneEncryptKeyFromConfig;
@@ -71,29 +70,11 @@ public class ParentUserServiceImpl implements ParentUserService {
 
     @Override
     public ParentWechatLoginOutcome wechatLoginOutcome(ParentWechatLoginDTO dto) {
-        if (StringUtils.isBlank(dto.getCode())) {
-            throw new RenException(ErrorCode.PARENT_WECHAT_CODE_INVALID);
-        }
-        String appId = sysParamsService.getValue(PARAM_WECHAT_APP_ID, true);
-        String secret = sysParamsService.getValue(PARAM_WECHAT_SECRET, true);
-        if (StringUtils.isAnyBlank(appId, secret)) {
-            throw new RenException(ErrorCode.PARENT_WECHAT_CODE_INVALID);
-        }
-        String url = WECHAT_URL.replace("{appid}", appId).replace("{secret}", secret).replace("{code}", dto.getCode());
-        String body = restTemplate.getForObject(url, String.class);
-        if (StringUtils.isBlank(body)) {
-            throw new RenException(ErrorCode.PARENT_WECHAT_CODE_INVALID);
-        }
         try {
-            JsonNode node = objectMapper.readTree(body);
-            if (node.has("errcode") && node.get("errcode").asInt() != 0) {
-                throw new RenException(ErrorCode.PARENT_WECHAT_CODE_INVALID);
-            }
-            String openId = node.has("openid") ? node.get("openid").asText() : null;
-            String unionId = node.has("unionid") ? node.get("unionid").asText() : null;
-            if (StringUtils.isBlank(openId)) {
-                throw new RenException(ErrorCode.PARENT_WECHAT_CODE_INVALID);
-            }
+            ParentWechatJscode2SessionService.SessionResult session =
+                    parentWechatJscode2SessionService.exchange(dto.getCode());
+            String openId = session.openId();
+            String unionId = session.unionId();
             String channel = StringUtils.isNotBlank(dto.getChannel()) ? dto.getChannel() : "mini_program";
             Long parentUserId = parentAuthService.findParentUserIdByWechat(openId, channel);
             if (parentUserId == null) {

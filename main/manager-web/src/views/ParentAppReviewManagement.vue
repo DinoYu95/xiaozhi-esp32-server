@@ -8,6 +8,24 @@
       <el-tabs v-model="activeTab">
         <el-tab-pane label="访问与文案" name="config">
           <el-card shadow="never" class="cr-card" v-loading="loading">
+            <el-alert
+              v-if="form.wechatCredentialsConfigured === false"
+              type="error"
+              title="未配置微信小程序 AppID/AppSecret"
+              description="参数字典需配置 parent.wechat.app_id 与 parent.wechat.secret，且须与提审小程序 AppID 一致；否则审核登录必报「微信登录失败」。"
+              show-icon
+              :closable="false"
+              style="margin-bottom: 16px"
+            />
+            <el-alert
+              v-else-if="form.wechatAppIdMasked"
+              type="info"
+              :title="'当前配置 AppID：' + form.wechatAppIdMasked"
+              description="请与微信公众平台 → 开发管理 → 开发设置 中的 AppID 核对；Secret 轮换后需同步更新参数字典。"
+              show-icon
+              :closable="false"
+              style="margin-bottom: 16px"
+            />
             <el-form label-width="140px" size="small">
               <el-form-item label="accessMode">
                 <el-radio-group v-model="form.accessMode">
@@ -146,6 +164,8 @@ export default {
         homeBannerTitle: '',
         homeBannerSubtitle: '',
         loginHint: '',
+        wechatCredentialsConfigured: null,
+        wechatAppIdMasked: '',
       },
       allowLoading: false,
       allowlist: [],
@@ -184,6 +204,8 @@ export default {
           this.form.homeBannerTitle = d.homeBannerTitle || ''
           this.form.homeBannerSubtitle = d.homeBannerSubtitle || ''
           this.form.loginHint = d.loginHint || ''
+          this.form.wechatCredentialsConfigured = d.wechatCredentialsConfigured
+          this.form.wechatAppIdMasked = d.wechatAppIdMasked || ''
         }
       })
     },

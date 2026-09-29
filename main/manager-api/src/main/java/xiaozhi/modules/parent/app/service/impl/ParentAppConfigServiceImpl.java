@@ -24,6 +24,7 @@ import xiaozhi.modules.parent.app.service.ParentAppConfigService;
 import xiaozhi.modules.parent.app.vo.ParentAppAdminSettingsVO;
 import xiaozhi.modules.parent.app.vo.ParentAppGuestPreviewVO;
 import xiaozhi.modules.parent.app.vo.ParentAppPublicConfigVO;
+import xiaozhi.modules.parent.wechat.ParentWechatJscode2SessionService;
 import xiaozhi.modules.sys.service.SysParamsService;
 
 @Service
@@ -39,6 +40,7 @@ public class ParentAppConfigServiceImpl implements ParentAppConfigService {
 
     private final SysParamsService sysParamsService;
     private final ObjectMapper objectMapper;
+    private final ParentWechatJscode2SessionService parentWechatJscode2SessionService;
 
     @Override
     public ParentAppPublicConfigVO getPublicConfig() {
@@ -91,6 +93,9 @@ public class ParentAppConfigServiceImpl implements ParentAppConfigService {
         }
         vo.setLoginHint(textOrDefault(root, "loginHint", ""));
         vo.setGuestTabHints(readStringMap(root.get("guestTabHints")));
+        ParentWechatJscode2SessionService.WechatCredentialStatus cred = parentWechatJscode2SessionService.credentialStatus();
+        vo.setWechatCredentialsConfigured(cred.isConfigured());
+        vo.setWechatAppIdMasked(cred.getAppIdMasked());
         return vo;
     }
 

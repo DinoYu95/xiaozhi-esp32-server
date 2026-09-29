@@ -18,4 +18,8 @@ public class ParentAppAdminSettingsVO {
     private List<String> homeBannerTags;
     private String loginHint;
     private Map<String, String> guestTabHints;
+    @Schema(description = "是否已在参数字典配置 parent.wechat.app_id 与 secret")
+    private Boolean wechatCredentialsConfigured;
+    @Schema(description = "脱敏 AppID，便于核对是否与提审小程序一致")
+    private String wechatAppIdMasked;
 }

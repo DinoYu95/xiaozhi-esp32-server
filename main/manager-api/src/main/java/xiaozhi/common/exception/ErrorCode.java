@@ -248,7 +248,11 @@ public interface ErrorCode {
 
     // 家长端相关错误码
     int PARENT_TOKEN_INVALID = 20001; // 家长token无效或已过期
-    int PARENT_WECHAT_CODE_INVALID = 20002; // 微信code无效
+    int PARENT_WECHAT_CODE_INVALID = 20002; // 微信 code 换 session 失败（通用）
+    int PARENT_WECHAT_CODE_EXPIRED = 20037; // code 已用过或过期（微信 40029/40163）
+    int PARENT_WECHAT_CREDENTIALS_MISSING = 20038; // 未配置 parent.wechat.app_id / secret
+    int PARENT_WECHAT_CREDENTIALS_INVALID = 20039; // AppID 与 Secret 不匹配（微信 40013/40125）
+    int PARENT_WECHAT_API_UNAVAILABLE = 20040; // 调微信接口失败或系统繁忙
     int PARENT_PHONE_CODE_INVALID = 20003; // 手机验证码错误
     int PARENT_BIND_CODE_INVALID = 20004; // 绑定码无效或已过期
     int PARENT_DEVICE_ALREADY_BOUND = 20005; // 设备已被其他账号绑定

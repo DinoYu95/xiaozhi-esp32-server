@@ -172,6 +172,9 @@
             <el-dropdown-item @click.native="goParentUserManagement">
               {{ $t("header.parentUserManagement") }}
             </el-dropdown-item>
+            <el-dropdown-item @click.native="goParentAppReviewManagement">
+              小程序审核配置
+            </el-dropdown-item>
           </el-dropdown-menu>
         </el-dropdown>
       </div>
@@ -440,6 +443,9 @@ export default {
     },
     goParentUserManagement() {
       this.$router.push("/parent-user-management");
+    },
+    goParentAppReviewManagement() {
+      this.$router.push("/parent-app-review-management");
     },
     // 加载功能状态
     async loadFeatureStatus() {

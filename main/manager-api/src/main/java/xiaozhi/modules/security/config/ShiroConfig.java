@@ -121,6 +121,8 @@ public class ShiroConfig {
         filterMap.put("/parent-api/auth/avatar/file/**", "anon");
         filterMap.put("/parent-api/consent/document", "anon");
         filterMap.put("/parent-api/beta-confidentiality/document", "anon");
+        filterMap.put("/parent-api/app/public-config", "anon");
+        filterMap.put("/parent-api/app/guest-preview", "anon");
         filterMap.put("/parent-api/chat/snapshot/device-upload", "anon");
         filterMap.put("/parent-api/**", "parentToken,parentConsent,parentBetaConf");
         filterMap.put("/internal/teaching/**", "anon");

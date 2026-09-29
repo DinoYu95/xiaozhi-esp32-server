@@ -20,6 +20,7 @@ import xiaozhi.common.utils.JsonUtils;
 import xiaozhi.common.utils.Result;
 import xiaozhi.modules.parent.dao.ParentUserTokenDao;
 import xiaozhi.modules.parent.entity.ParentUserTokenEntity;
+import xiaozhi.modules.parent.util.ParentApiPathRules;
 
 /**
  * 家长端 token 校验：从 Header 取 token，查 parent_user_token，写入 request 属性 parent_user_id。
@@ -40,7 +41,7 @@ public class ParentTokenFilter extends jakarta.servlet.http.HttpFilter {
             return;
         }
         // 登录、发验证码等无需 token 的接口直接放行（与 Shiro anon 保持一致）
-        if (isAnonymousPath(uri)) {
+        if (ParentApiPathRules.isTokenAnonymous(uri)) {
             chain.doFilter(request, response);
             return;
         }
@@ -60,20 +61,6 @@ public class ParentTokenFilter extends jakarta.servlet.http.HttpFilter {
         }
         request.setAttribute(Constant.PARENT_USER_KEY, tokenEntity.getParentUserId());
         chain.doFilter(request, response);
-    }
-
-    /** 无需 token 即可访问的 parent-api 路径（登录、发验证码、声纹播放） */
-    private static boolean isAnonymousPath(String uri) {
-        if (uri == null) return false;
-        return uri.contains("/parent-api/auth/wechat")
-                || uri.contains("/parent-api/auth/phone/code")
-                || uri.contains("/parent-api/auth/phone/login")
-                || uri.contains("/parent-api/auth/avatar/file/")
-                || uri.contains("/parent-api/feedback/image/file/")
-                || uri.contains("/parent-api/device/child/voiceprint/play/")
-                || uri.contains("/parent-api/chat/play/")
-                || uri.contains("/parent-api/chat/snapshot/device-upload")
-                || uri.contains("/parent-api/consent/document");
     }
 
     private static String getRequestToken(HttpServletRequest request) {

@@ -15,6 +15,7 @@ import xiaozhi.common.utils.HttpContextUtils;
 import xiaozhi.common.utils.JsonUtils;
 import xiaozhi.common.utils.Result;
 import xiaozhi.modules.parent.consent.service.ParentConsentService;
+import xiaozhi.modules.parent.util.ParentApiPathRules;
 
 /**
  * 家长端协议门禁：已登录但未同意当前版本时，拦截除白名单外的 parent-api。
@@ -33,7 +34,7 @@ public class ParentConsentFilter extends jakarta.servlet.http.HttpFilter {
             chain.doFilter(request, response);
             return;
         }
-        if (isConsentExemptPath(uri)) {
+        if (ParentApiPathRules.isConsentGateExempt(uri)) {
             chain.doFilter(request, response);
             return;
         }
@@ -47,21 +48,6 @@ public class ParentConsentFilter extends jakarta.servlet.http.HttpFilter {
             return;
         }
         writeConsentRequired(response);
-    }
-
-    private static boolean isConsentExemptPath(String uri) {
-        return uri.contains("/parent-api/auth/wechat")
-                || uri.contains("/parent-api/auth/phone/code")
-                || uri.contains("/parent-api/auth/phone/login")
-                || uri.contains("/parent-api/auth/avatar/file/")
-                || uri.contains("/parent-api/auth/info")
-                || uri.contains("/parent-api/consent/document")
-                || uri.contains("/parent-api/consent/status")
-                || uri.contains("/parent-api/consent/agree")
-                || uri.contains("/parent-api/beta-confidentiality/document")
-                || uri.contains("/parent-api/beta-confidentiality/status")
-                || uri.contains("/parent-api/beta-confidentiality/agree")
-                || uri.contains("/parent-api/chat/snapshot/device-upload");
     }
 
     private static void writeConsentRequired(HttpServletResponse response) throws IOException {

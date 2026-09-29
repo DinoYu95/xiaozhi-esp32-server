@@ -15,6 +15,7 @@ import xiaozhi.common.utils.HttpContextUtils;
 import xiaozhi.common.utils.JsonUtils;
 import xiaozhi.common.utils.Result;
 import xiaozhi.modules.parent.betaconfidentiality.service.ParentBetaConfService;
+import xiaozhi.modules.parent.util.ParentApiPathRules;
 
 /**
  * 内测保密协议门禁：已登录且已通过儿童隐私协议后，仍未签署内测保密协议时拦截 parent-api。
@@ -33,7 +34,7 @@ public class ParentBetaConfFilter extends jakarta.servlet.http.HttpFilter {
             chain.doFilter(request, response);
             return;
         }
-        if (isBetaConfExemptPath(uri)) {
+        if (ParentApiPathRules.isBetaConfGateExempt(uri)) {
             chain.doFilter(request, response);
             return;
         }
@@ -47,21 +48,6 @@ public class ParentBetaConfFilter extends jakarta.servlet.http.HttpFilter {
             return;
         }
         writeBetaConfRequired(response);
-    }
-
-    static boolean isBetaConfExemptPath(String uri) {
-        return uri.contains("/parent-api/auth/wechat")
-                || uri.contains("/parent-api/auth/phone/code")
-                || uri.contains("/parent-api/auth/phone/login")
-                || uri.contains("/parent-api/auth/avatar/file/")
-                || uri.contains("/parent-api/auth/info")
-                || uri.contains("/parent-api/consent/document")
-                || uri.contains("/parent-api/consent/status")
-                || uri.contains("/parent-api/consent/agree")
-                || uri.contains("/parent-api/beta-confidentiality/document")
-                || uri.contains("/parent-api/beta-confidentiality/status")
-                || uri.contains("/parent-api/beta-confidentiality/agree")
-                || uri.contains("/parent-api/chat/snapshot/device-upload");
     }
 
     private static void writeBetaConfRequired(HttpServletResponse response) throws IOException {

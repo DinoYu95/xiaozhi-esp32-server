@@ -6,6 +6,7 @@ import xiaozhi.modules.parent.dto.ParentProfileDTO;
 import xiaozhi.modules.parent.dto.ParentWechatLoginDTO;
 import org.springframework.web.multipart.MultipartFile;
 
+import xiaozhi.modules.parent.app.vo.ParentWechatLoginOutcome;
 import xiaozhi.modules.parent.vo.ParentLoginVO;
 import xiaozhi.modules.parent.vo.ParentUserVO;
 
@@ -18,6 +19,9 @@ public interface ParentUserService {
      * 微信 code 登录，有则查无则建用户，返回 token + 用户信息
      */
     ParentLoginVO wechatLogin(ParentWechatLoginDTO dto);
+
+    /** 微信登录（含 internal_beta 内测鉴权，可能返回 20031 不发 token） */
+    ParentWechatLoginOutcome wechatLoginOutcome(ParentWechatLoginDTO dto);
 
     /**
      * 发送手机验证码（限流 1 分钟 1 次）

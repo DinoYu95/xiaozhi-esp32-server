@@ -37,6 +37,8 @@ import xiaozhi.modules.parent.storage.ParentStorageCategory;
 import xiaozhi.modules.parent.storage.ParentStorageService;
 import xiaozhi.modules.parent.storage.vo.ParentStorageUploadVO;
 import xiaozhi.modules.parent.vo.ParentAvatarUploadVO;
+import xiaozhi.modules.parent.app.vo.ParentWechatAccessDeniedVO;
+import xiaozhi.modules.parent.app.vo.ParentWechatLoginOutcome;
 import xiaozhi.modules.parent.vo.ParentLoginVO;
 import xiaozhi.modules.parent.vo.ParentUserVO;
 
@@ -59,9 +61,13 @@ public class ParentAuthController {
 
     @PostMapping("/wechat")
     @Operation(summary = "微信 code 登录")
-    public Result<ParentLoginVO> wechatLogin(@RequestBody ParentWechatLoginDTO dto) {
-        ParentLoginVO vo = parentUserService.wechatLogin(dto);
-        return new Result<ParentLoginVO>().ok(vo);
+    public Result<?> wechatLogin(@RequestBody ParentWechatLoginDTO dto) {
+        ParentWechatLoginOutcome outcome = parentUserService.wechatLoginOutcome(dto);
+        if (outcome.isDenied()) {
+            return new Result<ParentWechatAccessDeniedVO>().error(
+                    outcome.getDeniedCode(), outcome.getDeniedMsg(), outcome.getDeniedData());
+        }
+        return new Result<ParentLoginVO>().ok(outcome.getLogin());
     }
 
     @PostMapping("/phone/code")

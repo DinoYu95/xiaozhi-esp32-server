@@ -187,6 +187,17 @@ const routes = [
     }
   },
   {
+    path: '/parent-app-review-management',
+    name: 'ParentAppReviewManagement',
+    component: function () {
+      return import('../views/ParentAppReviewManagement.vue')
+    },
+    meta: {
+      requiresAuth: true,
+      title: '小程序审核配置'
+    }
+  },
+  {
     path: '/knowledge-file-upload',
     name: 'KnowledgeFileUpload',
     component: function () {

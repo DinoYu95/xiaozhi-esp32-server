@@ -765,4 +765,97 @@ export default {
             }).send()
     },
 
+    getParentAppSettings(callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-app/settings`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getParentAppSettings(callback)
+                })
+            }).send()
+    },
+    saveParentAppSettings(body, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-app/settings`)
+            .method('PUT')
+            .data(body)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.saveParentAppSettings(body, callback)
+                })
+            }).send()
+    },
+    saveParentAppPublicConfig(body, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-app/public-config`)
+            .method('PUT')
+            .data(body)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.saveParentAppPublicConfig(body, callback)
+                })
+            }).send()
+    },
+    getParentAppAllowlistPage(params, callback) {
+        const q = new URLSearchParams()
+        if (params.page) q.set('page', params.page)
+        if (params.limit) q.set('limit', params.limit)
+        if (params.keyword) q.set('keyword', params.keyword)
+        if (params.enabled !== undefined && params.enabled !== '') q.set('enabled', params.enabled)
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-app/allowlist/page?${q.toString()}`)
+            .method('GET')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.getParentAppAllowlistPage(params, callback)
+                })
+            }).send()
+    },
+    saveParentAppAllowlist(body, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-app/allowlist`)
+            .method('POST')
+            .data(body)
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.saveParentAppAllowlist(body, callback)
+                })
+            }).send()
+    },
+    deleteParentAppAllowlist(id, callback) {
+        RequestService.sendRequest()
+            .url(`${getServiceUrl()}/admin/parent-app/allowlist/${id}`)
+            .method('DELETE')
+            .success((res) => {
+                RequestService.clearRequestTime()
+                callback(res)
+            })
+            .networkFail((err) => {
+                RequestService.reAjaxFun(() => {
+                    this.deleteParentAppAllowlist(id, callback)
+                })
+            }).send()
+    },
+
 }

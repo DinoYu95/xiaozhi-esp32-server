@@ -54,6 +54,13 @@ public class Result<T> implements Serializable {
         return this;
     }
 
+    public Result<T> error(int code, String msg, T data) {
+        this.code = code;
+        this.msg = msg;
+        this.data = data;
+        return this;
+    }
+
     public Result<T> error(String msg) {
         this.code = ErrorCode.INTERNAL_SERVER_ERROR;
         this.msg = msg;

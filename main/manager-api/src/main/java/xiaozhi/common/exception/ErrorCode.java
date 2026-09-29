@@ -279,7 +279,8 @@ public interface ErrorCode {
     int PARENT_BETA_CONF_VERSION_INVALID = 20030; // 内测保密协议版本无效或已过期，请刷新后重试
     int PARENT_LIVE_DISABLED = 20029; // 远程监控未开放
     int PARENT_LIVE_DEVICE_BUSY = 20030; // 设备忙，无法开启监控
-    int PARENT_LIVE_ALREADY_ACTIVE = 20031; // 已有进行中的监控会话
+    int PARENT_APP_BETA_ACCESS_DENIED = 20031; // 小程序内测未开放，未发 token
+    int PARENT_LIVE_ALREADY_ACTIVE = 20036; // 已有进行中的监控会话
     int PARENT_LIVE_SESSION_NOT_FOUND = 20032; // 监控会话不存在
     int PARENT_FAMILY_ROLE_REQUIRED = 20033; // 须先在家庭共享中设置家庭角色
     int PARENT_VOICEPRINT_ROLE_MISMATCH = 20034; // 声纹身份与家庭角色不一致

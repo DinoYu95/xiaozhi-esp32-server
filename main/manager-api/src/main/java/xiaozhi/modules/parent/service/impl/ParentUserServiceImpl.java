@@ -14,6 +14,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import xiaozhi.common.exception.ErrorCode;
 import xiaozhi.common.exception.RenException;
+import xiaozhi.common.utils.MessageUtils;
+import xiaozhi.modules.parent.app.service.ParentAppAccessService;
+import xiaozhi.modules.parent.app.vo.ParentWechatLoginOutcome;
 import xiaozhi.common.utils.AESUtils;
 import xiaozhi.modules.parent.dao.ParentUserDao;
 import xiaozhi.modules.parent.dao.ParentDeviceBindingDao;
@@ -52,12 +55,22 @@ public class ParentUserServiceImpl implements ParentUserService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final ParentStorageService parentStorageService;
+    private final ParentAppAccessService parentAppAccessService;
 
     @Value("${parent.phone_encrypt_key:}")
     private String phoneEncryptKeyFromConfig;
 
     @Override
     public ParentLoginVO wechatLogin(ParentWechatLoginDTO dto) {
+        ParentWechatLoginOutcome outcome = wechatLoginOutcome(dto);
+        if (outcome.isDenied()) {
+            throw new RenException(outcome.getDeniedCode());
+        }
+        return outcome.getLogin();
+    }
+
+    @Override
+    public ParentWechatLoginOutcome wechatLoginOutcome(ParentWechatLoginDTO dto) {
         if (StringUtils.isBlank(dto.getCode())) {
             throw new RenException(ErrorCode.PARENT_WECHAT_CODE_INVALID);
         }
@@ -91,8 +104,15 @@ public class ParentUserServiceImpl implements ParentUserService {
             if (user == null) {
                 throw new RenException(ErrorCode.PARENT_TOKEN_INVALID);
             }
+            if (!parentAppAccessService.mayIssueLoginToken(openId, channel, user.getId())) {
+                String msg = MessageUtils.getMessage(ErrorCode.PARENT_APP_BETA_ACCESS_DENIED);
+                return ParentWechatLoginOutcome.denied(
+                        ErrorCode.PARENT_APP_BETA_ACCESS_DENIED,
+                        msg,
+                        parentAppAccessService.buildAccessDeniedPayload());
+            }
             ParentUserTokenService.TokenResult tr = parentUserTokenService.createToken(user.getId(), channel);
-            return buildLoginVO(tr.token(), tr.expireTime(), user);
+            return ParentWechatLoginOutcome.ok(buildLoginVO(tr.token(), tr.expireTime(), user));
         } catch (RenException e) {
             throw e;
         } catch (Exception e) {

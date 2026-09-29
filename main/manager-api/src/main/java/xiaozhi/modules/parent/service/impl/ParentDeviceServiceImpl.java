@@ -38,6 +38,7 @@ import xiaozhi.modules.parent.entity.ParentDeviceBindingEntity;
 import xiaozhi.modules.parent.entity.ParentUserEntity;
 import xiaozhi.modules.parent.service.DeviceInviteService;
 import xiaozhi.modules.parent.service.ParentDeviceService;
+import xiaozhi.modules.parent.app.service.ParentAppAccessService;
 import xiaozhi.modules.parent.service.ParentUserSkillService;
 import xiaozhi.modules.parent.util.ParentDeviceAccessHelper;
 import xiaozhi.modules.parent.util.ParentDeviceDisplayResolver;
@@ -66,6 +67,7 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
     private final SysUserScopeService sysUserScopeService;
     private final DeviceTelemetryService deviceTelemetryService;
     private final DeviceInviteService deviceInviteService;
+    private final ParentAppAccessService parentAppAccessService;
 
     @Override
     public BindResult bind(Long parentUserId, ParentDeviceBindDTO dto) {
@@ -162,6 +164,7 @@ public class ParentDeviceServiceImpl implements ParentDeviceService {
         }
 
         redisUtils.delete(List.of(cacheDeviceKey, deviceKey));
+        parentAppAccessService.ensureAllowlistAfterDeviceBind(parentUserId);
         return new BindResult(deviceId, "绑定成功");
     }
 

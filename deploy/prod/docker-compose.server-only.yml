@@ -1,0 +1,35 @@
+# B 机（语音节点）：仅 xiaozhi-server，manager-api / web 在 A 机
+# 启动：docker compose --env-file .env.server-b -f docker-compose.server-only.yml up -d
+#
+# .config.yaml 中 manager-api.url 须指向 A 内网，例如 http://10.x.x.x:8002/xiaozhi
+
+version: '3.8'
+
+services:
+  server:
+    image: ${SERVER_IMAGE:?set SERVER_IMAGE in .env.server-b}
+    container_name: xiaozhi-server
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+    dns:
+      - 127.0.0.11
+      - 223.5.5.5
+      - 100.100.2.136
+    ports:
+      - "${SERVER_WS_PORT:-8000}:8000"
+      - "${SERVER_HTTP_PORT:-8003}:8003"
+    security_opt:
+      - seccomp:unconfined
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../data:/opt/xiaozhi-esp32-server/data
+      - ../models/SenseVoiceSmall/model.pt:/opt/xiaozhi-esp32-server/models/SenseVoiceSmall/model.pt
+    networks:
+      - prod
+
+networks:
+  prod:
+    name: zhiban-prod
+    driver: bridge

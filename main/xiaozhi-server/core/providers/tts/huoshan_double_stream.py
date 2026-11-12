@@ -186,6 +186,8 @@ class TTSProvider(TTSProviderBase):
         enable_ws_reuse_value = config.get("enable_ws_reuse", True)
         self.enable_ws_reuse = False if str(enable_ws_reuse_value).lower() == 'false' else True
         self.tts_text = ""
+        # 一轮 TTS 仅向设备发一次 sentence_start，避免火山多分句时设备反复清缓冲卡顿
+        self._volcano_client_sentence_notified = False
 
         model_key_msg = check_model_key("TTS", self.access_token)
         if model_key_msg:
@@ -257,6 +259,7 @@ class TTSProvider(TTSProviderBase):
                 )
         except Exception as e:
             logger.bind(tag=TAG).warning("abort_playback 取消火山会话失败: %s", e)
+        self._volcano_client_sentence_notified = False
 
     async def finish_connection(self):
         """发送 FinishConnection 事件，等待服务端返回 EVENT_ConnectionFinished"""
@@ -305,6 +308,7 @@ class TTSProvider(TTSProviderBase):
                         continue
 
                 if message.sentence_type == SentenceType.FIRST:
+                    self._volcano_client_sentence_notified = False
                     # 初始化参数
                     try:
                         if not getattr(self.conn, "sentence_id", None): 
@@ -526,9 +530,16 @@ class TTSProvider(TTSProviderBase):
                         json_data = json.loads(res.payload.decode("utf-8"))
                         self.tts_text = json_data.get("text", "")
                         logger.bind(tag=TAG).debug(f"句子语音生成开始: {self.tts_text}")
-                        self.tts_audio_queue.put(
-                            (SentenceType.FIRST, [], self.tts_text)
-                        )
+                        if not self._volcano_client_sentence_notified:
+                            self.tts_audio_queue.put(
+                                (SentenceType.FIRST, [], self.tts_text)
+                            )
+                            self._volcano_client_sentence_notified = True
+                        else:
+                            logger.bind(tag=TAG).debug(
+                                "火山下一句（跳过 sentence_start，保持音频连续）: "
+                                f"{self.tts_text}"
+                            )
                     elif (
                         res.optional.event == EVENT_TTSResponse
                         and res.header.message_type == AUDIO_ONLY_RESPONSE
@@ -551,6 +562,7 @@ class TTSProvider(TTSProviderBase):
                     elif res.optional.event == EVENT_SessionFinished:
                         logger.bind(tag=TAG).debug(f"会话结束～～")
                         self.activate_session = False
+                        self._volcano_client_sentence_notified = False
                         self._process_before_stop_play_files()
                         # 非复用模式下，会话结束后发送 FinishConnection
                         if not self.enable_ws_reuse:

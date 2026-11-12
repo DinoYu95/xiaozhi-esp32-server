@@ -4,6 +4,7 @@
 设备不直连 zhiban-agent，由 xiaozhi-server 在需要时调用本客户端，再将回复经 TTS 返回设备。
 """
 import json
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Optional, Iterator, Dict, Any, List, Tuple, Union
@@ -157,12 +158,19 @@ class ZhibanAgentClient:
             client = self._get_client()
             if not client:
                 return None, None
+            t_http = time.monotonic()
             r = client.post(
                 "%s/api/chat" % self.base_url,
                 json=payload,
                 headers=trace_headers,
             )
             r.raise_for_status()
+            logger.bind(tag=TAG).info(
+                "[RT] zhiban-agent 非流式 HTTP 完成: {:.3f}s trace_id={} session_id={}",
+                time.monotonic() - t_http,
+                trace_headers["X-Trace-Id"],
+                session_id,
+            )
             data = r.json()
             if not isinstance(data, dict):
                 logger.bind(tag=TAG).warning("zhiban_agent 返回非 dict: {}", data)
@@ -230,6 +238,9 @@ class ZhibanAgentClient:
             client = self._get_client()
             if not client:
                 return
+            t_stream = time.monotonic()
+            t_first_chunk = None
+            trace_id = trace_headers["X-Trace-Id"]
             current_event: Optional[str] = None
             with client.stream(
                 "POST",
@@ -238,6 +249,13 @@ class ZhibanAgentClient:
                 headers=trace_headers,
             ) as r:
                 r.raise_for_status()
+                t_headers = time.monotonic() - t_stream
+                logger.bind(tag=TAG).info(
+                    "[RT] zhiban-agent 流式响应头: {:.3f}s trace_id={} session_id={}",
+                    t_headers,
+                    trace_id,
+                    session_id,
+                )
                 for line in r.iter_lines():
                     if not line:
                         continue
@@ -264,6 +282,14 @@ class ZhibanAgentClient:
                             yield ZhibanStreamFrame(kind="meta", payload=inline_meta)
                             current_event = None
                             continue
+                        if t_first_chunk is None:
+                            t_first_chunk = time.monotonic()
+                            logger.bind(tag=TAG).info(
+                                "[RT] zhiban-agent 流式首 chunk: {:.3f}s trace_id={} session_id={}",
+                                t_first_chunk - t_stream,
+                                trace_id,
+                                session_id,
+                            )
                         yield ZhibanStreamFrame(kind="text", payload=part)
                         current_event = None
                         continue
@@ -276,7 +302,21 @@ class ZhibanAgentClient:
                             current_event = s.split(":", 1)[1].strip().lower()
                         continue
                     # 兼容旧版/错误 SSE：chunk 内换行导致续行无 data: 前缀时被丢行
+                    if t_first_chunk is None:
+                        t_first_chunk = time.monotonic()
+                        logger.bind(tag=TAG).info(
+                            "[RT] zhiban-agent 流式首 chunk: {:.3f}s trace_id={} session_id={}",
+                            t_first_chunk - t_stream,
+                            trace_id,
+                            session_id,
+                        )
                     yield ZhibanStreamFrame(kind="text", payload=s)
+            logger.bind(tag=TAG).info(
+                "[RT] zhiban-agent 流式结束: {:.3f}s trace_id={} session_id={}",
+                time.monotonic() - t_stream,
+                trace_id,
+                session_id,
+            )
         except httpx.HTTPError as e:
             logger.bind(tag=TAG).error("zhiban_agent 流式请求失败: {}", e)
         except Exception as e:

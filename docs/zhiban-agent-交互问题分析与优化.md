@@ -98,15 +98,22 @@
 
 ## 六、关键阶段 RT 日志（已实现）
 
-`connection.py` 在 `depth=0` 时打印以下耗时（`[RT]` 前缀，info 级别）：
+同一轮对话共享 `round_id`（`[RT][8位hex]`）。轮次从 `listen_stop` / VAD `handle_voice_stop` / `listen_detect` 开始，到 `E2E 首段下行` 结束。
 
 | 日志 | 含义 |
 |------|------|
-| `[RT] get_functions 耗时` | 拉取工具列表耗时（ZhibanAgent 时跳过，不打印） |
-| `[RT] memory.query_memory 耗时` | 记忆查询耗时（ZhibanAgent 时跳过，不打印） |
-| `[RT] chat 入口到 LLM 调用前` | 含 get_functions/memory/上下文准备的总耗时 |
-| `[RT] LLM 首 token: Xs \| chat 入口到首包(TTFT): Ys` | LLM 首包耗时 + 用户感知 TTFT |
-| `[RT] LLM 流式完成耗时 \| chat 总耗时` | LLM 流式结束耗时 + 整轮 chat 总耗时 |
+| `[RT][id] 轮次开始 source=…` | 用户结束说话或设备上报文本 |
+| `[RT][id] ASR+声纹 handle_voice_stop` | ASR 与声纹并行总耗时 + 轮次累计 |
+| `[RT][id] 意图处理` | startToChat 内意图阶段 |
+| `[RT][id] startToChat 完成→提交 chat` | 进入线程池前轮次累计 |
+| `[RT][id] chat() 入口` | chat 线程开始 |
+| `[RT][id] chat 入口到 LLM 调用前` | 上下文准备（Zhiban 无 get_functions/memory） |
+| `[RT][id] LLM 首 token` | LLM TTFT + **轮次累计** |
+| `[RT] zhiban-agent 流式首 chunk` | B→A HTTP 首包（含 trace_id） |
+| `[RT][id] TTS 首句合成` / `TTS 首包音频入队` | 火山双流 |
+| `[RT][id] E2E 首段下行` | **端到端**（结束说话→设备可播） |
+
+排查：`docker logs xiaozhi-server 2>&1 | grep '\[RT\]'`
 
 ---
 

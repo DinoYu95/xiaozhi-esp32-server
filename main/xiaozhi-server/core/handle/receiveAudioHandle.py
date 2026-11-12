@@ -139,6 +139,10 @@ async def resume_vad_detection(conn):
 
 
 async def startToChat(conn, text):
+    import time as _time
+    from core.utils.round_timing import log_rt, round_elapsed
+
+    _t_start_to_chat = _time.monotonic()
     # 检查输入是否是JSON格式（包含说话人信息）
     speaker_name = None
     language_tag = None
@@ -214,6 +218,10 @@ async def startToChat(conn, text):
 
     # 首先进行意图分析，使用实际文本内容
     intent_handled = await handle_user_intent(conn, actual_text)
+    log_rt(
+        conn,
+        f"意图处理: {_time.monotonic() - _t_start_to_chat:.3f}s handled={intent_handled}",
+    )
 
     if intent_handled:
         # 如果意图已被处理，不再进行聊天
@@ -260,6 +268,12 @@ async def startToChat(conn, text):
     if is_zhiban_connection(conn) and will_photo_capture:
         speak_one_sentence(conn, PHOTO_CAPTURE_START_REPLY)
         conn._learning_pending_photo_user_text = actual_text
+    _elapsed = round_elapsed(conn)
+    if _elapsed is not None:
+        log_rt(
+            conn,
+            f"startToChat 完成→提交 chat 线程池 | 轮次累计: {_elapsed:.3f}s",
+        )
     conn.executor.submit(conn.chat, actual_text)
 
 

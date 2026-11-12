@@ -5,6 +5,7 @@ from core.utils import textUtils
 from core.utils.util import audio_to_data
 from core.providers.tts.dto.dto import SentenceType
 from core.utils.audioRateController import AudioRateController
+from core.utils.round_timing import maybe_log_e2e_first_downlink
 
 TAG = __name__
 # 音频帧时长（毫秒）
@@ -15,6 +16,7 @@ PRE_BUFFER_COUNT = 5
 
 async def sendAudioMessage(conn, sentenceType, audios, text):
     if conn.tts.tts_audio_first_sentence:
+        maybe_log_e2e_first_downlink(conn, text or "")
         conn.logger.bind(tag=TAG).info(f"发送第一段语音: {text}")
         conn.tts.tts_audio_first_sentence = False
         await send_tts_message(conn, "start", None)

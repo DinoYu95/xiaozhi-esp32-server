@@ -18,6 +18,7 @@ from core.utils.output_counter import add_device_output
 from core.handle.reportHandle import enqueue_tts_report
 from core.handle.sendAudioHandle import sendAudioMessage
 from core.utils.util import audio_bytes_to_data_stream, audio_to_data_stream
+from core.utils.round_timing import maybe_log_first_opus
 from core.providers.tts.dto.dto import (
     TTSMessageDTO,
     SentenceType,
@@ -83,6 +84,8 @@ class TTSProviderBase(ABC):
     def handle_opus(self, opus_data: bytes):
         if self.conn and getattr(self.conn, "client_abort", False):
             return
+        if self.conn:
+            maybe_log_first_opus(self.conn)
         logger.bind(tag=TAG).debug(f"推送数据到队列里面帧数～～ {len(opus_data)}")
         self.tts_audio_queue.put((SentenceType.MIDDLE, opus_data, None))
 

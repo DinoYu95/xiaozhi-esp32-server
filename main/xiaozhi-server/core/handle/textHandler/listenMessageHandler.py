@@ -9,6 +9,7 @@ from core.handle.textMessageHandler import TextMessageHandler
 from core.handle.textMessageType import TextMessageType
 from core.utils.util import remove_punctuation_and_length
 from core.providers.asr.dto.dto import InterfaceType
+from core.utils.round_timing import begin_user_round
 
 TAG = __name__
 
@@ -29,6 +30,7 @@ class ListenTextMessageHandler(TextMessageHandler):
             # 设备从播放模式切回录音模式,清除所有音频状态和缓冲区
             conn.reset_audio_states()
         elif msg_json["state"] == "stop":
+            begin_user_round(conn, "listen_stop")
             conn.client_voice_stop = True
             if conn.asr.interface_type == InterfaceType.STREAM:
                 # 流式模式下，发送结束请求
@@ -63,11 +65,13 @@ class ListenTextMessageHandler(TextMessageHandler):
                     conn.client_is_speaking = False
                 elif is_wakeup_words:
                     conn.just_woken_up = True
+                    begin_user_round(conn, "listen_detect_wakeup")
                     # 上报纯文字数据（复用ASR上报功能，但不提供音频数据）
                     enqueue_asr_report(conn, "嘿，你好呀", [])
                     await startToChat(conn, "嘿，你好呀")
                 else:
                     conn.just_woken_up = True
+                    begin_user_round(conn, "listen_detect_text")
                     # 上报纯文字数据（复用ASR上报功能，但不提供音频数据）
                     enqueue_asr_report(conn, original_text, [])
                     # 否则需要LLM对文字内容进行答复

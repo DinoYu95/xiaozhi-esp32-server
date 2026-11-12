@@ -1243,11 +1243,16 @@ class ConnectionHandler:
                 maybe_clear_owner_exclusive(self)
 
     def _chat_impl(self, query, depth=0):
+        from core.utils.round_timing import log_rt, round_elapsed
+
         if query is not None:
             self.logger.bind(tag=TAG).info(f"大模型收到用户消息: {query}")
 
         # 为最顶层时新建会话ID和发送FIRST请求
         if depth == 0:
+            _e = round_elapsed(self)
+            if _e is not None:
+                log_rt(self, f"chat() 入口 | 轮次累计: {_e:.3f}s")
             self.skip_memory_persist = False
             self.sentence_id = str(uuid.uuid4().hex)
             self.dialogue.put(Message(role="user", content=query))
@@ -1290,9 +1295,7 @@ class ConnectionHandler:
             t_f = time.monotonic()
             functions = self.func_handler.get_functions()
             if depth == 0:
-                self.logger.bind(tag=TAG).info(
-                    "[RT] get_functions 耗时: %.3fs", time.monotonic() - t_f
-                )
+                log_rt(self, f"get_functions 耗时: {time.monotonic() - t_f:.3f}s")
         response_message = []
 
         try:
@@ -1325,15 +1328,17 @@ class ConnectionHandler:
                 )
                 memory_str = future.result()
                 if depth == 0:
-                    self.logger.bind(tag=TAG).info(
-                        "[RT] memory.query_memory 耗时: %.3fs", time.monotonic() - t_m
+                    log_rt(
+                        self,
+                        f"memory.query_memory 耗时: {time.monotonic() - t_m:.3f}s",
                     )
 
             t_llm = time.monotonic()
             if depth == 0 and t0_chat is not None:
-                self.logger.bind(tag=TAG).info(
-                    "[RT] chat 入口到 LLM 调用前: %.3fs (含 get_functions/memory/上下文)",
-                    t_llm - t0_chat,
+                log_rt(
+                    self,
+                    f"chat 入口到 LLM 调用前: {t_llm - t0_chat:.3f}s "
+                    "(含 get_functions/memory/上下文)",
                 )
             llm_kwargs = {
                 "user_id": role_id,
@@ -1412,11 +1417,14 @@ class ConnectionHandler:
                         if depth == 0 and not first_token_logged:
                             first_token_logged = True
                             t_now = time.monotonic()
-                            self.logger.bind(tag=TAG).info(
-                                "[RT] LLM 首 token: %.3fs | chat 入口到首包(TTFT): %.3fs",
-                                t_now - t_llm,
-                                t_now - t0_chat,
+                            _re = round_elapsed(self)
+                            _msg = (
+                                f"LLM 首 token: {t_now - t_llm:.3f}s | "
+                                f"chat 入口 TTFT: {t_now - t0_chat:.3f}s"
                             )
+                            if _re is not None:
+                                _msg += f" | 轮次累计: {_re:.3f}s"
+                            log_rt(self, _msg)
                         response_message.append(content)
                         self.tts.tts_text_queue.put(
                             TTSMessageDTO(
@@ -1427,11 +1435,14 @@ class ConnectionHandler:
                             )
                         )
             if depth == 0 and t0_chat is not None:
-                self.logger.bind(tag=TAG).info(
-                    "[RT] LLM 流式完成耗时: %.3fs | chat 总耗时: %.3fs",
-                    time.monotonic() - t_llm,
-                    time.monotonic() - t0_chat,
+                _re = round_elapsed(self)
+                _msg = (
+                    f"LLM 流式完成: {time.monotonic() - t_llm:.3f}s | "
+                    f"chat 总耗时: {time.monotonic() - t0_chat:.3f}s"
                 )
+                if _re is not None:
+                    _msg += f" | 轮次累计: {_re:.3f}s"
+                log_rt(self, _msg)
                 self._maybe_report_learning_photo(query, response_message)
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"LLM stream processing error: {e}")

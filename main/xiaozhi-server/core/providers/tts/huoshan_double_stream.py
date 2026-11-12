@@ -13,6 +13,8 @@ from core.utils import opus_encoder_utils
 from core.utils.util import check_model_key
 from core.providers.tts.base import TTSProviderBase
 from core.providers.tts.dto.dto import SentenceType, ContentType, InterfaceType
+from core.utils.round_timing import log_rt
+import time
 
 
 TAG = __name__
@@ -376,7 +378,7 @@ class TTSProvider(TTSProviderBase):
             filtered_text = MarkdownCleaner.clean_markdown(text)
 
             if filtered_text:
-                # 发送文本
+                self._rt_tts_text_sent_at = time.monotonic()
                 await self.send_text(self.voice, filtered_text, self.conn.sentence_id)
             return
         except Exception as e:
@@ -534,6 +536,18 @@ class TTSProvider(TTSProviderBase):
                         self.wav_to_opus_data_audio_raw_stream(res.payload, callback=self.handle_opus)
                     elif res.optional.event == EVENT_TTSSentenceEnd:
                         logger.bind(tag=TAG).info(f"句子语音生成成功：{self.tts_text}")
+                        if (
+                            self.conn
+                            and not getattr(self, "_rt_sentence_synth_logged", False)
+                            and getattr(self, "_rt_tts_text_sent_at", None) is not None
+                        ):
+                            self._rt_sentence_synth_logged = True
+                            dt = time.monotonic() - self._rt_tts_text_sent_at
+                            log_rt(
+                                self.conn,
+                                f"TTS 首句合成(送文本→句末): {dt:.3f}s",
+                                tag=TAG,
+                            )
                     elif res.optional.event == EVENT_SessionFinished:
                         logger.bind(tag=TAG).debug(f"会话结束～～")
                         self.activate_session = False

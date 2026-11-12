@@ -19,6 +19,7 @@ from core.handle.receiveAudioHandle import startToChat
 from core.handle.reportHandle import enqueue_asr_report
 from core.utils.util import remove_punctuation_and_length
 from core.handle.receiveAudioHandle import handleAudioMessage
+from core.utils.round_timing import begin_user_round, log_rt, round_elapsed
 import tempfile
 
 TAG = __name__
@@ -80,6 +81,8 @@ class ASRProviderBase(ABC):
     async def handle_voice_stop(self, conn, asr_audio_task: List[bytes]):
         """并行处理ASR和声纹识别"""
         try:
+            if getattr(conn, "_rt_round_t0", None) is None:
+                begin_user_round(conn, "vad_voice_stop")
             total_start_time = time.monotonic()
 
             # 准备音频数据
@@ -163,9 +166,12 @@ class ASRProviderBase(ABC):
                 enhanced_text = self._build_enhanced_text(raw_text, speaker_name, speaker_id)
                 content_for_length_check = raw_text
 
-            # 性能监控
             total_time = time.monotonic() - total_start_time
-            logger.bind(tag=TAG).debug(f"总处理耗时: {total_time:.3f}s")
+            log_rt(
+                conn,
+                f"ASR+声纹 handle_voice_stop: {total_time:.3f}s | 轮次累计: {round_elapsed(conn) or 0:.3f}s",
+                tag=TAG,
+            )
 
             # 检查文本长度
             text_len, _ = remove_punctuation_and_length(content_for_length_check)

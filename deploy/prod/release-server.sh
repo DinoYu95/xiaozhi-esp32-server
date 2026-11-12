@@ -10,20 +10,30 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/.env.server-b}"
 COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.server-only.yml"
 
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo "缺少 ${ENV_FILE}，请先: cp .env.server-b.example .env.server-b" >&2
+# shellcheck source=lib/server-image.sh
+source "${SCRIPT_DIR}/lib/server-image.sh"
+
+ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/.env.server-b.runtime}"
+if [[ -f "$ENV_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+elif [[ -f "${SCRIPT_DIR}/server.env" ]]; then
+  server_env_load "$SCRIPT_DIR" || exit 1
+  export SERVER_IMAGE
+elif [[ -f "${SCRIPT_DIR}/.env.server-b" ]]; then
+  # shellcheck disable=SC1090
+  source "${SCRIPT_DIR}/.env.server-b"
+else
+  echo "缺少 server.env，请: cp server.env.example server.env 或 bash deploy-server.sh" >&2
   exit 1
 fi
 
-# shellcheck disable=SC1090
-source "$ENV_FILE"
 if [[ -z "${SERVER_IMAGE:-}" ]]; then
-  echo "请在 ${ENV_FILE} 中设置 SERVER_IMAGE" >&2
-  exit 1
+  server_env_load "$SCRIPT_DIR" || exit 1
 fi
+export SERVER_IMAGE
 
 DATA_YAML="${SCRIPT_DIR}/../data/.config.yaml"
 MODEL="${SCRIPT_DIR}/../models/SenseVoiceSmall/model.pt"

@@ -54,8 +54,8 @@ export ACR_LOGIN=1
 ```bash
 cd /opt/xiaozhi-esp32-server/deploy/prod
 
-cp .env.server-b.example .env.server-b
-# 编辑 SERVER_IMAGE（与 A 当前发版一致）
+cp server.env.example server.env
+# 仅需核对 ACR_REGISTRY、ACR_NAMESPACE；版本用 SERVER_APP_TAG（与构建机一致）
 
 cp server-config.example.yaml ../data/.config.yaml
 # 编辑：
@@ -66,8 +66,17 @@ cp server-config.example.yaml ../data/.config.yaml
 # 若模型未下载，从 A 同步示例：
 # rsync -avz A:/opt/xiaozhi-esp32-server/deploy/models/ B:/opt/xiaozhi-esp32-server/deploy/models/
 
-bash release-server.sh
+bash deploy-server.sh
 ```
+
+**日常发版（推荐）**
+
+| 步骤 | 在哪执行 | 命令 |
+|------|----------|------|
+| 构建推送 | 构建机 | `cd deploy/prod && bash publish-server.sh v1.0.2` |
+| 部署 | B 机 | `cd deploy/prod && bash deploy-server.sh` |
+
+`server.env` 里的 `SERVER_APP_TAG` 由 `publish-server.sh` 带版本参数时自动写入；B 机 `git pull` 后 `deploy-server.sh` 会 pull 同一 tag，无需再改 `.env.server-b` 的 `SERVER_IMAGE`。
 
 验证：
 

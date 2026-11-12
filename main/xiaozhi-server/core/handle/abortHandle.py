@@ -3,11 +3,12 @@ import json
 TAG = __name__
 
 
-async def handleAbortMessage(conn):
+async def handleAbortMessage(conn, *, preserve_asr: bool = False):
     conn.logger.bind(tag=TAG).info(
-        "Abort message received speaking=%s inflight=%s",
+        "Abort message received speaking=%s inflight=%s preserve_asr=%s",
         getattr(conn, "client_is_speaking", False),
         int(getattr(conn, "_chat_inflight", 0) or 0),
+        preserve_asr,
     )
     conn.client_abort = True
     if getattr(conn, "tts", None) and hasattr(conn.tts, "abort_playback"):
@@ -15,14 +16,15 @@ async def handleAbortMessage(conn):
             conn.tts.abort_playback()
         except Exception as e:
             conn.logger.bind(tag=TAG).warning("TTS abort_playback 失败: %s", e)
-    asr = getattr(conn, "asr", None)
-    if asr is not None:
-        stop_ws = getattr(asr, "stop_ws_connection", None)
-        if callable(stop_ws):
-            try:
-                stop_ws()
-            except Exception as e:
-                conn.logger.bind(tag=TAG).warning("ASR stop_ws_connection 失败: %s", e)
+    if not preserve_asr:
+        asr = getattr(conn, "asr", None)
+        if asr is not None:
+            stop_ws = getattr(asr, "stop_ws_connection", None)
+            if callable(stop_ws):
+                try:
+                    stop_ws()
+                except Exception as e:
+                    conn.logger.bind(tag=TAG).warning("ASR stop_ws_connection 失败: %s", e)
     conn.clear_queues()
     conn.reset_audio_states()
     conn.clearSpeakStatus()

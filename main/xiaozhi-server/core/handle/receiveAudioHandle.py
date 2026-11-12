@@ -101,30 +101,35 @@ async def handleAudioMessage(conn, audio):
     machine_busy = is_machine_busy(conn)
     if not machine_busy:
         conn._barge_in_voice_accum_ms = 0
-    # 播读/LLM 在途：宽松模式下 VAD 累计人声后打断；严格模式等 ASR+声纹
-    if have_voice and machine_busy and conn.client_listen_mode != "manual":
+    # 仅机器人在播读时 VAD 打断；纯等 Agent（inflight）时打断会误杀 ASR，导致停顿后再说识别不到
+    speaking = bool(getattr(conn, "client_is_speaking", False))
+    if (
+        have_voice
+        and speaking
+        and conn.client_listen_mode != "manual"
+    ):
         if allow_vad_barge_in(conn):
             min_ms = int(conn.config.get("barge_in_min_voice_ms", 400))
             if min_ms <= 0:
                 conn.logger.bind(tag=TAG).info(
-                    "播读/在途中人声触发打断（VAD 即时） speaking=%s inflight=%s permissive=%s",
-                    conn.client_is_speaking,
+                    "播读中人声触发打断（VAD 即时） speaking=%s inflight=%s permissive=%s",
+                    speaking,
                     chat_inflight,
                     barge_in_permissive(conn),
                 )
-                await handleAbortMessage(conn)
+                await handleAbortMessage(conn, preserve_asr=True)
             else:
                 conn._barge_in_voice_accum_ms += AUDIO_FRAME_DURATION
                 if conn._barge_in_voice_accum_ms >= min_ms:
                     conn.logger.bind(tag=TAG).info(
-                        "播读/在途中人声累计约 %dms（阈值 %dms），VAD 打断 permissive=%s",
+                        "播读中人声累计约 %dms（阈值 %dms），VAD 打断 permissive=%s",
                         conn._barge_in_voice_accum_ms,
                         min_ms,
                         barge_in_permissive(conn),
                     )
                     conn._barge_in_voice_accum_ms = 0
-                    await handleAbortMessage(conn)
-    elif machine_busy and not have_voice:
+                    await handleAbortMessage(conn, preserve_asr=True)
+    elif not speaking and not have_voice:
         conn._barge_in_voice_accum_ms = 0
     # 设备长时间空闲检测，用于say goodbye
     await no_voice_close_connect(conn, have_voice)
@@ -214,7 +219,7 @@ async def startToChat(conn, text):
                 conn.client_is_speaking,
                 chat_inflight,
             )
-            await handleAbortMessage(conn)
+            await handleAbortMessage(conn, preserve_asr=True)
 
     # 首先进行意图分析，使用实际文本内容
     intent_handled = await handle_user_intent(conn, actual_text)

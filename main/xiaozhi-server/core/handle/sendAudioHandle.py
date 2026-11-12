@@ -14,6 +14,17 @@ AUDIO_FRAME_DURATION = 60
 PRE_BUFFER_COUNT = 5
 
 
+async def _maybe_sentence_start(conn, text):
+    """一轮播放只向设备发一次 sentence_start，避免多路径重复触发清缓冲。"""
+    if getattr(conn, "_tts_device_sentence_start_sent", False):
+        conn.logger.bind(tag=TAG).info(
+            f"跳过重复 sentence_start（设备端）: {(text or '')[:60]!r}"
+        )
+        return
+    conn._tts_device_sentence_start_sent = True
+    await send_tts_message(conn, "sentence_start", text)
+
+
 async def sendAudioMessage(conn, sentenceType, audios, text):
     if conn.tts.tts_audio_first_sentence:
         maybe_log_e2e_first_downlink(conn, text or "")
@@ -30,11 +41,11 @@ async def sendAudioMessage(conn, sentenceType, audios, text):
             == conn.sentence_id
         ):
             conn.audio_rate_controller.add_message(
-                lambda: send_tts_message(conn, "sentence_start", text)
+                lambda: _maybe_sentence_start(conn, text)
             )
         else:
             # 新句子或流控器未初始化，立即发送
-            await send_tts_message(conn, "sentence_start", text)
+            await _maybe_sentence_start(conn, text)
 
     await sendAudio(conn, audios)
     # 发送句子开始消息
@@ -266,6 +277,7 @@ async def send_tts_message(conn, state, text=None):
 
     # TTS播放结束
     if state == "stop":
+        conn._tts_device_sentence_start_sent = False
         # 播放提示音
         tts_notify = conn.config.get("enable_stop_tts_notify", False)
         if tts_notify:

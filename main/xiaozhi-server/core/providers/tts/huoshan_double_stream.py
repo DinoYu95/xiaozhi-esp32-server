@@ -188,6 +188,8 @@ class TTSProvider(TTSProviderBase):
         self.tts_text = ""
         # 一轮 TTS 仅向设备发一次 sentence_start，避免火山多分句时设备反复清缓冲卡顿
         self._volcano_client_sentence_notified = False
+        # LLM 流式 token 先入缓冲，按标点/长度再送火山，避免逐 token 合成断续
+        self._huoshan_text_buf = ""
 
         model_key_msg = check_model_key("TTS", self.access_token)
         if model_key_msg:
@@ -260,6 +262,34 @@ class TTSProvider(TTSProviderBase):
         except Exception as e:
             logger.bind(tag=TAG).warning("abort_playback 取消火山会话失败: %s", e)
         self._volcano_client_sentence_notified = False
+        self._huoshan_text_buf = ""
+
+    def _should_flush_huoshan_text_buf(self, buf: str) -> bool:
+        if not buf or not buf.strip():
+            return False
+        if len(buf) >= 48:
+            return True
+        trail = buf.rstrip()
+        for p in ("。", "！", "？", "?", "!", "；", ";", "\n", "，", ","):
+            if trail.endswith(p):
+                return True
+        return False
+
+    def _flush_huoshan_text_buf(self, force: bool = False) -> None:
+        buf = self._huoshan_text_buf
+        if not buf or not buf.strip():
+            self._huoshan_text_buf = ""
+            return
+        if not force and not self._should_flush_huoshan_text_buf(buf):
+            return
+        text = buf
+        self._huoshan_text_buf = ""
+        logger.bind(tag=TAG).info(f"火山 TTS 送文 ({len(text)} 字): {text[:80]!r}")
+        future = asyncio.run_coroutine_threadsafe(
+            self.text_to_speak(text, None),
+            loop=self.conn.loop,
+        )
+        future.result()
 
     async def finish_connection(self):
         """发送 FinishConnection 事件，等待服务端返回 EVENT_ConnectionFinished"""
@@ -309,6 +339,7 @@ class TTSProvider(TTSProviderBase):
 
                 if message.sentence_type == SentenceType.FIRST:
                     self._volcano_client_sentence_notified = False
+                    self._huoshan_text_buf = ""
                     # 初始化参数
                     try:
                         if not getattr(self.conn, "sentence_id", None): 
@@ -330,15 +361,8 @@ class TTSProvider(TTSProviderBase):
                 elif ContentType.TEXT == message.content_type:
                     if message.content_detail:
                         try:
-                            logger.bind(tag=TAG).debug(
-                                f"开始发送TTS文本: {message.content_detail}"
-                            )
-                            future = asyncio.run_coroutine_threadsafe(
-                                self.text_to_speak(message.content_detail, None),
-                                loop=self.conn.loop,
-                            )
-                            future.result()
-                            logger.bind(tag=TAG).debug("TTS文本发送成功")
+                            self._huoshan_text_buf += message.content_detail
+                            self._flush_huoshan_text_buf(force=False)
                         except Exception as e:
                             logger.bind(tag=TAG).error(f"发送TTS文本失败: {str(e)}")
                             continue
@@ -352,6 +376,7 @@ class TTSProvider(TTSProviderBase):
                         self._process_audio_file_stream(message.content_file, callback=lambda audio_data: self.handle_audio_file(audio_data, message.content_detail))
                 if message.sentence_type == SentenceType.LAST:
                     try:
+                        self._flush_huoshan_text_buf(force=True)
                         logger.bind(tag=TAG).debug("开始结束TTS会话...")
                         future = asyncio.run_coroutine_threadsafe(
                             self.finish_session(self.conn.sentence_id),
@@ -536,9 +561,9 @@ class TTSProvider(TTSProviderBase):
                             )
                             self._volcano_client_sentence_notified = True
                         else:
-                            logger.bind(tag=TAG).debug(
+                            logger.bind(tag=TAG).info(
                                 "火山下一句（跳过 sentence_start，保持音频连续）: "
-                                f"{self.tts_text}"
+                                f"{self.tts_text[:80]!r}"
                             )
                     elif (
                         res.optional.event == EVENT_TTSResponse

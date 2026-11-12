@@ -14,12 +14,26 @@ AUDIO_FRAME_DURATION = 60
 PRE_BUFFER_COUNT = 5
 
 
+async def send_tts_subtitle(conn, text):
+    """仅字幕/测试页展示，不触发设备换句清缓冲。"""
+    if not text or not str(text).strip():
+        return
+    message = {
+        "type": "tts",
+        "state": "subtitle",
+        "session_id": conn.session_id,
+        "text": textUtils.check_emoji(text),
+    }
+    await conn.websocket.send(json.dumps(message))
+
+
 async def _maybe_sentence_start(conn, text):
     """一轮播放只向设备发一次 sentence_start，避免多路径重复触发清缓冲。"""
     if getattr(conn, "_tts_device_sentence_start_sent", False):
         conn.logger.bind(tag=TAG).info(
             f"跳过重复 sentence_start（设备端）: {(text or '')[:60]!r}"
         )
+        await send_tts_subtitle(conn, text)
         return
     conn._tts_device_sentence_start_sent = True
     await send_tts_message(conn, "sentence_start", text)

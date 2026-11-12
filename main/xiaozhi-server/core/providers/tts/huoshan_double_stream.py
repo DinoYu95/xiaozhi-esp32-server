@@ -14,6 +14,7 @@ from core.utils.util import check_model_key
 from core.providers.tts.base import TTSProviderBase
 from core.providers.tts.dto.dto import SentenceType, ContentType, InterfaceType
 from core.utils.round_timing import log_rt
+from core.handle.sendAudioHandle import send_tts_subtitle
 import time
 
 
@@ -565,6 +566,11 @@ class TTSProvider(TTSProviderBase):
                                 "火山下一句（跳过 sentence_start，保持音频连续）: "
                                 f"{self.tts_text[:80]!r}"
                             )
+                            if self.conn and self.conn.loop:
+                                asyncio.run_coroutine_threadsafe(
+                                    send_tts_subtitle(self.conn, self.tts_text),
+                                    self.conn.loop,
+                                )
                     elif (
                         res.optional.event == EVENT_TTSResponse
                         and res.header.message_type == AUDIO_ONLY_RESPONSE

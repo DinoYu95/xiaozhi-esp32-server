@@ -135,8 +135,13 @@ export class WebSocketHandler {
 
             // 启动Live2D说话动画
             this.startLive2DTalking();
-        } else if (message.state === 'sentence_start') {
-            log(`服务器发送语音段: ${message.text}`, 'info');
+        } else if (message.state === 'sentence_start' || message.state === 'subtitle') {
+            log(
+                message.state === 'subtitle'
+                    ? `字幕(不触发换句): ${message.text}`
+                    : `服务器发送语音段: ${message.text}`,
+                'info'
+            );
             this.ttsSentenceCount = (this.ttsSentenceCount || 0) + 1;
 
             if (message.text && this.onChatMessage) {

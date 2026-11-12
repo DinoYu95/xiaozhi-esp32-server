@@ -98,22 +98,44 @@ class ASRProviderBase(ABC):
             if conn.voiceprint_provider and combined_pcm_data:
                 wav_data = self._pcm_to_wav(combined_pcm_data)
 
-            # 定义ASR任务
-            asr_task = self.speech_to_text_wrapper(
-                asr_audio_task, conn.session_id, conn.audio_format
-            )
+            async def _run_asr():
+                t0 = time.monotonic()
+                try:
+                    return (
+                        await self.speech_to_text_wrapper(
+                            asr_audio_task, conn.session_id, conn.audio_format
+                        ),
+                        time.monotonic() - t0,
+                    )
+                except Exception as e:
+                    return e, time.monotonic() - t0
+
+            async def _run_voiceprint():
+                t0 = time.monotonic()
+                try:
+                    return (
+                        await conn.voiceprint_provider.identify_speaker(
+                            wav_data, conn.session_id
+                        ),
+                        time.monotonic() - t0,
+                    )
+                except Exception as e:
+                    return e, time.monotonic() - t0
 
             if conn.voiceprint_provider and wav_data:
-                voiceprint_task = conn.voiceprint_provider.identify_speaker(
-                    wav_data, conn.session_id
+                (asr_result, asr_ms), (voiceprint_result, voiceprint_ms) = (
+                    await asyncio.gather(_run_asr(), _run_voiceprint())
                 )
-                # 并发等待两个结果
-                asr_result, voiceprint_result = await asyncio.gather(
-                    asr_task, voiceprint_task, return_exceptions=True
+                log_rt(
+                    conn,
+                    f"ASR 耗时: {asr_ms:.3f}s | 声纹 耗时: {voiceprint_ms:.3f}s "
+                    f"(并行 max≈{max(asr_ms, voiceprint_ms):.3f}s)",
+                    tag=TAG,
                 )
             else:
-                asr_result = await asr_task
+                asr_result, asr_ms = await _run_asr()
                 voiceprint_result = None
+                log_rt(conn, f"ASR 耗时: {asr_ms:.3f}s（无声纹）", tag=TAG)
 
             # 记录识别结果 - 检查是否为异常
             if isinstance(asr_result, Exception):

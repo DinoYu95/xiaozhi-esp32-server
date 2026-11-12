@@ -20,8 +20,11 @@ server_env_load() {
   if [[ -f "${prod_dir}/server.env" ]]; then
     # shellcheck disable=SC1090
     source "${prod_dir}/server.env"
-  fi
-  if [[ -z "${SERVER_IMAGE:-}" ]] && [[ -n "${ACR_REGISTRY:-}" ]] && [[ -n "${SERVER_APP_TAG:-}" ]]; then
+    # server.env 为 tag 唯一来源：忽略 .env.server-b 里陈旧的整行 SERVER_IMAGE
+    if [[ -n "${ACR_REGISTRY:-}" ]] && [[ -n "${ACR_NAMESPACE:-}" ]] && [[ -n "${SERVER_APP_TAG:-}" ]]; then
+      SERVER_IMAGE="$(server_image_resolve)"
+    fi
+  elif [[ -z "${SERVER_IMAGE:-}" ]] && [[ -n "${ACR_REGISTRY:-}" ]] && [[ -n "${SERVER_APP_TAG:-}" ]]; then
     SERVER_IMAGE="$(server_image_resolve)"
   fi
   if [[ -z "${SERVER_IMAGE:-}" ]]; then

@@ -5,7 +5,8 @@
 # 启动：docker compose --env-file .env.prod up -d
 # 生产镜像：先在 deploy/prod/images 构建 push ACR，再在此填 SERVER_IMAGE / WEB_IMAGE，勿 --build
 #
-# 同机还需启动 zhiban-agent、voiceprint-api 的 deploy/prod（共用网络 zhiban-prod）
+# 同机还需启动 zhiban-agent、voiceprint-api、teaching-research 的 deploy/prod（共用网络 zhiban-prod）
+# HTTPS 由宿主机 edge-nginx（deploy/prod/edge-nginx）占 443，web/server 仅绑定 127.0.0.1，勿对公网暴露 8002/8000
 
 version: '3.8'
 
@@ -30,7 +31,7 @@ services:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
       XIAOZHI_OPENAPI_ENABLED: ${XIAOZHI_OPENAPI_ENABLED:-false}
     ports:
-      - "${WEB_PORT:-8002}:8002"
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8002}:8002"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -53,8 +54,8 @@ services:
       - 223.5.5.5
       - 100.100.2.136
     ports:
-      - "${SERVER_WS_PORT:-8000}:8000"
-      - "${SERVER_HTTP_PORT:-8003}:8003"
+      - "${SERVER_BIND:-127.0.0.1}:${SERVER_WS_PORT:-8000}:8000"
+      - "${SERVER_BIND:-127.0.0.1}:${SERVER_HTTP_PORT:-8003}:8003"
     security_opt:
       - seccomp:unconfined
     extra_hosts:
